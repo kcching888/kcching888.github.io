@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.72</title>
+    <title>IBKR Portfolio Manager v2.73</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.72</h1>
+    <h1>IBKR Portfolio Manager v2.73</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -741,7 +741,58 @@ async function getLivePrice(symbol) {
     }
 }
 
+
 async function updateAllPrices() {
+    const gas_url = localStorage.getItem('gas_url');
+    if (!gas_url) return;
+
+    // 1. Create a UNIQUE list of symbols
+    // We use a Map to ensure we only have one entry per symbol name
+    const uniqueMap = new Map();
+    allTrades.forEach(t => {
+        if (t.symbol && !uniqueMap.has(t.symbol)) {
+            uniqueMap.set(t.symbol, { 
+                symbol: t.symbol, 
+                currency: t.currency 
+            });
+        }
+    });
+    const symbols = Array.from(uniqueMap.values());
+
+    try {
+        const btn = $('price-btn');
+        if (btn) btn.textContent = 'Updating...';
+
+        // 2. Properly encode the parameters
+        const params = new URLSearchParams({
+            action: 'getPrices',
+            symbols: JSON.stringify(symbols)
+        });
+        
+        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?'}${params.toString()}`;
+        
+        // Log the cleaned URL to console to verify
+        console.log("Requesting unique symbols:", finalUrl);
+
+        const response = await fetch(finalUrl);
+        const priceMap = await response.json();
+
+        window.currentPrices = priceMap;
+        localStorage.setItem('finnhub_price_cache', JSON.stringify({
+            timestamp: Date.now(),
+            prices: priceMap
+        }));
+
+        renderPortfolio();
+    } catch (err) {
+        console.error("Price fetch failed:", err);
+    } finally {
+        if ($('price-btn')) $('price-btn').textContent = '$ Refresh Prices';
+    }
+}
+
+    
+async function updateAllPricesbkup10() {
     const gas_url = localStorage.getItem('ibkr_gas_url'); // Ensure we get the latest URL
     if (!gas_url) {
         console.error("No Google Apps Script URL found in settings.");
