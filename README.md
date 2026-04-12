@@ -1,1 +1,927 @@
-# kcching888.github.io
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IBKR Portfolio Manager</title>
+    <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
+        .header{background:#16213e;padding:15px 20px;display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid #0f3460}
+        .header h1{color:#e94560;font-size:1.4em}
+        #connStat{font-size:0.8em;padding:4px 10px;border-radius:12px;background:#333}
+        #connStat.ok{background:#1a5c2a;color:#4caf50}
+        #connStat.err{background:#5c1a1a;color:#f44336}
+        .btn{cursor:pointer;border:none;border-radius:5px;padding:8px 14px;font-size:0.85em;transition:background 0.2s}
+        .btn-primary{background:#0f3460;color:#fff}
+        .btn-primary:hover{background:#1a4a8a}
+        .btn-success{background:#1a5c2a;color:#fff}
+        .btn-danger{background:#7a1a1a;color:#fff}
+        .btn-warning{background:#7a5a00;color:#fff}
+        .nav-tabs{background:#16213e;display:flex;gap:5px;padding:10px 20px;border-bottom:1px solid #0f3460}
+        .nav-tab{padding:8px 16px;cursor:pointer;border-radius:5px 5px 0 0;color:#aaa;transition:all 0.2s}
+        .nav-tab.active,.nav-tab:hover{background:#0f3460;color:#fff}
+        .content{padding:20px}
+        .card{background:#16213e;border-radius:8px;padding:15px;margin-bottom:15px;border:1px solid #0f3460}
+        .card h3{margin-bottom:10px;color:#e94560}
+        .filters{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:15px;align-items:flex-end}
+        .filter-group{display:flex;flex-direction:column;gap:3px}
+        .filter-group label{font-size:0.75em;color:#aaa}
+        .filter-group input,.filter-group select{background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;font-size:0.85em}
+        table{width:100%;border-collapse:collapse;font-size:0.85em}
+        thead{background:#0f3460}
+        th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #0f3460}
+        tr:hover{background:#1a2a4a}
+        .pagination{display:flex;gap:5px;align-items:center;justify-content:flex-end;margin-top:10px}
+        .pagination button{padding:4px 10px;font-size:0.8em;background:#0f3460;color:#fff;border:none;border-radius:4px;cursor:pointer}
+        .pagination button.active{background:#e94560}
+        .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:15px;margin-bottom:15px}
+        .stat-card{background:#0f3460;border-radius:8px;padding:15px;text-align:center}
+        .stat-card .val{font-size:1.5em;font-weight:bold;color:#e94560}
+        .stat-card .lbl{font-size:0.8em;color:#aaa;margin-top:4px}
+        .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
+        .modal-overlay.show{display:flex}
+        .modal{background:#16213e;border-radius:8px;padding:25px;min-width:350px;max-width:600px;max-height:80vh;overflow-y:auto;border:1px solid #0f3460}
+        .modal h3{color:#e94560;margin-bottom:15px}
+        .form-group{margin-bottom:12px}
+        .form-group label{display:block;font-size:0.85em;margin-bottom:4px;color:#aaa}
+        .form-group input,.form-group select,.form-group textarea{width:100%;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:8px;font-size:0.85em}
+        .modal-footer{display:flex;gap:10px;justify-content:flex-end;margin-top:15px}
+        .tabs-modal{display:flex;gap:5px;margin-bottom:15px}
+        .tab-modal-btn{padding:6px 12px;cursor:pointer;background:#0f3460;color:#aaa;border:none;border-radius:4px;font-size:0.8em}
+        .tab-modal-btn.active{background:#e94560;color:#fff}
+        .tab-content-modal{display:none}
+        .tab-content-modal.active{display:block}
+        .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.75em}
+        .badge-buy{background:#1a4a1a;color:#4caf50}
+        .badge-sell{background:#4a1a1a;color:#f44336}
+        .badge-div{background:#1a3a5a;color:#64b5f6}
+        .pos-gain{color:#4caf50}
+        .pos-loss{color:#f44336}
+        .loading{padding:20px;text-align:center;color:#aaa;font-style:italic}
+    </style>
+</head>
+<body>
+<div class="header">
+    <h1>IBKR Portfolio Manager</h1>
+    <div style="display:flex;gap:10px;align-items:center">
+        <span id="connStat" class="err">Not connected</span>
+                    <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
+        <button class="btn btn-primary" onclick="openSettings()">Settings</button>
+        <button class="btn btn-warning" onclick="syncFromSheets()">Sync</button>
+        <button class="btn btn-success" onclick="openUploadModal()">Upload CSV</button>
+        <button class="btn btn-primary" onclick="openAddTradeModal()">+ Trade</button>
+        <button class="btn btn-primary" onclick="openAddDivModal()">+ Dividend</button>
+    </div>
+</div>
+
+<div class="nav-tabs">
+    <div class="nav-tab active" onclick="showTab('transactions')" id="tab-transactions">Transactions</div>
+    <div class="nav-tab" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
+    <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
+    <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
+</div>
+
+<div class="content">
+    <div id="page-transactions">
+        <div class="card">
+            <div class="filters">
+                <div class="filter-group">
+                    <label>Search</label>
+                    <input id="f-search" oninput="applyFilters()" placeholder="Symbol, desc...">
+                </div>
+                <div class="filter-group">
+                    <label>Account</label>
+                    <select id="f-account" onchange="applyFilters()"><option value="">All</option></select>
+                </div>
+                <div class="filter-group">
+                    <label>Category</label>
+                    <select id="f-category" onchange="applyFilters()">
+                        <option value="">All</option>
+                        <option>Stock</option>
+                        <option>Forex</option>
+                        <option>Options</option>
+                        <option>Fixed Income</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Action</label>
+                    <select id="f-action" onchange="applyFilters()">
+                        <option value="">All</option>
+                        <option>Buy</option>
+                        <option>Sell</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Currency</label>
+                    <select id="f-currency" onchange="applyFilters()">
+                        <option value="">All</option>
+                        <option>CAD</option>
+                        <option>USD</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>From</label>
+                    <input id="f-from" type="date" onchange="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>To</label>
+                    <input id="f-to" type="date" onchange="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>Show</label>
+                    <select id="f-perpage" onchange="applyFilters()">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="clearFilters()">Clear</button>
+                <button class="btn btn-primary" onclick="exportTrades()">Export CSV</button>
+            </div>
+            <div id="trades-info" style="margin-bottom:10px;font-size:0.8em;color:#aaa"></div>
+            <div id="trades-table-wrap"></div>
+            <div id="trades-pagination" class="pagination"></div>
+        </div>
+    </div>
+
+    <div id="page-portfolio" style="display:none">
+        <div id="port-stats" class="stat-grid"></div>
+        <div class="card">
+            <h3>Current Positions</h3>
+            <div id="port-table-wrap"></div>
+        </div>
+    </div>
+
+    <div id="page-gainloss" style="display:none">
+        <div id="gl-stats" class="stat-grid"></div>
+        <div class="card">
+            <h3>Realized Gain/Loss</h3>
+            <div id="gl-table-wrap"></div>
+        </div>
+    </div>
+
+    <div id="page-dividends" style="display:none">
+        <div id="div-stats" class="stat-grid"></div>
+        <div class="card">
+            <div class="filters">
+                <div class="filter-group">
+                    <label>From</label>
+                    <input id="df-from" type="date" onchange="applyDivFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>To</label>
+                    <input id="df-to" type="date" onchange="applyDivFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>Show</label>
+                    <select id="df-perpage" onchange="applyDivFilters()">
+                        <option value="25">25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="all">All</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary" onclick="exportDivs()">Export CSV</button>
+                            <button class="btn btn-primary" onclick="syncData()" id="sync-btn">⟳ Sync with Google Sheets</button>
+            </div>
+            <div id="div-table-wrap"></div>
+            <div id="div-pagination" class="pagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modals -->
+<div id="modal-settings" class="modal-overlay">
+    <div class="modal">
+        <h3>Settings</h3>
+        <div class="form-group">
+            <label>Google Sheets Web App URL</label>
+            <input id="set-url" placeholder="https://script.google.com/macros/s/...">
+                        </div>
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" id="set-autosync" style="margin-right:8px;">
+                    Auto-sync on data load
+                </label>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('modal-settings')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveSettings()">Save & Connect</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-add-trade" class="modal-overlay">
+    <div class="modal">
+        <h3>Add Trade</h3>
+        <div class="form-group">
+            <label>Date</label>
+            <input id="at-date" type="date">
+        </div>
+        <div class="form-group">
+            <label>Account</label>
+            <input id="at-account" placeholder="e.g. U1234567">
+        </div>
+        <div class="form-group">
+            <label>Action</label>
+            <select id="at-action"><option>Buy</option><option>Sell</option></select>
+        </div>
+        <div class="form-group">
+            <label>Symbol</label>
+            <input id="at-symbol">
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <input id="at-desc">
+        </div>
+        <div class="form-group">
+            <label>Quantity</label>
+            <input id="at-qty" type="number" step="any">
+        </div>
+        <div class="form-group">
+            <label>Price</label>
+            <input id="at-price" type="number" step="any">
+        </div>
+        <div class="form-group">
+            <label>Amount</label>
+            <input id="at-amount" type="number" step="any">
+        </div>
+        <div class="form-group">
+            <label>Commission</label>
+            <input id="at-comm" type="number" step="any">
+        </div>
+        <div class="form-group">
+            <label>Currency</label>
+            <select id="at-currency"><option>CAD</option><option>USD</option></select>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('modal-add-trade')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveTrade()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-add-div" class="modal-overlay">
+    <div class="modal">
+        <h3>Add Dividend</h3>
+        <div class="form-group">
+            <label>Date</label>
+            <input id="ad-date" type="date">
+        </div>
+        <div class="form-group">
+            <label>Account</label>
+            <input id="ad-account" placeholder="e.g. U1234567">
+        </div>
+        <div class="form-group">
+            <label>Symbol</label>
+            <input id="ad-symbol">
+        </div>
+        <div class="form-group">
+            <label>Description</label>
+            <input id="ad-desc">
+        </div>
+        <div class="form-group">
+            <label>Amount</label>
+            <input id="ad-amount" type="number" step="any">
+        </div>
+        <div class="form-group">
+            <label>Currency</label>
+            <select id="ad-currency"><option>CAD</option><option>USD</option></select>
+        </div>
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('modal-add-div')">Cancel</button>
+            <button class="btn btn-primary" onclick="saveDiv()">Save</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-upload" class="modal-overlay">
+    <div class="modal">
+        <h3>Bulk Upload CSV</h3>
+        <div class="tabs-modal">
+            <button class="tab-modal-btn active" onclick="switchUploadTab('ibkr')">IBKR Raw</button>
+            <button class="tab-modal-btn" onclick="switchUploadTab('trades')">Trades CSV</button>
+            <button class="tab-modal-btn" onclick="switchUploadTab('divs')">Dividends CSV</button>
+        </div>
+        
+        <div id="up-ibkr">
+            <p style="font-size:0.85em;color:#aaa;margin-bottom:10px">Paste or upload your IBKR activity statement CSV. The app will auto-detect trades and dividends.</p>
+            <div class="form-group">
+                <label>Upload File</label>
+                <input id="up-ibkr-file" type="file" accept=".csv">
+            </div>
+            <div class="form-group">
+                <label>Or Paste CSV Content</label>
+                <textarea id="up-ibkr-text" style="height:150px"></textarea>
+            </div>
+        </div>
+        
+        <div id="up-trades" style="display:none">
+            <p style="font-size:0.85em;color:#aaa;margin-bottom:10px">Upload trades CSV. Expected columns: Date, Account, Action, Symbol, Description, Quantity, Price, Amount, Commission, Currency</p>
+            <input id="up-trades-file" type="file" accept=".csv">
+        </div>
+        
+        <div id="up-divs" style="display:none">
+            <p style="font-size:0.85em;color:#aaa;margin-bottom:10px">Upload dividends CSV. Expected columns: Date, Account, Symbol, Description, Amount, Currency</p>
+            <input id="up-divs-file" type="file" accept=".csv">
+        </div>
+
+        <div id="up-preview" style="margin-top:10px;font-size:0.85em;color:#4caf50"></div>
+        
+        <div class="modal-footer">
+            <button class="btn" onclick="closeModal('modal-upload')">Cancel</button>
+            <button class="btn btn-success" onclick="processUpload()">Import</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
+    var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
+    var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
+    var filteredTrades = [];
+    var filteredDivs = [];
+    var tradeCurrentPage = 1;
+    var divCurrentPage = 1;
+    var currentUploadTab = 'ibkr';
+
+    // Replace your current function $(id) with this:
+    function $(id) {
+        if (id.startsWith('#')) id = id.substring(1); // Handle both 'id' and '#id'
+        return document.getElementById(id);
+    }
+    function fmt(n,d){return (+(+n).toFixed(d||2)).toLocaleString('en-CA',{minimumFractionDigits:d||2,maximumFractionDigits:d||2});}
+    function fmtDate(d){if(!d)return '';try{return new Date(d).toISOString().slice(0,10);}catch(e){return d;}}
+    function esc(s){if(s===undefined||s===null)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+    function saveLocal(){
+        localStorage.setItem('ibkr_trades', JSON.stringify(allTrades));
+        localStorage.setItem('ibkr_divs', JSON.stringify(allDivs));
+    }
+
+    function getAssetType(t) {
+        if (!t.symbol) return 'Stock';
+            if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stock')) return 'Stock'; if (cat.includes('forex')) return 'Forex'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
+        var s = String(t.symbol).toUpperCase();
+        var d = (t.description || '').toLowerCase();
+        if (['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD'].indexOf(s) >= 0) return 'Forex';
+            if (s.includes('.')) { var parts = s.split('.'); if (parts.length === 2 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[0]) >= 0 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[1]) >= 0) return 'Forex'; }
+        if (d.includes(' bond ') || d.includes(' bill ') || d.includes(' note ')) return 'Fixed Income';
+        if (d.includes(' opt ') || d.includes(' call ') || d.includes(' put ') || (s.length > 6 && /\\d/.test(s))) return 'Options';
+        return 'Stock';
+    }
+
+    function showTab(tab){
+        ['transactions','portfolio','gainloss','dividends'].forEach(function(t){
+            $('page-'+t).style.display = t===tab?'':'none';
+            $('tab-'+t).classList.toggle('active',t===tab);
+        });
+        if(tab==='portfolio') renderPortfolio();
+        if(tab==='gainloss') renderGainLoss();
+        if(tab==='dividends') { applyDivFilters(); renderDivStats(); }
+    }
+
+    function openModal(id){$(id).classList.add('show');}
+    function closeModal(id){$(id).classList.remove('show');}
+
+    function openSettings(){
+        $('set-url').value = GAS_URL;
+        openModal('modal-settings');
+        var checkbox = $('set-autosync');
+        if(checkbox) checkbox.checked = localStorage.getItem('ibkr_autosync') === 'true';
+    }
+
+    function saveSettings(){
+        GAS_URL = $('set-url').value.trim();
+        localStorage.setItem('ibkr_gas_url', GAS_URL);
+        var checkbox = $('set-autosync');
+        var AUTO_SYNC = checkbox ? checkbox.checked : false;
+        localStorage.setItem('ibkr_autosync', AUTO_SYNC);
+        closeModal('modal-settings');
+        if(GAS_URL) checkConnection();
+    }
+    
+
+function syncData() {
+    if (!GAS_URL) {
+        alert('Please configure Google Sheets URL in Settings first.');
+        return;
+    }
+
+    const btn = $('sync-btn');
+    const status = $('sync-status');
+    const conn = $('connStat');
+    
+    if (btn) { btn.disabled = true; btn.textContent = 'Syncing...'; }
+    if (conn) { conn.textContent = 'Syncing...'; conn.className = ''; }
+
+    // 1. Download latest data from Sheets
+    fetch(`${GAS_URL}?action=getAll`, {
+        method: 'GET',
+        mode: 'cors',
+        cache: 'no-cache',
+        redirect: 'follow'
+    })
+    .then(response => {
+        if (!response.ok) throw new Error('Network response was not ok');
+        return response.json();
+    })
+    .then(cloudData => {
+        // Merge: Take Cloud data if local is empty, otherwise keep local (User's choice)
+        // Here we prioritize the cloud as the "Source of Truth"
+        allTrades = cloudData.trades || [];
+        allDivs = cloudData.dividends || [];
+        
+        saveLocal();
+        applyFilters();
+        updateAccountFilter();
+        renderPortfolio();
+        renderDivStats();
+
+        // 2. Immediate confirmation UI update
+        const ts = new Date().toLocaleString();
+        localStorage.setItem('ibkr_sync_time', ts);
+        
+        if (status) { status.textContent = '✔ Last synced: ' + ts; status.style.display = ''; }
+        if (conn) { conn.textContent = 'Connected'; conn.className = 'ok'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '⟳ Sync with Google Sheets'; }
+        
+        console.log('Sync Complete');
+    })
+    .catch(err => {
+        console.error('Sync error:', err);
+        if (conn) { conn.textContent = 'Connection Error'; conn.className = 'err'; }
+        if (btn) { btn.disabled = false; btn.innerHTML = '⟳ Sync with Google Sheets'; }
+        alert('Sync failed. Check console for details. Ensure Web App is deployed as "Anyone".');
+    });
+}
+    
+
+    function openAddTradeModal(){
+        $('at-date').value = new Date().toISOString().slice(0,10);
+        openModal('modal-add-trade');
+    }
+
+    function openAddDivModal(){
+        $('ad-date').value = new Date().toISOString().slice(0,10);
+        openModal('modal-add-div');
+    }
+
+    function openUploadModal(){
+        switchUploadTab('ibkr');
+        $('up-ibkr-text').value='';
+        $('up-ibkr-file').value='';
+        if($('up-trades-file')) $('up-trades-file').value='';
+        if($('up-divs-file')) $('up-divs-file').value='';
+        $('up-preview').textContent='';
+        openModal('modal-upload');
+    }
+
+    function switchUploadTab(tab){
+        currentUploadTab = tab;
+        ['ibkr','trades','divs'].forEach(function(t){
+            var el = $('up-'+t);
+            if(el) el.style.display = t===tab?'block':'none';
+        });
+        document.querySelectorAll('.tab-modal-btn').forEach(function(btn, i){
+            var labels = ['ibkr','trades','divs'];
+            btn.classList.toggle('active', labels[i]===tab);
+        });
+    }
+
+    // 1. Update checkConnection to be CORS-safe
+function checkConnection(){
+    if(!GAS_URL){$('connStat').textContent='Not connected';$('connStat').className='err';return;}
+    $('connStat').textContent='Connecting...';
+    
+    fetch(GAS_URL + '?action=ping', {
+        method: 'GET',
+        mode: 'cors', // Explicitly ask for CORS
+        redirect: 'follow'
+    })
+    .then(r => r.json())
+    .then(r => {
+        if(r && r.success){
+            $('connStat').textContent='Connected';
+            $('connStat').className='ok';
+        }
+    })
+    .catch(() => {
+        $('connStat').textContent='Not connected';
+        $('connStat').className='err';
+    });
+}
+
+// 2. Remove gasCall and gasPost entirely (they are redundant now)
+// Use this unified function instead for all future calls:
+async function apiCall(params) {
+    const queryString = Object.keys(params)
+        .map(k => encodeURIComponent(k) + '=' + encodeURIComponent(params[k]))
+        .join('&');
+    
+    const response = await fetch(`${GAS_URL}?${queryString}`, {
+        method: 'GET',
+        mode: 'cors',
+        redirect: 'follow'
+    });
+    return await response.json();
+}
+
+
+    function syncFromSheets() {
+        syncData();
+    }
+
+    function syncFromSheets_old(){
+        if(!GAS_URL){alert('Configure URL first.');return;}
+        $('connStat').textContent='Syncing...';
+        gasCall({action:'getTrades'}, function(r){
+            if(r&&r.data){allTrades=r.data;}
+            gasCall({action:'getDividends'}, function(r2){
+                if(r2&&r2.data){allDivs=r2.data;}
+                saveLocal();
+                applyFilters();
+                renderPortfolio();
+                $('connStat').textContent='Synced';$('connStat').className='ok';
+            });
+        }, function(){$('connStat').textContent='Sync failed';$('connStat').className='err';});
+    }
+
+    function applyFilters(){
+        tradeCurrentPage = 1;
+        var search = ($('f-search').value||'').toLowerCase();
+        var account = $('f-account').value||'';
+        var category = $('f-category').value||'';
+        var action = $('f-action').value||'';
+        var currency = $('f-currency').value||'';
+        var from = $('f-from').value||'';
+        var to = $('f-to').value||'';
+
+        filteredTrades = allTrades.filter(function(t){
+            if(search && !(String(t.symbol||'').toLowerCase().includes(search)||String(t.description||'').toLowerCase().includes(search))) return false;
+            if(account && String(t.account||'')!==account) return false;
+            if(category && getAssetType(t)!==category) return false;
+            if(action && String(t.action||'').toLowerCase()!==action.toLowerCase()) return false;
+            if(currency && String(t.currency||'').toLowerCase()!==currency.toLowerCase()) return false;
+            if(from && String(t.date||'')<from) return false;
+            if(to && String(t.date||'')>to) return false;
+            return true;
+        });
+        renderTradesTable();
+    }
+
+    function renderTradesTable(){
+        var perPageVal = ($('f-perpage')||{}).value||'25';
+        var perPage = perPageVal==='all'?filteredTrades.length:(parseInt(perPageVal)||25);
+        var total = filteredTrades.length;
+        var totalPages = perPage>0?Math.max(1,Math.ceil(total/perPage)):1;
+        if(tradeCurrentPage>totalPages) tradeCurrentPage=totalPages;
+
+        var start = (tradeCurrentPage-1)*perPage;
+        var rows = filteredTrades.slice(start, perPage===filteredTrades.length?undefined:start+perPage);
+
+        $('trades-info').textContent = 'Showing '+(total===0?0:start+1)+'-'+Math.min(start+rows.length,total)+' of '+total+' records ('+allTrades.length+' total loaded)';
+
+        if(!rows.length){
+            $('trades-table-wrap').innerHTML='<div class="loading">No transactions match filters.</div>';
+            $('trades-pagination').innerHTML='';
+            return;
+        }
+
+        var html='<table><thead><tr><th>Date</th><th>Account</th><th>Action</th><th>Symbol</th><th>Description</th><th>Type</th><th>Qty</th><th>Price</th><th>Amount</th><th>Comm</th><th>Currency</th><th></th></tr></thead><tbody>';
+        rows.forEach(function(t, i){
+            var idx = allTrades.indexOf(t);
+            var assetType = getAssetType(t);
+            html += '<tr><td>'+fmtDate(t.date)+'</td><td>'+esc(t.account)+'</td><td>'+esc(t.action)+'</td><td>'+esc(t.symbol)+'</td><td>'+esc(t.description)+'</td><td>'+assetType+'</td><td>'+fmt(t.quantity,4)+'</td><td>'+fmt(t.price)+'</td><td>'+fmt(t.amount)+'</td><td>'+fmt(t.commission)+'</td><td>'+esc(t.currency)+'</td><td><button class="btn btn-danger" onclick="deleteTrade(\''+String(t.id||idx)+'\')" style="padding:3px 8px;font-size:0.75em">Del</button></td></tr>';
+        });
+        html+='</tbody></table>';
+        $('trades-table-wrap').innerHTML=html;
+        renderPagination('trades-pagination', totalPages, tradeCurrentPage, function(p){tradeCurrentPage=p;renderTradesTable();});
+    }
+
+    function renderPagination(containerId, totalPages, current, cb){
+        var el=$(containerId); if(!el)return;
+        if(totalPages<=1){el.innerHTML='';return;}
+        var html='';
+        if(current>1) html+='<button onclick="showPage(\''+containerId+'\','+(current-1)+')">&lsaquo;</button>';
+        var start=Math.max(1,current-2), end=Math.min(totalPages,start+4);
+        for(var p=start;p<=end;p++) html+='<button class="'+(p===current?'active':'')+'" onclick="showPage(\''+containerId+'\','+p+')">'+p+'</button>';
+        if(current<totalPages) html+='<button onclick="showPage(\''+containerId+'\','+(current+1)+')">&rsaquo;</button>';
+        el.innerHTML=html;
+        window['cb_'+containerId] = cb;
+    }
+    function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
+
+    function applyDivFilters(){
+        divCurrentPage=1;
+        var from=$('df-from').value||'';
+        var to=$('df-to').value||'';
+        filteredDivs=allDivs.filter(function(d){
+            if(from&&String(d.date||'')<from)return false;
+            if(to&&String(d.date||'')>to)return false;
+            return true;
+        });
+        renderDivTable();
+    }
+
+    function renderDivTable(){
+        var perPageVal=($('df-perpage')||{}).value||'25';
+        var perPage=perPageVal==='all'?filteredDivs.length:(parseInt(perPageVal)||25);
+        var total=filteredDivs.length;
+        var totalPages=Math.max(1,Math.ceil(total/perPage));
+        if(divCurrentPage>totalPages)divCurrentPage=totalPages;
+        var start=(divCurrentPage-1)*perPage;
+        var rows=filteredDivs.slice(start,start+perPage);
+
+        if(!rows.length){$('div-table-wrap').innerHTML='<div class="loading">No dividends.</div>';$('div-pagination').innerHTML='';return;}
+        var html='<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
+        rows.forEach(function(d){
+            html+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.account)+'</td><td>'+esc(d.symbol)+'</td><td>'+esc(d.description)+'</td><td class="pos-gain">'+fmt(d.amount)+'</td><td>'+esc(d.currency)+'</td><td><button class="btn btn-danger" onclick="deleteDiv(\''+esc(d.id)+'\')" style="padding:3px 8px;font-size:0.75em">Del</button></td></tr>';
+        });
+        html+='</tbody></table>';
+        $('div-table-wrap').innerHTML=html;
+        renderPagination('div-pagination', totalPages, divCurrentPage, function(p){divCurrentPage=p;renderDivTable();});
+    }
+
+    function renderDivStats(){
+        var totalCAD=0, totalUSD=0;
+        allDivs.forEach(function(d){
+            if((d.currency||'').toUpperCase()==='USD') totalUSD+=parseFloat(d.amount)||0;
+            else totalCAD+=parseFloat(d.amount)||0;
+        });
+        $('div-stats').innerHTML='<div class="stat-card"><div class="val">$'+fmt(totalCAD)+'</div><div class="lbl">Total Dividends (CAD)</div></div><div class="stat-card"><div class="val">$'+fmt(totalUSD)+'</div><div class="lbl">Total Dividends (USD)</div></div><div class="stat-card"><div class="val">'+allDivs.length+'</div><div class="lbl">Total Records</div></div>';
+    }
+
+    function renderPortfolio(){
+        var positions={};
+        allTrades.forEach(function(t){
+            var key=esc(t.symbol)+'|'+esc(t.currency)+'|'+esc(t.account);
+            if(!positions[key])positions[key]={symbol:t.symbol,currency:t.currency,qty:0,totalCost:0,account:t.account,type:getAssetType(t)};
+            var q=parseFloat(t.quantity)||0;
+            var a=parseFloat(t.amount)||0;
+            var act=(t.action||'').toLowerCase();
+            if(act==='buy'){positions[key].qty+=q;positions[key].totalCost+=Math.abs(a);}
+            else if(act==='sell'){
+                var avg = positions[key].qty>0 ? positions[key].totalCost/positions[key].qty : 0;
+                positions[key].qty-=q;
+                positions[key].totalCost-=avg*q;
+            }
+        });
+        var posArr=Object.values(positions).filter(function(p){return Math.abs(p.qty)>0.0001;});
+        var totalCost=posArr.reduce(function(s,p){return s+(p.currency==='USD'?p.totalCost*1.36:p.totalCost);},0);
+
+        $('port-stats').innerHTML='<div class="stat-card"><div class="val">'+posArr.length+'</div><div class="lbl">Open Positions</div></div><div class="stat-card"><div class="val">$'+fmt(totalCost)+'</div><div class="lbl">Total Cost Basis (est CAD)</div></div>';
+
+        if(!posArr.length){$('port-table-wrap').innerHTML='<div class="loading">No positions.</div>';return;}
+        var byAccount={};
+        posArr.forEach(function(p){
+            if(!byAccount[p.account])byAccount[p.account]={};
+            if(!byAccount[p.account][p.type])byAccount[p.account][p.type]=[];
+            byAccount[p.account][p.type].push(p);
+        });
+
+        var html='';
+        Object.keys(byAccount).sort().forEach(function(acct){
+            html+='<h3 style="margin-top:20px;border-bottom:1px solid #333">'+esc(acct)+'</h3>';
+            Object.keys(byAccount[acct]).sort().forEach(function(type){
+                html+='<h4 style="margin-top:10px;color:#e94560;">'+type+'</h4>';
+                html+='<table><thead><tr><th>Symbol</th><th>Quantity</th><th>Avg Cost</th><th>Total Cost</th><th>Currency</th></tr></thead><tbody>';
+                byAccount[acct][type].forEach(function(p){
+                    var avg=p.qty>0?p.totalCost/p.qty:0;
+                    html+='<tr><td>'+esc(p.symbol)+'</td><td>'+fmt(p.qty,4)+'</td><td>'+fmt(avg)+'</td><td>'+fmt(p.totalCost)+'</td><td>'+esc(p.currency)+'</td></tr>';
+                });
+                html+='</tbody></table>';
+            });
+        });
+        $('port-table-wrap').innerHTML=html;
+    }
+
+    function renderGainLoss(){
+    var realized={};
+    var costBasis={};
+    allTrades.sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
+    
+    allTrades.forEach(function(t){
+        var key=esc(t.symbol)+'|'+esc(t.currency);
+        if(!costBasis[key])costBasis[key]={qty:0,totalCost:0};
+        if(!realized[key])realized[key]={symbol:t.symbol,currency:t.currency,proceeds:0,cost:0,gain:0,type:getAssetType(t)};
+        
+        var q=parseFloat(t.quantity)||0;
+        var a=Math.abs(parseFloat(t.amount)||0);
+        var comm=Math.abs(parseFloat(t.commission)||0);
+        var act=(t.action||'').toLowerCase();
+        
+        if(act==='buy'){
+            costBasis[key].qty+=q;
+            costBasis[key].totalCost+=a+comm;
+        } else if(act==='sell' && costBasis[key].qty>0){
+            var avgCost=costBasis[key].totalCost/costBasis[key].qty;
+            var costOfSold=avgCost*q;
+            realized[key].proceeds+=a-comm;
+            realized[key].cost+=costOfSold;
+            realized[key].gain+=a-comm-costOfSold;
+            costBasis[key].qty-=q;
+            costBasis[key].totalCost-=costOfSold;
+        }
+    });
+    
+    var glArr=Object.values(realized).filter(function(r){return Math.abs(r.gain)>0.001;});
+    
+    // Separate stocks and forex
+    var stockGains=glArr.filter(function(r){return r.type==='Stock';});
+    var forexGains=glArr.filter(function(r){return r.type==='Forex';});
+    
+    var totalStockGain=stockGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
+    var totalForexGain=forexGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
+    var totalGain=totalStockGain+totalForexGain;
+    
+    $('gl-stats').innerHTML='<div class="stat-card"><div class="val '+(totalGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalGain)+'</div><div class="lbl">Total Realized Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalStockGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalStockGain)+'</div><div class="lbl">Stock Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalForexGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalForexGain)+'</div><div class="lbl">Forex Gain/Loss (est CAD)</div></div>';
+    
+    var html='';
+    if(stockGains.length>0){
+        html+='<h4 style="margin-top:15px;color:#e94560;">Stock Realized Gain/Loss</h4>';
+        html+='<table><thead><tr><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
+        stockGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
+            html+='<tr><td>'+esc(r.symbol)+'</td><td>'+fmt(r.proceeds)+'</td><td>'+fmt(r.cost)+'</td><td class="'+(r.gain>=0?'pos-gain':'pos-loss')+'">'+fmt(r.gain)+'</td><td>'+esc(r.currency)+'</td></tr>';
+        });
+        html+='</tbody></table>';
+    }
+    
+    if(forexGains.length>0){
+        html+='<h4 style="margin-top:20px;color:#e94560;">Forex Realized Gain/Loss</h4>';
+        html+='<table><thead><tr><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
+        forexGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
+            html+='<tr><td>'+esc(r.symbol)+'</td><td>'+fmt(r.proceeds)+'</td><td>'+fmt(r.cost)+'</td><td class="'+(r.gain>=0?'pos-gain':'pos-loss')+'">'+fmt(r.gain)+'</td><td>'+esc(r.currency)+'</td></tr>';
+        });
+        html+='</tbody></table>';
+    }
+    
+    $('gl-table-wrap').innerHTML=html;
+}
+
+    function saveTrade(){
+        var t={id:'T'+Date.now(),date:$('at-date').value,account:$('at-account').value,action:$('at-action').value,symbol:$('at-symbol').value.toUpperCase(),description:$('at-desc').value,quantity:parseFloat($('at-qty').value)||0,price:parseFloat($('at-price').value)||0,amount:parseFloat($('at-amount').value)||0,commission:parseFloat($('at-comm').value)||0,currency:$('at-currency').value};
+        if(!t.date||!t.symbol){alert('Date and Symbol required.');return;}
+        allTrades.push(t);saveLocal();
+        if(GAS_URL)gasPost({action:'addTrade',trade:t});
+        closeModal('modal-add-trade');applyFilters();updateAccountFilter();
+    }
+
+    function saveDiv(){
+        var d={id:'D'+Date.now(),date:$('ad-date').value,account:$('ad-account').value,symbol:$('ad-symbol').value.toUpperCase(),description:$('ad-desc').value,amount:parseFloat($('ad-amount').value)||0,currency:$('ad-currency').value};
+        if(!d.date||!d.symbol){alert('Date and Symbol required.');return;}
+        allDivs.push(d);saveLocal();
+        if(GAS_URL)gasPost({action:'addDividend',dividend:d});
+        closeModal('modal-add-div');
+        if($('page-dividends').style.display!=='none'){applyDivFilters();renderDivStats();}
+    }
+
+    function deleteTrade(id){
+        if(!confirm('Delete this trade?'))return;
+        allTrades=allTrades.filter(function(t){return String(t.id)!==String(id);});
+        saveLocal();if(GAS_URL)gasPost({action:'deleteTrade',id:id});applyFilters();
+    }
+    function deleteDiv(id){
+        if(!confirm('Delete this dividend?'))return;
+        allDivs=allDivs.filter(function(d){return String(d.id)!==String(id);});
+        saveLocal();if(GAS_URL)gasPost({action:'deleteDividend',id:id});applyDivFilters();
+    }
+
+    function processUpload(){
+        if(currentUploadTab==='ibkr'){
+            var file=$('up-ibkr-file').files[0];
+            var text=$('up-ibkr-text').value.trim();
+            if(file){var r=new FileReader();r.onload=function(e){parseIBKR(e.target.result);};r.readAsText(file);}
+            else if(text){parseIBKR(text);}
+        } else if(currentUploadTab==='trades'){
+            var f=$('up-trades-file').files[0]; if(!f)return;
+            var r=new FileReader();r.onload=function(e){parseTradesCsv(e.target.result);};r.readAsText(f);
+        } else if(currentUploadTab==='divs'){
+            var f=$('up-divs-file').files[0]; if(!f)return;
+            var r=new FileReader();r.onload=function(e){parseDivsCsv(e.target.result);};r.readAsText(f);
+        }
+    }
+
+    function parseCSVLine(line){
+        var res=[],inQ=false,cur='';
+        for(var i=0;i<line.length;i++){
+            var c=line[i];
+            if(c=='"'){if(inQ&&line[i+1]=='"') {cur+='"';i++;} else inQ=!inQ;}
+            else if(c==','&&!inQ){res.push(cur.trim());cur='';}
+            else cur+=c;
+        }
+        res.push(cur.trim());
+        return res;
+    }
+
+    function parseIBKR(text){
+        var trades=[]; var divs=[]; var currentAccount='';
+        var lines=text.split(/\r?\n/);
+        lines.forEach(function(line){
+            var cols=parseCSVLine(line);
+            if(!cols||cols.length<4)return;
+            var section=(cols[0]||'').trim();
+            var rowType=(cols[1]||'').trim().toLowerCase();
+            if(section==='Account Information'&&rowType==='data'){
+                if((cols[2]||'').trim()==='Account') currentAccount=(cols[3]||'').trim();
+            }
+            if(rowType!=='data')return;
+            if(section==='Trades'&&cols.length>=12){
+                var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
+                if(!symbol||symbol===currency)return;
+                trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
+            } else if((section==='Dividends'||section==='Withholding Tax')&&cols.length>=6){
+                var currency=cols[2], date=cols[3], desc=cols[4], amount=parseFloat(cols[5]);
+                if(!date||isNaN(new Date(date).getTime()))return;
+                var sym=desc.split(' ')[0]||'';
+                divs.push({id:'D'+Date.now()+'_'+divs.length, date:date, account:currentAccount, symbol:sym, description:desc, amount:amount, currency:currency});
+            }
+        });
+        var addedT=0; var addedD=0;
+        trades.forEach(function(t){ if(!allTrades.some(function(x){return x.date===t.date&&x.symbol===t.symbol&&x.quantity===t.quantity;})){allTrades.push(t);addedT++;} });
+        divs.forEach(function(d){ if(!allDivs.some(function(x){return x.date===d.date&&x.symbol===d.symbol&&x.amount===d.amount;})){allDivs.push(d);addedD++;} });
+        saveLocal();
+        $('up-preview').textContent='Added '+addedT+' trades, '+addedD+' dividends';
+        closeModal('modal-upload'); applyFilters(); updateAccountFilter();
+    }
+
+    function parseTradesCsv(text){
+        var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
+        if(lines.length<2)return;
+        var headers=parseCSVLine(lines[0]).map(function(h){return h.toLowerCase().replace(/[^a-z]/g,'');});
+        var added=0;
+        lines.slice(1).forEach(function(l){
+            var v=parseCSVLine(l); var o={}; headers.forEach(function(h,i){o[h]=v[i];});
+            var t={id:'T'+Date.now()+'_'+added, date:o.date, account:o.account, action:o.action||'Buy', symbol:(o.symbol||'').toUpperCase(), description:o.description||o.symbol, quantity:parseFloat(o.quantity||o.qty)||0, price:parseFloat(o.price)||0, amount:parseFloat(o.amount)||0, commission:parseFloat(o.commission||o.comm)||0, currency:o.currency||'CAD'};
+            if(t.date&&t.symbol){allTrades.push(t);added++;}
+        });
+        saveLocal(); $('up-preview').textContent='Added '+added+' trades';
+        closeModal('modal-upload'); applyFilters(); updateAccountFilter();
+    }
+
+    function parseDivsCsv(text){
+        var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
+        if(lines.length<2)return;
+        var added=0;
+        lines.slice(1).forEach(function(l){
+            var v=parseCSVLine(l);
+            var d={id:'D'+Date.now()+'_'+added, date:v[0], account:v[1], symbol:v[2], description:v[3], amount:parseFloat(v[4]), currency:v[5]||'CAD'};
+            if(d.date&&d.symbol){allDivs.push(d);added++;}
+        });
+        saveLocal(); $('up-preview').textContent='Added '+added+' dividends';
+        closeModal('modal-upload'); applyDivFilters();
+    }
+
+    function exportTrades(){
+        var csv='Date,Account,Action,Symbol,Description,Quantity,Price,Amount,Commission,Currency';
+        filteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
+        dlCsv(csv,'trades.csv');
+    }
+    function exportDivs(){
+        var csv='Date,Account,Symbol,Description,Amount,Currency';
+        filteredDivs.forEach(function(d){csv+=[fmtDate(d.date),d.account,d.symbol,d.description,d.amount,d.currency].join(',')+'';});
+        dlCsv(csv,'dividends.csv');
+    }
+    function dlCsv(csv,name){var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=name;a.click();}
+
+    function clearFilters(){
+        ['f-search','f-from','f-to','f-account','f-category','f-action','f-currency'].forEach(function(id){$(id).value='';});
+        $('f-perpage').value='25';
+        applyFilters();
+    }
+
+    function updateAccountFilter(){
+        var sel=$('f-account'); var cur=sel.value;
+        var accts=[...new Set(allTrades.map(function(t){return t.account||'';}).filter(Boolean))].sort();
+        sel.innerHTML='<option value="">All</option>';
+        accts.forEach(function(a){var o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);});
+        if(accts.indexOf(cur)>=0) sel.value=cur;
+    }
+
+window.addEventListener('load', function() {
+    // 1. Initial UI Setup
+    updateAccountFilter();
+    applyFilters();
+
+    // 2. Load sync time UI
+    const syncTime = localStorage.getItem('ibkr_sync_time');
+    if (syncTime && $('sync-status')) {
+        $('sync-status').textContent = '✔ Last synced: ' + syncTime;
+        $('sync-status').style.display = '';
+    }
+
+    // 3. Handle Connection / Auto-Sync
+    if (GAS_URL) {
+        checkConnection();
+        const autoSync = localStorage.getItem('ibkr_autosync') === 'true';
+        if (autoSync) {
+            syncData();
+        }
+    }
+});
+</script>
+</body>
+</html>
