@@ -927,7 +927,7 @@ async function handlePriceRefresh() {
             //var currentPrice = priceCache[p.symbol];
             console.log("window, priceCache: ", window, priceCache);
             var liveData = window.currentPrices ? window.currentPrices[p.symbol] : null;
-            var currentPrice = liveData ? liveData.price : (priceCache.prices[p.symbol].price || 0);
+            var currentPrice = liveData ? liveData.price : (priceCache[p.symbol] || 0);
             var marketValue = currentPrice * p.qty;
             var marketValueCAD = p.currency === 'USD' ? marketValue * 1.36 : marketValue;
             totalMarketValue += marketValueCAD;
