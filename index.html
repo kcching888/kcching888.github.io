@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.21</title>
+    <title>IBKR Portfolio Manager v2.3</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -726,6 +726,60 @@ async function getLivePrice(symbol) {
 }
 
 async function updateAllPrices() {
+    const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key');
+    if (!FINNHUB_KEY) return;
+
+    // 1. Check Cache first (15-minute expiry)
+    const CACHE_KEY = 'finnhub_price_cache';
+    const cachedData = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    const now = Date.now();
+    const cacheExpiry = 15 * 60 * 1000; // 15 minutes
+
+    if (cachedData.timestamp && (now - cachedData.timestamp < cacheExpiry)) {
+        console.log("Using cached prices from " + new Date(cachedData.timestamp).toLocaleTimeString());
+        window.currentPrices = cachedData.prices;
+        renderPortfolio();
+        return;
+    }
+
+    // 2. If no valid cache, fetch new prices
+    const symbols = [...new Set(allTrades.map(t => t.symbol))].filter(Boolean);
+    const priceMap = {};
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    for (const symbol of symbols) {
+        try {
+            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.c) {
+                priceMap[symbol] = {
+                    price: data.c,
+                    change: data.d,
+                    pc: data.dp
+                };
+            }
+            // Rate limit safety delay
+            await new Promise(r => setTimeout(r, 150)); 
+        } catch (err) {
+            console.error(`Error fetching ${symbol}:`, err);
+        }
+    }
+
+    // 3. Save to Cache and Global State
+    window.currentPrices = priceMap;
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+        timestamp: Date.now(),
+        prices: priceMap
+    }));
+
+    if (btn) btn.textContent = '$ Refresh Prices';
+    renderPortfolio();
+}
+
+async function updateAllPricesbkup() {
     const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key'); // Recommendation: Store key in localStorage
     if (!FINNHUB_KEY) {
         console.warn("No Finnhub API key found.");
@@ -814,7 +868,7 @@ function fetchStockPrices12(symbols, callback) {
 // A wrapper to prevent spamming the API (1-minute cooldown)
 let lastPriceFetch = 0;
 
-async function handlePriceRefresh() {
+async function handlePriceRefreshbkup() {
     const now = Date.now();
     if (now - lastPriceFetch < 60000) { 
         alert("Please wait 1 minute between price refreshes to respect API limits.");
@@ -832,6 +886,18 @@ async function handlePriceRefresh() {
     btn.textContent = '$ Refresh Prices';
 }
 
+async function handlePriceRefresh() {
+    // Clear the cache to force a new fetch
+    localStorage.removeItem('finnhub_price_cache');
+    
+    const btn = $('price-btn');
+    btn.disabled = true;
+    
+    await updateAllPrices();
+    
+    btn.disabled = false;
+    alert("Prices updated successfully.");
+}
     
     function renderPortfolio() {
     var positions = {};
@@ -871,7 +937,7 @@ async function handlePriceRefresh() {
         }
     });
     
-    var cachedPrices = localStorage.getItem('ibkr_price_cache');
+    var cachedPrices = localStorage.getItem('');
     var cachedTime = localStorage.getItem('ibkr_price_timestamp');
     if (cachedPrices && !lastPriceUpdate) {
         priceCache = JSON.parse(cachedPrices);
@@ -1158,6 +1224,16 @@ window.addEventListener('load', function() {
             syncData();
         }
     }
+
+    // Load prices from cache immediately for instant UI populating
+    const cached = JSON.parse(localStorage.getItem('finnhub_price_cache') || '{}');
+    if (cached.prices) {
+        window.currentPrices = cached.prices;
+        renderPortfolio();
+    }
+
+    // Still call updateAllPrices to check if cache is expired
+    updateAllPrices();
 });
 </script>
 </body>
