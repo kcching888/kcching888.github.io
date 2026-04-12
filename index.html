@@ -703,8 +703,28 @@ async function apiCall(params) {
         $('div-stats').innerHTML='<div class="stat-card"><div class="val">$'+fmt(totalCAD)+'</div><div class="lbl">Total Dividends (CAD)</div></div><div class="stat-card"><div class="val">$'+fmt(totalUSD)+'</div><div class="lbl">Total Dividends (USD)</div></div><div class="stat-card"><div class="val">'+allDivs.length+'</div><div class="lbl">Total Records</div></div>';
     }
 
+// Replace your old fetch logic with this Finnhub version
+async function getLivePrice(symbol) {
+    const FINNHUB_KEY = "YOUR_FINNHUB_API_KEY"; // Replace with your key
+    const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
 
-// Fetch stock prices from API
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        // Finnhub returns 'c' for Current Price
+        return {
+            price: data.c,
+            change: data.d,
+            percent: data.dp
+        };
+    } catch (err) {
+        console.error("Price fetch failed:", err);
+        return null;
+    }
+}
+
+// !!!!Fetch stock prices from API - twelvedata = OBSOLETE!!!!!
 function fetchStockPrices(symbols, callback) {
     if (!symbols || symbols.length === 0) {
         if (callback) callback({});
@@ -778,7 +798,8 @@ function refreshPortfolioPrices() {
             btn.disabled = true;
             btn.textContent = 'Fetching...';
         }
-        fetchStockPrices(uniqueSymbols, function(prices) {
+        // fetchStockPrices(uniqueSymbols, function(prices) {
+        getLivePrice(function(prices) {
             renderPortfolio();
             if (btn) {
                 btn.disabled = false;
