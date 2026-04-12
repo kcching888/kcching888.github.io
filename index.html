@@ -705,7 +705,8 @@ async function apiCall(params) {
 
 // Replace your old fetch logic with this Finnhub version
 async function getLivePrice(symbol) {
-    const FINNHUB_KEY = "YOUR_FINNHUB_API_KEY"; // Replace with your key
+    //const FINNHUB_KEY = "YOUR_FINNHUB_API_KEY"; // Replace with your key
+    var FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key') || '';
     const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
 
     try {
