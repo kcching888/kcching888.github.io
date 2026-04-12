@@ -831,47 +831,6 @@ async function handlePriceRefresh() {
     btn.textContent = '$ Refresh Prices';
 }
 
-function refreshPortfolioPrices() {
-    var positions = {};
-    allTrades.forEach(function(t) {
-        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
-        var q = parseFloat(t.quantity) || 0;
-        var a = parseFloat(t.amount) || 0;
-        var act = (t.action || '').toLowerCase();
-        if (act === 'buy') {
-            positions[key].qty += q;
-            positions[key].totalCost += Math.abs(a);
-        } else if (act === 'sell') {
-            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
-            positions[key].qty -= q;
-            positions[key].totalCost -= avg * q;
-        }
-    });
-    
-    var posArr = Object.values(positions).filter(function(p) {
-        return Math.abs(p.qty) > 0.0001 && p.type === 'Stock';
-    });
-    
-    var symbols = posArr.map(function(p) { return p.symbol; });
-    var uniqueSymbols = [...new Set(symbols)];
-    
-    if (uniqueSymbols.length > 0) {
-        var btn = $('#refresh-prices-btn');
-        if (btn) {
-            btn.disabled = true;
-            btn.textContent = 'Fetching...';
-        }
-        
-        updateAllPrices({
-            renderPortfolio();
-            if (btn) {
-                btn.disabled = false;
-                btn.textContent = '🔄 Refresh Prices';
-            }
-        });
-    }
-}
     
     function renderPortfolio() {
     var positions = {};
