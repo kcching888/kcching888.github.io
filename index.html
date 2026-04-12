@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.33</title>
+    <title>IBKR Portfolio Manager v2.34</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -937,7 +937,7 @@ async function handlePriceRefresh() {
         }
     });
     
-    var cachedPrices = localStorage.getItem('');
+    var cachedPrices = localStorage.getItem('finnhub_price_cache');
     var cachedTime = localStorage.getItem('ibkr_price_timestamp');
     if (cachedPrices && !lastPriceUpdate) {
         priceCache = JSON.parse(cachedPrices);
