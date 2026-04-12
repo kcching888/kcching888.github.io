@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.37</title>
+    <title>IBKR Portfolio Manager v2.38</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -898,8 +898,113 @@ async function handlePriceRefresh() {
     btn.disabled = false;
     alert("Prices updated successfully.");
 }
+function renderPortfolio() {
+    var positions = {};
+    allTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
+        var q = parseFloat(t.quantity) || 0;
+        var a = parseFloat(t.amount) || 0;
+        var act = (t.action || '').toLowerCase();
+        if (act === 'buy') {
+            positions[key].qty += q;
+            positions[key].totalCost += Math.abs(a);
+        } else if (act === 'sell') {
+            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
+            positions[key].qty -= q;
+            positions[key].totalCost -= avg * q;
+        }
+    });
     
-    function renderPortfolio() {
+    var posArr = Object.values(positions).filter(function(p) { return Math.abs(p.qty) > 0.0001; });
+    
+    // --- UPDATED PRICE LOGIC ---
+    var livePrices = window.currentPrices || {};
+    var totalCost = 0, totalMarketValue = 0, totalGainLoss = 0;
+
+    posArr.forEach(function(p) {
+        var costInCAD = p.currency === 'USD' ? p.totalCost * 1.36 : p.totalCost;
+        totalCost += costInCAD;
+        
+        // Check if we have live data for this symbol
+        var liveData = livePrices[p.symbol];
+        
+        if (p.type === 'Stock' && liveData) {
+            var currentPrice = liveData.price;
+            var marketValue = currentPrice * p.qty;
+            var marketValueCAD = p.currency === 'USD' ? marketValue * 1.36 : marketValue;
+            totalMarketValue += marketValueCAD;
+            totalGainLoss += (marketValueCAD - costInCAD);
+        } else {
+            // Fallback: If no live price, use cost as market value (0 gain)
+            totalMarketValue += costInCAD;
+        }
+    });
+    
+    // UI: Stats Cards
+    var priceUpdateText = (window.currentPrices) 
+        ? '<div style="font-size:0.75em;color:#4caf50;margin-top:5px;">Live prices active</div>'
+        : '<div style="font-size:0.75em;color:#aaa;margin-top:5px;">No live price data. Click Refresh.</div>';
+    
+    $('#port-stats').innerHTML = 
+        '<div class="stat-card"><div class="val">' + posArr.length + '</div><div class="lbl">Open Positions</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalCost) + '</div><div class="lbl">Cost Basis (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalMarketValue) + '</div><div class="lbl">Market Value (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val ' + (totalGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGainLoss) + '</div><div class="lbl">Unrealized P&L</div></div>' +
+        priceUpdateText;
+    
+    if (!posArr.length) {
+        $('#port-table-wrap').innerHTML = '<div class="loading">No positions.</div>';
+        return;
+    }
+    
+    // Grouping for the Table
+    var byAccount = {};
+    posArr.forEach(function(p) {
+        if (!byAccount[p.account]) byAccount[p.account] = {};
+        if (!byAccount[p.account][p.type]) byAccount[p.account][p.type] = [];
+        byAccount[p.account][p.type].push(p);
+    });
+    
+    var html = '<div style="margin-bottom:10px;"><button class="btn btn-primary" id="refresh-prices-btn" onclick="handlePriceRefresh()">🔄 Refresh Prices</button></div>';
+    
+    Object.keys(byAccount).sort().forEach(function(acct) {
+        html += '<h3 style="margin-top:20px;border-bottom:1px solid #333">' + esc(acct) + '</h3>';
+        Object.keys(byAccount[acct]).sort().forEach(function(type) {
+            html += '<h4 style="margin-top:10px;color:#e94560;">' + type + '</h4>';
+            html += '<table><thead><tr><th>Symbol</th><th>Quantity</th><th>Avg Cost</th><th>Total Cost</th>';
+            if (type === 'Stock') {
+                html += '<th>Current Price</th><th>Market Value</th><th>Gain/Loss</th><th>G/L %</th>';
+            }
+            html += '<th>Currency</th></tr></thead><tbody>';
+            byAccount[acct][type].forEach(function(p) {
+                var avg = p.qty > 0 ? p.totalCost / p.qty : 0;
+                html += '<tr><td>' + esc(p.symbol) + '</td><td>' + fmt(p.qty, 4) + '</td><td>' + fmt(avg) + '</td><td>' + fmt(p.totalCost) + '</td>';
+                
+                if (type === 'Stock') {
+                    var liveData = livePrices[p.symbol];
+                    if (liveData) {
+                        var currentPrice = liveData.price;
+                        var marketValue = currentPrice * p.qty;
+                        var gainLoss = marketValue - p.totalCost;
+                        var gainLossPct = p.totalCost > 0 ? (gainLoss / p.totalCost * 100) : 0;
+                        html += '<td>' + fmt(currentPrice) + '</td><td>' + fmt(marketValue) + '</td>';
+                        html += '<td class="' + (gainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(gainLoss) + '</td>';
+                        html += '<td class="' + (gainLossPct >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(gainLossPct, 2) + '%</td>';
+                    } else {
+                        html += '<td colspan="4" style="color:#aaa;font-style:italic;">No price data</td>';
+                    }
+                }
+                html += '<td>' + esc(p.currency) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        });
+    });
+    $('#port-table-wrap').innerHTML = html;
+}
+
+    
+    function renderPortfoliobkup() {
     var positions = {};
     allTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
