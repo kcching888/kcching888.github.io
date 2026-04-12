@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.63</h1>
+    <h1>IBKR Portfolio Manager v2.7</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -728,6 +728,42 @@ async function getLivePrice(symbol) {
 }
 
 async function updateAllPrices() {
+    if (!GAS_URL) return;
+    
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Fetching via Google...';
+
+    // 1. Prepare symbol list
+    const symbols = [...new Set(allTrades.map(t => ({ 
+        symbol: t.symbol, 
+        currency: t.currency 
+    })))].filter(s => s.symbol);
+
+    try {
+        // 2. Call your Google Script instead of Yahoo/Finnhub directly
+        const url = `${GAS_URL}?action=getPrices&symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
+        
+        const response = await fetch(url);
+        const priceMap = await response.json();
+
+        // 3. Update State & Cache
+        window.currentPrices = priceMap;
+        localStorage.setItem('finnhub_price_cache', JSON.stringify({
+            timestamp: Date.now(),
+            prices: priceMap
+        }));
+
+        console.log("Prices updated via Google Script");
+        renderPortfolio();
+
+    } catch (err) {
+        console.error("Google Script Price Fetch failed:", err);
+    } finally {
+        if (btn) btn.textContent = '$ Refresh Prices';
+    }
+}
+
+async function updateAllPricesbkup8() {
     const symbols = [...new Set(allTrades.map(t => ({ 
         symbol: t.symbol, 
         currency: t.currency 
