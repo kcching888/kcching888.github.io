@@ -764,6 +764,7 @@ async function updateAllPrices() {
 
     // 3. Update your Global State and UI
     window.currentPrices = priceMap; 
+    console.log("window.currentPrices: ", window.currentPrices);
     renderPortfolio(); // Re-render the table with new prices
 }
 
