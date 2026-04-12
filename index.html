@@ -729,6 +729,71 @@ async function getLivePrice(symbol) {
 
 async function updateAllPrices() {
     const FINNHUB_KEY = localStorage.getItem('finnhub_key');
+    const symbols = [...new Set(allTrades.map(t => ({ 
+        symbol: t.symbol, 
+        currency: t.currency 
+    })))].filter(s => s.symbol);
+
+    const priceMap = {};
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    for (const item of symbols) {
+        try {
+            let priceData = null;
+
+            if (item.currency === 'CAD') {
+                // 1. Correct Yahoo Symbol
+                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
+                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
+                
+                // 2. Use a different proxy if corsproxy.io is failing
+                const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
+                
+                const response = await fetch(proxiedUrl);
+                const json = await response.json();
+                // AllOrigins wraps the response in a 'contents' string
+                const data = JSON.parse(json.contents); 
+                const quote = data.quoteResponse.result[0];
+
+                if (quote) {
+                    priceData = {
+                        price: quote.regularMarketPrice,
+                        change: quote.regularMarketChange,
+                        pc: quote.regularMarketChangePercent
+                    };
+                }
+            } else if (FINNHUB_KEY) {
+                // US Stocks
+                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.c) {
+                    priceData = { price: data.c, change: data.d, pc: data.dp };
+                }
+            }
+
+            if (priceData) priceMap[item.symbol] = priceData;
+
+            await new Promise(r => setTimeout(r, 300)); // Respect rate limits
+        } catch (err) {
+            // This will now show a real error in Eruda instead of 'Script error'
+            console.error("Failed to fetch " + item.symbol, err);
+        }
+    }
+
+    window.currentPrices = priceMap;
+    localStorage.setItem('finnhub_price_cache', JSON.stringify({
+        timestamp: Date.now(),
+        prices: priceMap
+    }));
+
+    if (btn) btn.textContent = '$ Refresh Prices';
+    renderPortfolio();
+}
+
+async function updateAllPricesbkup5() {
+    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
     // Map unique symbols and their currencies
     const symbols = [...new Set(allTrades.map(t => ({ 
         symbol: t.symbol, 
