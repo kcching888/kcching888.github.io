@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.62</h1>
+    <h1>IBKR Portfolio Manager v2.63</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -728,6 +728,63 @@ async function getLivePrice(symbol) {
 }
 
 async function updateAllPrices() {
+    const symbols = [...new Set(allTrades.map(t => ({ 
+        symbol: t.symbol, 
+        currency: t.currency 
+    })))].filter(s => s.symbol);
+
+    const priceMap = {};
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    for (const item of symbols) {
+        try {
+            let priceData = null;
+
+            if (item.currency === 'CAD') {
+                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
+                
+                // Using v6 modules instead of v7 quote - this is often more stable
+                const yahooUrl = `https://query2.finance.yahoo.com/v6/finance/quoteSummary/${ySymbol}?modules=financialData,price`;
+                const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
+                
+                const response = await fetch(proxiedUrl);
+                const wrapper = await response.json();
+                const data = JSON.parse(wrapper.contents);
+
+                // Path changed because we switched from 'quote' to 'quoteSummary'
+                if (data && data.quoteSummary && data.quoteSummary.result) {
+                    const result = data.quoteSummary.result[0];
+                    priceData = {
+                        price: result.price.regularMarketPrice.raw,
+                        change: result.price.regularMarketChange.raw,
+                        pc: result.price.regularMarketChangePercent.raw * 100
+                    };
+                } else if (data.finance && data.finance.error) {
+                    console.error(`Yahoo Error for ${ySymbol}:`, data.finance.error.description);
+                }
+            } else {
+                // ... (Keep your Finnhub logic here for USD stocks)
+            }
+
+            if (priceData) priceMap[item.symbol] = priceData;
+            await new Promise(r => setTimeout(r, 500)); 
+
+        } catch (err) {
+            console.error(`Fetch failed for ${item.symbol}:`, err);
+        }
+    }
+
+    window.currentPrices = priceMap;
+    localStorage.setItem('finnhub_price_cache', JSON.stringify({
+        timestamp: Date.now(),
+        prices: priceMap
+    }));
+    if (btn) btn.textContent = '$ Refresh Prices';
+    renderPortfolio();
+}
+
+async function updateAllPricesbkup7() {
     const FINNHUB_KEY = localStorage.getItem('finnhub_key');
     const symbols = [...new Set(allTrades.map(t => ({ 
         symbol: t.symbol, 
