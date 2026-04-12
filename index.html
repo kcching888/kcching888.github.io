@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.74</title>
+    <title>IBKR Portfolio Manager v2.75</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.74</h1>
+    <h1>IBKR Portfolio Manager v2.75</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -741,8 +741,56 @@ async function getLivePrice(symbol) {
     }
 }
 
-
 async function updateAllPrices() {
+    // 1. Corrected key name
+    const gas_url = localStorage.getItem('ibkr_gas_url'); 
+    if (!gas_url) {
+        console.error("No Google Apps Script URL found in settings (ibkr_gas_url).");
+        return;
+    }
+
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    // 2. Filter for unique symbols to keep URL short
+    const uniqueMap = new Map();
+    allTrades.forEach(t => {
+        if (t.symbol && !uniqueMap.has(t.symbol)) {
+            uniqueMap.set(t.symbol, { symbol: t.symbol, currency: t.currency });
+        }
+    });
+    const symbols = Array.from(uniqueMap.values());
+
+    try {
+        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?' }action=getPrices&symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
+        
+        // 3. Robust fetch call
+        const response = await fetch(finalUrl, {
+            method: 'GET',
+            mode: 'cors',
+            redirect: 'follow' // This handles the 302 redirect
+        });
+
+        if (!response.ok) throw new Error('Network response was not ok');
+        
+        const priceMap = await response.json();
+
+        // 4. Update state and cache
+        window.currentPrices = priceMap;
+        localStorage.setItem('finnhub_price_cache', JSON.stringify({
+            timestamp: Date.now(),
+            prices: priceMap
+        }));
+
+        renderPortfolio();
+    } catch (err) {
+        console.error("Price fetch failed:", err);
+    } finally {
+        if (btn) btn.textContent = '$ Refresh Prices';
+    }
+}
+
+async function updateAllPricesbkup11() {
     const gas_url = localStorage.getItem('ibkr_gas_url');
     if (!gas_url) return;
 
@@ -838,371 +886,6 @@ async function updateAllPricesbkup10() {
     }
 }
     
-async function updateAllPricesbkup9() {
-    if (!GAS_URL) return;
-    
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Fetching via Google...';
-
-    // 1. Prepare symbol list
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    try {
-        // 2. Call your Google Script instead of Yahoo/Finnhub directly
-        const url = `${GAS_URL}?action=getPrices&symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
-        
-        const response = await fetch(url);
-        const priceMap = await response.json();
-
-        // 3. Update State & Cache
-        window.currentPrices = priceMap;
-        localStorage.setItem('finnhub_price_cache', JSON.stringify({
-            timestamp: Date.now(),
-            prices: priceMap
-        }));
-
-        console.log("Prices updated via Google Script");
-        renderPortfolio();
-
-    } catch (err) {
-        console.error("Google Script Price Fetch failed:", err);
-    } finally {
-        if (btn) btn.textContent = '$ Refresh Prices';
-    }
-}
-
-async function updateAllPricesbkup8() {
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                
-                // Using v6 modules instead of v7 quote - this is often more stable
-                const yahooUrl = `https://query2.finance.yahoo.com/v6/finance/quoteSummary/${ySymbol}?modules=financialData,price`;
-                const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                const wrapper = await response.json();
-                const data = JSON.parse(wrapper.contents);
-
-                // Path changed because we switched from 'quote' to 'quoteSummary'
-                if (data && data.quoteSummary && data.quoteSummary.result) {
-                    const result = data.quoteSummary.result[0];
-                    priceData = {
-                        price: result.price.regularMarketPrice.raw,
-                        change: result.price.regularMarketChange.raw,
-                        pc: result.price.regularMarketChangePercent.raw * 100
-                    };
-                } else if (data.finance && data.finance.error) {
-                    console.error(`Yahoo Error for ${ySymbol}:`, data.finance.error.description);
-                }
-            } else {
-                // ... (Keep your Finnhub logic here for USD stocks)
-            }
-
-            if (priceData) priceMap[item.symbol] = priceData;
-            await new Promise(r => setTimeout(r, 500)); 
-
-        } catch (err) {
-            console.error(`Fetch failed for ${item.symbol}:`, err);
-        }
-    }
-
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup7() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // 1. Format for Yahoo
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
-                
-                // 2. Use AllOrigins Proxy
-                const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                if (!response.ok) throw new Error('Network response was not ok');
-                
-                const wrapper = await response.json();
-                // AllOrigins returns the stringified JSON in the 'contents' property
-                const data = JSON.parse(wrapper.contents);
-
-                if (data && data.quoteResponse && data.quoteResponse.result && data.quoteResponse.result[0]) {
-                    const quote = data.quoteResponse.result[0];
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // US Stocks via Finnhub
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data && data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) {
-                priceMap[item.symbol] = priceData;
-            }
-
-            // Delay to prevent hitting rate limits (400ms is safer for mobile)
-            await new Promise(r => setTimeout(r, 400)); 
-
-        } catch (err) {
-            // This prevents the "undefined is not an object" crash
-            console.error(`Skipping ${item.symbol} due to error:`, err.message);
-        }
-    }
-
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup6() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // 1. Correct Yahoo Symbol
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
-                
-                // 2. Use a different proxy if corsproxy.io is failing
-                const proxiedUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                const json = await response.json();
-                // AllOrigins wraps the response in a 'contents' string
-                const data = JSON.parse(json.contents); 
-                const quote = data.quoteResponse.result[0];
-
-                if (quote) {
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // US Stocks
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) priceMap[item.symbol] = priceData;
-
-            await new Promise(r => setTimeout(r, 300)); // Respect rate limits
-        } catch (err) {
-            // This will now show a real error in Eruda instead of 'Script error'
-            console.error("Failed to fetch " + item.symbol, err);
-        }
-    }
-
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup5() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    // Map unique symbols and their currencies
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // 1. Format for Yahoo (e.g., TRI -> TRI.TO)
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                
-                // 2. The Yahoo URL
-                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
-                
-                // 3. The Proxy Wrapper (CRITICAL for fixing the TypeError)
-                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                const data = await response.json();
-                const quote = data.quoteResponse.result[0];
-
-                if (quote) {
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // US Stocks via Finnhub
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) {
-                priceMap[item.symbol] = priceData;
-            }
-
-            // Delay to avoid rate limiting
-            await new Promise(r => setTimeout(r, 300)); 
-        } catch (err) {
-            console.error(`Error fetching ${item.symbol}:`, err);
-        }
-    }
-
-    // Update state and cache
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup4() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // 1. Format Symbol (e.g., TRI -> TRI.TO)
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                
-                // 2. Define Yahoo URL
-                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
-                
-                // 3. Wrap in CORS Proxy (This is the critical fix)
-                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                const data = await response.json();
-                const quote = data.quoteResponse.result[0];
-
-                if (quote) {
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // US Stocks via Finnhub
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) {
-                priceMap[item.symbol] = priceData;
-            }
-
-            // 4. Rate Limit Delay (250ms)
-            await new Promise(r => setTimeout(r, 250)); 
-        } catch (err) {
-            console.error(`Error fetching ${item.symbol}:`, err);
-        }
-    }
-
-    // Save to Global State and Cache
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
 
 async function updateAllPricesbkup3() {
     const FINNHUB_KEY = localStorage.getItem('finnhub_key');
