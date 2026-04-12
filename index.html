@@ -492,6 +492,43 @@ function syncData() {
         });
     }
 
+    function uploadData() {
+    if (!GAS_URL) return alert('No Google Sheets URL configured.');
+
+    const btn = $('save-btn');
+    const originalText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    const payload = {
+        action: 'saveAll',
+        trades: allTrades,
+        dividends: allDivs
+    };
+
+    // We use a POST request for saving data
+    fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors', // Use no-cors to bypass complex preflight checks for simple saves
+        cache: 'no-cache',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+    })
+    .then(() => {
+        alert('Data sent to Google Sheets! (Note: Browsers cannot confirm success in no-cors mode, check your sheet to verify).');
+        const ts = new Date().toLocaleString();
+        localStorage.setItem('ibkr_sync_time', ts);
+        if ($('sync-status')) $('sync-status').textContent = '✔ Last saved: ' + ts;
+    })
+    .catch(err => {
+        console.error('Save error:', err);
+        alert('Failed to save data. Check console.');
+    })
+    .finally(() => {
+        btn.disabled = false;
+        btn.textContent = originalText;
+    });
+}
     // 1. Update checkConnection to be CORS-safe
 function checkConnection(){
     if(!GAS_URL){$('connStat').textContent='Not connected';$('connStat').className='err';return;}
