@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.38</title>
+    <title>IBKR Portfolio Manager v2.4</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -726,6 +726,71 @@ async function getLivePrice(symbol) {
 }
 
 async function updateAllPrices() {
+    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
+    const symbols = [...new Set(allTrades.map(t => ({ 
+        symbol: t.symbol, 
+        currency: t.currency 
+    })))].filter(s => s.symbol);
+
+    const priceMap = {};
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    for (const item of symbols) {
+        try {
+            let priceData = null;
+
+            if (item.currency === 'CAD') {
+                // --- YAHOO FINANCE QUERY2 FOR CA STOCKS ---
+                const symbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
+                // Note: If this fails due to CORS, you may need a proxy like https://corsproxy.io/?
+                const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
+                
+                const response = await fetch(url);
+                const data = await response.json();
+                const quote = data.quoteResponse.result[0];
+
+                if (quote) {
+                    priceData = {
+                        price: quote.regularMarketPrice,
+                        change: quote.regularMarketChange,
+                        pc: quote.regularMarketChangePercent
+                    };
+                }
+            } else if (FINNHUB_KEY) {
+                // --- FINNHUB FOR US STOCKS ---
+                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
+                const response = await fetch(url);
+                const data = await response.json();
+                if (data.c) {
+                    priceData = { price: data.c, change: data.d, pc: data.dp };
+                }
+            }
+
+            if (priceData) {
+                priceMap[item.symbol] = priceData;
+            }
+
+            // Small delay to respect rate limits
+            await new Promise(r => setTimeout(r, 200)); 
+        } catch (err) {
+            console.error(`Error fetching ${item.symbol}:`, err);
+        }
+    }
+
+    // Save to Cache and Global State
+    window.currentPrices = priceMap;
+    localStorage.setItem('finnhub_price_cache', JSON.stringify({
+        timestamp: Date.now(),
+        prices: priceMap
+    }));
+
+    if (btn) btn.textContent = '$ Refresh Prices';
+    renderPortfolio();
+}
+
+
+async function updateAllPricesbkup() {
     const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key');
     if (!FINNHUB_KEY) return;
 
