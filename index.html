@@ -727,11 +727,51 @@ async function getLivePrice(symbol) {
     }
 }
 
-const response = await fetch(finalUrl, {
-    method: 'GET',
-    mode: 'cors', // Explicitly allow CORS
-    follow: 'follow'
-});
+async function updateAllPrices() {
+    const gas_url = localStorage.getItem('gas_url'); // Ensure we get the latest URL
+    if (!gas_url) {
+        console.error("No Google Apps Script URL found in settings.");
+        return;
+    }
+    
+    const btn = $('price-btn');
+    if (btn) btn.textContent = 'Fetching...';
+
+    const symbols = [...new Set(allTrades.map(t => ({ 
+        symbol: t.symbol, 
+        currency: t.currency 
+    })))].filter(s => s.symbol);
+
+    try {
+        // Construct the URL and log it to Eruda to verify it looks correct
+        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?'}action=getPrices&symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
+        console.log("Fetching from:", finalUrl);
+
+        const response = await fetch(finalUrl);
+        
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        
+        const priceMap = await response.json();
+
+        window.currentPrices = priceMap;
+        localStorage.setItem('finnhub_price_cache', JSON.stringify({
+            timestamp: Date.now(),
+            prices: priceMap
+        }));
+
+        renderPortfolio();
+    } catch (err) {
+        console.error("Google Script Price Fetch failed:", err);
+        // If Google fails, try to load from local cache so the UI doesn't break
+        const cached = JSON.parse(localStorage.getItem('finnhub_price_cache') || '{}');
+        if (cached.prices) {
+            window.currentPrices = cached.prices;
+            renderPortfolio();
+        }
+    } finally {
+        if (btn) btn.textContent = '$ Refresh Prices';
+    }
+}
     
 async function updateAllPricesbkup9() {
     if (!GAS_URL) return;
