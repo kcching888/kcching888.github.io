@@ -859,7 +859,7 @@ async function handlePriceRefresh() {
         totalCost += costInCAD;
         if (p.type === 'Stock' && priceCache[p.symbol]) {
             //var currentPrice = priceCache[p.symbol];
-
+            console.log("window, priceCache: ", window, priceCache);
             var liveData = window.currentPrices ? window.currentPrices[p.symbol] : null;
             var currentPrice = liveData ? liveData.price : (priceCache[p.symbol] || 0);
             var marketValue = currentPrice * p.qty;
