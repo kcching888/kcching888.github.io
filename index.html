@@ -208,6 +208,10 @@
                 </label>
             </div>
         </div>
+        <div class="form-group">
+           <label>Stock Price API Key <small>(<a href="https://twelvedata.com/pricing" target="_blank" style="color:#64b5f6;">Get Free Key</a>)</small></label>
+           <input id="set-apikey" placeholder="Your Twelve Data API key">
+        </div>
         <div class="modal-footer">
             <button class="btn" onclick="closeModal('modal-settings')">Cancel</button>
             <button class="btn btn-primary" onclick="saveSettings()">Save & Connect</button>
@@ -347,6 +351,9 @@
     var filteredDivs = [];
     var tradeCurrentPage = 1;
     var divCurrentPage = 1;
+    // Price feed cache
+    var priceCache = {};
+    var lastPriceUpdate = null;
     var currentUploadTab = 'ibkr';
 
     // Replace your current function $(id) with this:
@@ -390,6 +397,7 @@
 
     function openSettings(){
         $('set-url').value = GAS_URL;
+        $('set-apikey').value = localStorage.getItem('ibkr_price_api_key') || '';
         openModal('modal-settings');
         var checkbox = $('set-autosync');
         if(checkbox) checkbox.checked = localStorage.getItem('ibkr_autosync') === 'true';
@@ -400,6 +408,8 @@
         localStorage.setItem('ibkr_gas_url', GAS_URL);
         var checkbox = $('set-autosync');
         var AUTO_SYNC = checkbox ? checkbox.checked : false;
+        var apiKey = $('set-apikey').value.trim();
+        localStorage.setItem('ibkr_price_api_key', apiKey);
         localStorage.setItem('ibkr_autosync', AUTO_SYNC);
         closeModal('modal-settings');
         if(GAS_URL) checkConnection();
@@ -693,49 +703,190 @@ async function apiCall(params) {
         $('div-stats').innerHTML='<div class="stat-card"><div class="val">$'+fmt(totalCAD)+'</div><div class="lbl">Total Dividends (CAD)</div></div><div class="stat-card"><div class="val">$'+fmt(totalUSD)+'</div><div class="lbl">Total Dividends (USD)</div></div><div class="stat-card"><div class="val">'+allDivs.length+'</div><div class="lbl">Total Records</div></div>';
     }
 
-    function renderPortfolio(){
-        var positions={};
-        allTrades.forEach(function(t){
-            var key=esc(t.symbol)+'|'+esc(t.currency)+'|'+esc(t.account);
-            if(!positions[key])positions[key]={symbol:t.symbol,currency:t.currency,qty:0,totalCost:0,account:t.account,type:getAssetType(t)};
-            var q=parseFloat(t.quantity)||0;
-            var a=parseFloat(t.amount)||0;
-            var act=(t.action||'').toLowerCase();
-            if(act==='buy'){positions[key].qty+=q;positions[key].totalCost+=Math.abs(a);}
-            else if(act==='sell'){
-                var avg = positions[key].qty>0 ? positions[key].totalCost/positions[key].qty : 0;
-                positions[key].qty-=q;
-                positions[key].totalCost-=avg*q;
+
+// Fetch stock prices from API
+function fetchStockPrices(symbols, callback) {
+    if (!symbols || symbols.length === 0) {
+        if (callback) callback({});
+        return;
+    }
+    
+    var symbolStr = symbols.join(',');
+    var apiKey = localStorage.getItem('ibkr_price_api_key') || '';
+    
+    if (!apiKey) {
+        console.warn('No API key configured.');
+        if (callback) callback({});
+        return;
+    }
+    
+    var url = 'https://api.twelvedata.com/price?symbol=' + symbolStr + '&apikey=' + apiKey;
+    
+    fetch(url)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var prices = {};
+            if (data.price) {
+                prices[symbols[0]] = parseFloat(data.price);
+            } else if (typeof data === 'object') {
+                Object.keys(data).forEach(function(sym) {
+                    if (data[sym] && data[sym].price) {
+                        prices[sym] = parseFloat(data[sym].price);
+                    }
+                });
+            }
+            Object.assign(priceCache, prices);
+            lastPriceUpdate = new Date();
+            localStorage.setItem('ibkr_price_cache', JSON.stringify(priceCache));
+            localStorage.setItem('ibkr_price_timestamp', lastPriceUpdate.toISOString());
+            if (callback) callback(prices);
+        })
+        .catch(function(err) {
+            console.error('Price fetch error:', err);
+            if (callback) callback({});
+        });
+}
+
+function refreshPortfolioPrices() {
+    var positions = {};
+    allTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
+        var q = parseFloat(t.quantity) || 0;
+        var a = parseFloat(t.amount) || 0;
+        var act = (t.action || '').toLowerCase();
+        if (act === 'buy') {
+            positions[key].qty += q;
+            positions[key].totalCost += Math.abs(a);
+        } else if (act === 'sell') {
+            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
+            positions[key].qty -= q;
+            positions[key].totalCost -= avg * q;
+        }
+    });
+    
+    var posArr = Object.values(positions).filter(function(p) {
+        return Math.abs(p.qty) > 0.0001 && p.type === 'Stock';
+    });
+    
+    var symbols = posArr.map(function(p) { return p.symbol; });
+    var uniqueSymbols = [...new Set(symbols)];
+    
+    if (uniqueSymbols.length > 0) {
+        var btn = $('#refresh-prices-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Fetching...';
+        }
+        fetchStockPrices(uniqueSymbols, function(prices) {
+            renderPortfolio();
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '🔄 Refresh Prices';
             }
         });
-        var posArr=Object.values(positions).filter(function(p){return Math.abs(p.qty)>0.0001;});
-        var totalCost=posArr.reduce(function(s,p){return s+(p.currency==='USD'?p.totalCost*1.36:p.totalCost);},0);
-
-        $('port-stats').innerHTML='<div class="stat-card"><div class="val">'+posArr.length+'</div><div class="lbl">Open Positions</div></div><div class="stat-card"><div class="val">$'+fmt(totalCost)+'</div><div class="lbl">Total Cost Basis (est CAD)</div></div>';
-
-        if(!posArr.length){$('port-table-wrap').innerHTML='<div class="loading">No positions.</div>';return;}
-        var byAccount={};
-        posArr.forEach(function(p){
-            if(!byAccount[p.account])byAccount[p.account]={};
-            if(!byAccount[p.account][p.type])byAccount[p.account][p.type]=[];
-            byAccount[p.account][p.type].push(p);
-        });
-
-        var html='';
-        Object.keys(byAccount).sort().forEach(function(acct){
-            html+='<h3 style="margin-top:20px;border-bottom:1px solid #333">'+esc(acct)+'</h3>';
-            Object.keys(byAccount[acct]).sort().forEach(function(type){
-                html+='<h4 style="margin-top:10px;color:#e94560;">'+type+'</h4>';
-                html+='<table><thead><tr><th>Symbol</th><th>Quantity</th><th>Avg Cost</th><th>Total Cost</th><th>Currency</th></tr></thead><tbody>';
-                byAccount[acct][type].forEach(function(p){
-                    var avg=p.qty>0?p.totalCost/p.qty:0;
-                    html+='<tr><td>'+esc(p.symbol)+'</td><td>'+fmt(p.qty,4)+'</td><td>'+fmt(avg)+'</td><td>'+fmt(p.totalCost)+'</td><td>'+esc(p.currency)+'</td></tr>';
-                });
-                html+='</tbody></table>';
-            });
-        });
-        $('port-table-wrap').innerHTML=html;
     }
+}
+    
+    function renderPortfolio() {
+    var positions = {};
+    allTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
+        var q = parseFloat(t.quantity) || 0;
+        var a = parseFloat(t.amount) || 0;
+        var act = (t.action || '').toLowerCase();
+        if (act === 'buy') {
+            positions[key].qty += q;
+            positions[key].totalCost += Math.abs(a);
+        } else if (act === 'sell') {
+            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
+            positions[key].qty -= q;
+            positions[key].totalCost -= avg * q;
+        }
+    });
+    
+    var posArr = Object.values(positions).filter(function(p) { return Math.abs(p.qty) > 0.0001; });
+    
+    var totalCost = 0, totalMarketValue = 0, totalGainLoss = 0;
+    posArr.forEach(function(p) {
+        var costInCAD = p.currency === 'USD' ? p.totalCost * 1.36 : p.totalCost;
+        totalCost += costInCAD;
+        if (p.type === 'Stock' && priceCache[p.symbol]) {
+            var currentPrice = priceCache[p.symbol];
+            var marketValue = currentPrice * p.qty;
+            var marketValueCAD = p.currency === 'USD' ? marketValue * 1.36 : marketValue;
+            totalMarketValue += marketValueCAD;
+            totalGainLoss += (marketValueCAD - costInCAD);
+        } else {
+            totalMarketValue += costInCAD;
+        }
+    });
+    
+    var cachedPrices = localStorage.getItem('ibkr_price_cache');
+    var cachedTime = localStorage.getItem('ibkr_price_timestamp');
+    if (cachedPrices && !lastPriceUpdate) {
+        priceCache = JSON.parse(cachedPrices);
+        lastPriceUpdate = cachedTime ? new Date(cachedTime) : null;
+    }
+    
+    var priceUpdateText = lastPriceUpdate 
+        ? '<div style="font-size:0.75em;color:#aaa;margin-top:5px;">Prices updated: ' + lastPriceUpdate.toLocaleString() + '</div>'
+        : '<div style="font-size:0.75em;color:#aaa;margin-top:5px;">No price data. Click Refresh Prices.</div>';
+    
+    $('#port-stats').innerHTML = 
+        '<div class="stat-card"><div class="val">' + posArr.length + '</div><div class="lbl">Open Positions</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalCost) + '</div><div class="lbl">Cost Basis (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalMarketValue) + '</div><div class="lbl">Market Value (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val ' + (totalGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGainLoss) + '</div><div class="lbl">Unrealized P&L</div></div>' +
+        priceUpdateText;
+    
+    if (!posArr.length) {
+        $('#port-table-wrap').innerHTML = '<div class="loading">No positions.</div>';
+        return;
+    }
+    
+    var byAccount = {};
+    posArr.forEach(function(p) {
+        if (!byAccount[p.account]) byAccount[p.account] = {};
+        if (!byAccount[p.account][p.type]) byAccount[p.account][p.type] = [];
+        byAccount[p.account][p.type].push(p);
+    });
+    
+    var html = '<div style="margin-bottom:10px;"><button class="btn btn-primary" id="refresh-prices-btn" onclick="refreshPortfolioPrices()">🔄 Refresh Prices</button></div>';
+    
+    Object.keys(byAccount).sort().forEach(function(acct) {
+        html += '<h3 style="margin-top:20px;border-bottom:1px solid #333">' + esc(acct) + '</h3>';
+        Object.keys(byAccount[acct]).sort().forEach(function(type) {
+            html += '<h4 style="margin-top:10px;color:#e94560;">' + type + '</h4>';
+            html += '<table><thead><tr><th>Symbol</th><th>Quantity</th><th>Avg Cost</th><th>Total Cost</th>';
+            if (type === 'Stock') {
+                html += '<th>Current Price</th><th>Market Value</th><th>Gain/Loss</th><th>G/L %</th>';
+            }
+            html += '<th>Currency</th></tr></thead><tbody>';
+            byAccount[acct][type].forEach(function(p) {
+                var avg = p.qty > 0 ? p.totalCost / p.qty : 0;
+                html += '<tr><td>' + esc(p.symbol) + '</td><td>' + fmt(p.qty, 4) + '</td><td>' + fmt(avg) + '</td><td>' + fmt(p.totalCost) + '</td>';
+                if (type === 'Stock') {
+                    var currentPrice = priceCache[p.symbol];
+                    if (currentPrice) {
+                        var marketValue = currentPrice * p.qty;
+                        var gainLoss = marketValue - p.totalCost;
+                        var gainLossPct = p.totalCost > 0 ? (gainLoss / p.totalCost * 100) : 0;
+                        html += '<td>' + fmt(currentPrice) + '</td><td>' + fmt(marketValue) + '</td>';
+                        html += '<td class="' + (gainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(gainLoss) + '</td>';
+                        html += '<td class="' + (gainLossPct >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(gainLossPct, 2) + '%</td>';
+                    } else {
+                        html += '<td colspan="4" style="color:#aaa;font-style:italic;">No price data</td>';
+                    }
+                }
+                html += '<td>' + esc(p.currency) + '</td></tr>';
+            });
+            html += '</tbody></table>';
+        });
+    });
+    $('#port-table-wrap').innerHTML = html;
+}
 
     function renderGainLoss(){
     var realized={};
