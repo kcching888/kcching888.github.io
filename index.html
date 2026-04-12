@@ -1,3 +1,35 @@
+Skip to content
+kcching888
+kcching888.github.io
+Repository navigation
+Code
+Issues
+Pull requests
+Actions
+Projects
+Security and quality
+Insights
+Settings
+Files
+Go to file
+t
+README.md
+index.html
+kcching888.github.io
+/index.html
+kcching888
+kcching888
+Update index.html
+8e21cbf
+ · 
+4 minutes ago
+kcching888.github.io
+/index.html
+
+Code
+
+Blame
+1138 lines (1033 loc) · 52.8 KB
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -725,8 +757,50 @@ async function getLivePrice(symbol) {
     }
 }
 
+async function updateAllPrices() {
+    const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key'); // Recommendation: Store key in localStorage
+    if (!FINNHUB_KEY) {
+        console.warn("No Finnhub API key found.");
+        return;
+    }
+
+    // 1. Get unique tickers from your trades
+    const symbols = [...new Set(allTrades.map(t => t.symbol))].filter(Boolean);
+    const priceMap = {};
+
+    console.log(`Fetching prices for ${symbols.length} symbols...`);
+
+    for (const symbol of symbols) {
+        try {
+            // Finnhub API URL
+            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
+            
+            const response = await fetch(url);
+            const data = await response.json();
+
+            if (data.c) {
+                priceMap[symbol] = {
+                    price: data.c,      // Current price
+                    change: data.d,     // Change
+                    pc: data.dp         // Percent change
+                };
+            }
+
+            // 2. Small delay to respect rate limits (100ms = 10 requests per second)
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+        } catch (err) {
+            console.error(`Error fetching ${symbol}:`, err);
+        }
+    }
+
+    // 3. Update your Global State and UI
+    window.currentPrices = priceMap; 
+    renderPortfolio(); // Re-render the table with new prices
+}
+
 // !!!!Fetch stock prices from API - twelvedata = OBSOLETE!!!!!
-function fetchStockPrices(symbols, callback) {
+function fetchStockPrices12(symbols, callback) {
     if (!symbols || symbols.length === 0) {
         if (callback) callback({});
         return;
@@ -835,7 +909,10 @@ function refreshPortfolioPrices() {
         var costInCAD = p.currency === 'USD' ? p.totalCost * 1.36 : p.totalCost;
         totalCost += costInCAD;
         if (p.type === 'Stock' && priceCache[p.symbol]) {
-            var currentPrice = priceCache[p.symbol];
+            //var currentPrice = priceCache[p.symbol];
+
+            var liveData = window.currentPrices ? window.currentPrices[p.symbol] : null;
+            var currentPrice = liveData ? liveData.price : (priceCache[p.symbol] || 0);
             var marketValue = currentPrice * p.qty;
             var marketValueCAD = p.currency === 'USD' ? marketValue * 1.36 : marketValue;
             totalMarketValue += marketValueCAD;
@@ -1136,3 +1213,4 @@ window.addEventListener('load', function() {
 </script>
 </body>
 </html>
+ 
