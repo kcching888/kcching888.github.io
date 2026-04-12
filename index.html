@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.36</title>
+    <title>IBKR Portfolio Manager v2.37</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -927,9 +927,11 @@ async function handlePriceRefresh() {
             //var currentPrice = priceCache[p.symbol];
             console.log("window, priceCache: ", window, priceCache);
             var liveData = window.currentPrices ? window.currentPrices[p.symbol] : null;
-            var currentPrice = liveData ? liveData.price : (priceCache[p.symbol] || 0);
+            var currentPrice = liveData ? liveData.price : (priceCache.prices[p.symbol].price || 0);
             var marketValue = currentPrice * p.qty;
             var marketValueCAD = p.currency === 'USD' ? marketValue * 1.36 : marketValue;
+            console.log("liveData, currentPrice: ", liveData, currentPrice);
+            
             totalMarketValue += marketValueCAD;
             totalGainLoss += (marketValueCAD - costInCAD);
         } else {
