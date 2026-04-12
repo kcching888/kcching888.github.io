@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager V2</title>
+    <title>IBKR Portfolio Manager v2.2</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -820,7 +820,7 @@ async function handlePriceRefresh() {
         return;
     }
     
-    const btn = $('price-btn');
+    const btn = $('refresh-prices-btn');
     btn.disabled = true;
     btn.textContent = 'Updating...';
     
