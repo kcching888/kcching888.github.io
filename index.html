@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.73</title>
+    <title>IBKR Portfolio Manager v2.74</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.73</h1>
+    <h1>IBKR Portfolio Manager v2.74</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -743,7 +743,7 @@ async function getLivePrice(symbol) {
 
 
 async function updateAllPrices() {
-    const gas_url = localStorage.getItem('gas_url');
+    const gas_url = localStorage.getItem('ibkr_gas_url');
     if (!gas_url) return;
 
     // 1. Create a UNIQUE list of symbols
