@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.41</title>
+    <title>Portfolio Manager v3.5</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -31,6 +31,26 @@
         .filter-group label{font-size:0.75em;color:#aaa}
         .filter-group input,.filter-group select{background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;font-size:0.85em}
         table{width:100%;border-collapse:collapse;font-size:0.85em}
+        /* Container for the table to allow internal scrolling */
+        .table-responsive {
+            max-height: 600px; /* Adjust height as needed */
+            overflow-y: auto;
+            border: 1px solid #0f3460;
+            position: relative;
+        }
+
+        /* Make headers stick to the top */
+        thead th {
+            position: sticky;
+            top: 0;
+            background: #0f3460; /* Must match the table header color */
+            z-index: 10;
+        }
+
+        /* Ensure price columns align correctly */
+        .text-right {
+            text-align: right;
+        }
         thead{background:#0f3460}
         th,td{padding:8px 10px;text-align:left;border-bottom:1px solid #0f3460}
         tr:hover{background:#1a2a4a}
@@ -65,7 +85,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.41</h1>
+    <h1>Portfolio Manager v3.5</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -161,6 +181,7 @@
             <div id="trades-table-wrap"></div>
             <div id="trades-pagination" class="pagination"></div>
         </div>
+        
     </div>
 
     <div id="page-portfolio" style="display:none">
@@ -661,6 +682,37 @@ function updateFilterOptions() {
 }
 
 function applyFilters() {
+    // Get all filter values
+    const stock = $('filter-stock').value;
+    const year = $('filter-year').value;
+    const category = $('filter-category').value;
+    const account = $('filter-account').value;
+    const action = $('filter-action').value;
+    const currency = $('filter-currency').value;
+    const search = $('filter-search').value.toUpperCase();
+
+    // Check if any filter is active
+    isFilterActive = (stock || year || category || account || action || currency || search);
+
+    // Filter Trades
+    currentFilteredTrades = allTrades.filter(t => {
+        const matchesStock = !stock || t.symbol === stock;
+        const matchesYear = !year || new Date(t.date).getFullYear().toString() === year;
+        const matchesCat = !category || t.category === category;
+        const matchesAcc = !account || t.account === account;
+        const matchesAct = !action || t.action === action;
+        const matchesCur = !currency || t.currency === currency;
+        const matchesSearch = !search || t.symbol.includes(search) || (t.name && t.name.toUpperCase().includes(search));
+        
+        return matchesStock && matchesYear && matchesCat && matchesAcc && matchesAct && matchesCur && matchesSearch;
+    });
+
+    // Reset to page 1 and re-render
+    currentTradePage = 1;
+    renderTradesTable();
+}
+    
+function applyFilters() {
     const stock = $('filter-stock').value;
     const year = $('filter-year').value;
     const search = $('filter-search').value.toUpperCase();
@@ -687,7 +739,7 @@ function applyFilters() {
 
     // Trigger your existing complex render functions
     renderTradesTable();
-    renderDivTable();
+    //renderDivTable();
 }
 
  function updateFilterDropdowns() {
