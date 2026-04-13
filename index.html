@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.6</title>
+    <title>Portfolio Manager v3.61</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.6</h1>
+    <h1>Portfolio Manager v3.61</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -727,7 +727,7 @@ function applyFilters() {
                (!filters.search || t.symbol.includes(filters.search));
     });
 
-    console.log("currentFilteredTrades: ", currentFilteredTrades);
+    console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
     // Reset to page 1
     currentTradePage = 1;
     renderTradesTable();
@@ -798,7 +798,10 @@ function applyFiltersbkup() {
 
         var start = (tradeCurrentPage-1)*perPage;
         var rows = currentFilteredTrades.slice(start, perPage===currentFilteredTrades.length?undefined:start+perPage);
-
+        
+        console.log("renderTradesTable() currentFilteredTrades: ", currentFilteredTrades);
+        console.log("renderTradesTable() allTrades: ", allTrades);
+        
         $('trades-info').textContent = 'Showing '+(total===0?0:start+1)+'-'+Math.min(start+rows.length,total)+' of '+total+' records ('+allTrades.length+' total loaded)';
 
         if(!rows.length){
