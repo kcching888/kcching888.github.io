@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.61</title>
+    <title>Portfolio Manager v3.62</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.61</h1>
+    <h1>Portfolio Manager v3.62</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -419,8 +419,8 @@
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
-    let currentFilteredTrades = [];
-    let currentFilteredDivs = [];
+    var currentFilteredTrades = [];
+    var currentFilteredDivs = [];
     let isFilterActive = false; // This helps the UI know when to override the full list
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
     var tradeCurrentPage = 1;
@@ -727,6 +727,7 @@ function applyFilters() {
                (!filters.search || t.symbol.includes(filters.search));
     });
 
+    console.log("applyFilters() filters: ", filters);
     console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
     // Reset to page 1
     currentTradePage = 1;
