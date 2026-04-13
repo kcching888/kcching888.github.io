@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.67</title>
+    <title>Portfolio Manager v3.68</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.67</h1>
+    <h1>Portfolio Manager v3.68</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -165,7 +165,7 @@
                     <label>Category</label>
                     <select id="filter-category" onchange="applyFilters()">
                         <option value="">All</option>
-                        <option>Stock</option>
+                        <option>Stocks</option>
                         <option>Forex</option>
                         <option>Options</option>
                         <option>Fixed Income</option>
@@ -714,6 +714,7 @@ function applyFilters() {
         search: $('filter-search').value.toUpperCase()
     };
 
+    console("applyFilters() filters:", filters);
     // Set global flag
     isFilterActive = Object.values(filters).some(val => val !== "");
 
