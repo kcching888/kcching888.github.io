@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.66</title>
+    <title>Portfolio Manager v3.67</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.66</h1>
+    <h1>Portfolio Manager v3.67</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -720,6 +720,7 @@ function applyFilters() {
     currentFilteredTrades = allTrades.filter(t => {
     // 1. Helper to safely compare strings (handles nulls and extra spaces)
         const safeMatch = (dataVal, filterVal) => {
+            console.log("dataVal, filterVal: ", dataVal, filterVal);
             if (!filterVal) return true; // Filter is empty, so it's a match
             return String(dataVal || "").trim() === String(filterVal).trim();
         };
