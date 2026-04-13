@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v3.1</title>
+    <title>IBKR Portfolio Manager v3.2</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v3.1</h1>
+    <h1>IBKR Portfolio Manager v3.2</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -384,6 +384,8 @@
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
+    let currentFilteredTrades = [];
+    let currentFilteredDivs = [];
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
     var filteredTrades = [];
     var filteredDivs = [];
@@ -659,24 +661,28 @@ function applyFilters() {
     const stock = document.getElementById('filter-stock').value;
     const year = document.getElementById('filter-year').value;
 
-    // Filter Trades
-    const filteredTrades = allTrades.filter(t => {
+    // Update global filtered list for Trades
+    currentFilteredTrades = allTrades.filter(t => {
         const matchesSearch = t.symbol.includes(search) || (t.name && t.name.toUpperCase().includes(search));
         const matchesStock = !stock || t.symbol === stock;
         const matchesYear = !year || new Date(t.date).getFullYear().toString() === year;
         return matchesSearch && matchesStock && matchesYear;
     });
 
-    // Filter Dividends
-    const filteredDivs = allDivs.filter(d => {
+   // Update global filtered list for Dividends
+    currentFilteredDivs = allDivs.filter(d => {
         const matchesSearch = d.symbol.includes(search);
         const matchesStock = !stock || d.symbol === stock;
         const matchesYear = !year || new Date(d.date).getFullYear().toString() === year;
         return matchesSearch && matchesStock && matchesYear;
     });
 
-    renderTrades(filteredTrades);
-    renderDividends(filteredDivs);
+    // Re-run your complex render functions
+    renderTradesTable();
+    renderDivTable();
+
+    // If you have a portfolio dashboard that needs updating:
+    if (typeof renderPortfolio === "function") renderPortfolio();
 }
 
  function updateFilterDropdowns() {
@@ -705,6 +711,7 @@ function applyFilters() {
 }
     
     function renderTradesTable(){
+        const displayData = (currentFilteredTrades.length > 0 || document.getElementById('filter-stock').value || document.getElementById('filter-year').value) ? currentFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
         var perPage = perPageVal==='all'?filteredTrades.length:(parseInt(perPageVal)||25);
         var total = filteredTrades.length;
@@ -759,6 +766,7 @@ function applyFilters() {
     }
 
     function renderDivTable(){
+        const displayData = (currentFilteredDivs.length > 0 || document.getElementById('filter-stock').value || document.getElementById('filter-year').value) ? currentFilteredDivs : allDivs;
         var perPageVal=($('df-perpage')||{}).value||'25';
         var perPage=perPageVal==='all'?filteredDivs.length:(parseInt(perPageVal)||25);
         var total=filteredDivs.length;
