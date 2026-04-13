@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.5</title>
+    <title>Portfolio Manager v3.6</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -81,11 +81,33 @@
         .pos-gain{color:#4caf50}
         .pos-loss{color:#f44336}
         .loading{padding:20px;text-align:center;color:#aaa;font-style:italic}
+        /* Container to allow scrolling */
+        .table-scroll-container {
+            max-height: 65vh; /* Adjust as needed */
+            overflow-y: auto;
+            border: 1px solid #0f3460;
+            margin-top: 10px;
+        }
+
+        /* Make headers sticky */
+        #trades-list-table thead th {
+            position: sticky;
+            top: 0;
+            background-color: #0f3460;
+            z-index: 10;
+            box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
+        }
+
+/* Alignment helper */
+.text-right {
+    text-align: right !important;
+    font-family: 'Courier New', monospace; /* Optional: makes numbers line up better */
+}
     </style>
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.5</h1>
+    <h1>Portfolio Manager v3.6</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -115,7 +137,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Account</label>
-                    <select id="f-account" onchange="applyFilters()"><option value="">All</option></select>
+                    <select id="filter-account" onchange="applyFilters()"><option value="">All</option></select>
                 </div>
                 <div class="filter-group">
                     <label>Stock</label>
@@ -141,7 +163,7 @@
             <div class="filters">
                 <div class="filter-group">
                     <label>Category</label>
-                    <select id="f-category" onchange="applyFilters()">
+                    <select id="filter-category" onchange="applyFilters()">
                         <option value="">All</option>
                         <option>Stock</option>
                         <option>Forex</option>
@@ -151,7 +173,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Action</label>
-                    <select id="f-action" onchange="applyFilters()">
+                    <select id="filter-action" onchange="applyFilters()">
                         <option value="">All</option>
                         <option>Buy</option>
                         <option>Sell</option>
@@ -159,7 +181,7 @@
                 </div>
                 <div class="filter-group">
                     <label>Currency</label>
-                    <select id="f-currency" onchange="applyFilters()">
+                    <select id="filter-currency" onchange="applyFilters()">
                         <option value="">All</option>
                         <option>CAD</option>
                         <option>USD</option>
@@ -682,37 +704,35 @@ function updateFilterOptions() {
 }
 
 function applyFilters() {
-    // Get all filter values
-    const stock = $('filter-stock').value;
-    const year = $('filter-year').value;
-    const category = $('filter-category').value;
-    const account = $('filter-account').value;
-    const action = $('filter-action').value;
-    const currency = $('filter-currency').value;
-    const search = $('filter-search').value.toUpperCase();
+    const filters = {
+        stock: $('filter-stock').value,
+        year: $('filter-year').value,
+        category: $('filter-category').value,
+        account: $('filter-account').value,
+        action: $('filter-action').value,
+        currency: $('filter-currency').value,
+        search: $('filter-search').value.toUpperCase()
+    };
 
-    // Check if any filter is active
-    isFilterActive = (stock || year || category || account || action || currency || search);
+    // Set global flag
+    isFilterActive = Object.values(filters).some(val => val !== "");
 
-    // Filter Trades
     currentFilteredTrades = allTrades.filter(t => {
-        const matchesStock = !stock || t.symbol === stock;
-        const matchesYear = !year || new Date(t.date).getFullYear().toString() === year;
-        const matchesCat = !category || t.category === category;
-        const matchesAcc = !account || t.account === account;
-        const matchesAct = !action || t.action === action;
-        const matchesCur = !currency || t.currency === currency;
-        const matchesSearch = !search || t.symbol.includes(search) || (t.name && t.name.toUpperCase().includes(search));
-        
-        return matchesStock && matchesYear && matchesCat && matchesAcc && matchesAct && matchesCur && matchesSearch;
+        return (!filters.stock || t.symbol === filters.stock) &&
+               (!filters.year || new Date(t.date).getFullYear().toString() === filters.year) &&
+               (!filters.category || t.category === filters.category) &&
+               (!filters.account || t.account === filters.account) &&
+               (!filters.action || t.action === filters.action) &&
+               (!filters.currency || t.currency === filters.currency) &&
+               (!filters.search || t.symbol.includes(filters.search));
     });
 
-    // Reset to page 1 and re-render
+    // Reset to page 1
     currentTradePage = 1;
     renderTradesTable();
 }
     
-function applyFilters() {
+function applyFiltersbkup() {
     const stock = $('filter-stock').value;
     const year = $('filter-year').value;
     const search = $('filter-search').value.toUpperCase();
@@ -786,11 +806,44 @@ function applyFilters() {
             return;
         }
 
-        var html='<table><thead><tr><th>Date</th><th>Account</th><th>Action</th><th>Symbol</th><th>Description</th><th>Type</th><th>Qty</th><th>Price</th><th>Amount</th><th>Comm</th><th>Currency</th><th></th></tr></thead><tbody>';
-        rows.forEach(function(t, i){
+        var html = '<div class="table-scroll-container"><table><thead><tr>' +
+                   '<th>Date</th><th>Account</th><th>Action</th><th>Symbol</th>' +
+                   '<th>Type</th><th>Qty</th>' +
+                   '<th class="text-right">Price</th>' +
+                   '<th class="text-right">Amount</th>' +
+                   '<th class="text-right">Comm</th>' +
+                   '<th>Currency</th><th></th></tr></thead><tbody>';
+        
+        rows.forEach(function(t, i) {
             var idx = allTrades.indexOf(t);
             var assetType = getAssetType(t);
-            html += '<tr><td>'+fmtDate(t.date)+'</td><td>'+esc(t.account)+'</td><td>'+esc(t.action)+'</td><td>'+esc(t.symbol)+'</td><td>'+esc(t.description)+'</td><td>'+assetType+'</td><td>'+fmt(t.quantity,4)+'</td><td>'+fmt(t.price)+'</td><td>'+fmt(t.amount)+'</td><td>'+fmt(t.commission)+'</td><td>'+esc(t.currency)+'</td><td><button class="btn btn-danger" onclick="deleteTrade(\''+String(t.id||idx)+'\')" style="padding:3px 8px;font-size:0.75em">Del</button></td></tr>';
+
+            // Specific helper for $ symbol and 2 decimal places
+            var fmtMoney = function(num) {
+                var val = parseFloat(num) || 0;
+                return '$' + val.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                });
+            };
+
+            html += '<tr>' +
+                '<td>' + fmtDate(t.date) + '</td>' +
+                '<td>' + esc(t.account) + '</td>' +
+                '<td>' + esc(t.action) + '</td>' +
+                '<td>' + esc(t.symbol) + '</td>' +
+                // Description is removed here
+                '<td>' + assetType + '</td>' +
+                '<td>' + (t.quantity ? t.quantity.toFixed(4) : '0.0000') + '</td>' +
+                '<td class="text-right">' + fmtMoney(t.price) + '</td>' +
+                '<td class="text-right" style="font-weight:bold;">' + fmtMoney(t.amount) + '</td>' +
+                '<td class="text-right">' + fmtMoney(t.commission || t.comm) + '</td>' +
+                '<td>' + esc(t.currency) + '</td>' +
+                '<td>' +
+                    '<button class="btn btn-danger" onclick="deleteTrade(\'' + String(t.id || idx) + '\')" ' +
+                    'style="padding:3px 8px;font-size:0.75em">Del</button>' +
+                '</td>' +
+            '</tr>';
         });
         html+='</tbody></table>';
         $('trades-table-wrap').innerHTML=html;
@@ -1493,13 +1546,13 @@ function renderPortfolio() {
     function dlCsv(csv,name){var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=name;a.click();}
 
     function clearFilters(){
-        ['f-search','f-from','f-to','f-account','f-category','f-action','f-currency'].forEach(function(id){$(id).value='';});
+        ['filter-search','filter-from','filter-to','filter-account','filter-category','filter-action','filter-currency'].forEach(function(id){$(id).value='';});
         $('f-perpage').value='25';
         applyFilters();
     }
 
     function updateAccountFilter(){
-        var sel=$('f-account'); var cur=sel.value;
+        var sel=$('filter-account'); var cur=sel.value;
         var accts=[...new Set(allTrades.map(function(t){return t.account||'';}).filter(Boolean))].sort();
         sel.innerHTML='<option value="">All</option>';
         accts.forEach(function(a){var o=document.createElement('option');o.value=a;o.textContent=a;sel.appendChild(o);});
