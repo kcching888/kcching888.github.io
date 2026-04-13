@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v2.75</title>
+    <title>IBKR Portfolio Manager v3</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v2.75</h1>
+    <h1>IBKR Portfolio Manager v3</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -105,6 +105,14 @@
                         <option>Forex</option>
                         <option>Options</option>
                         <option>Fixed Income</option>
+                    </select>
+                </div>
+                <div class="filters-group">
+                    <select id="filter-stock" onchange="applyFilters()">
+                        <option value="">All Stocks</option>
+                    </select>            
+                    <select id="filter-year" onchange="applyFilters()">
+                        <option value="">All Years</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -624,6 +632,21 @@ async function apiCall(params) {
         var from = $('f-from').value||'';
         var to = $('f-to').value||'';
 
+        const selectedStock = document.getElementById('filter-stock').value;
+        const selectedYear = document.getElementById('filter-year').value;
+
+        const filteredData = allData.filter(item => {
+           const itemYear = new Date(item.date).getFullYear().toString();
+        
+        // Check if stock matches (if a stock is selected)
+            const matchesStock = selectedStock === "" || item.symbol === selectedStock;
+        
+        // Check if year matches (if a year is selected)
+            const matchesYear = selectedYear === "" || itemYear === selectedYear;
+
+            return matchesStock && matchesYear;
+        });
+        
         filteredTrades = allTrades.filter(function(t){
             if(search && !(String(t.symbol||'').toLowerCase().includes(search)||String(t.description||'').toLowerCase().includes(search))) return false;
             if(account && String(t.account||'')!==account) return false;
@@ -637,6 +660,31 @@ async function apiCall(params) {
         renderTradesTable();
     }
 
+ function updateFilterDropdowns() {
+    const stockSelect = document.getElementById('filter-stock');
+    const yearSelect = document.getElementById('filter-year');
+
+    // Get unique symbols from both Trades and Dividends
+    const tradeSymbols = allTrades.map(t => t.symbol);
+    const divSymbols = allDividends.map(d => d.symbol);
+    const uniqueStocks = [...new Set([...tradeSymbols, ...divSymbols])].filter(s => s).sort();
+
+    // Get unique years from both
+    const tradeYears = allTrades.map(t => new Date(t.date).getFullYear());
+    const divYears = allDividends.map(d => new Date(d.date).getFullYear());
+    const uniqueYears = [...new Set([...tradeYears, ...divYears])]
+        .filter(y => !isNaN(y))
+        .sort((a, b) => b - a);
+
+    // Populate Stock Dropdown
+    stockSelect.innerHTML = '<option value="">All Stocks</option>' + 
+        uniqueStocks.map(s => `<option value="${s}">${s}</option>`).join('');
+
+    // Populate Year Dropdown
+    yearSelect.innerHTML = '<option value="">All Years</option>' + 
+        uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('');
+}
+    
     function renderTradesTable(){
         var perPageVal = ($('f-perpage')||{}).value||'25';
         var perPage = perPageVal==='all'?filteredTrades.length:(parseInt(perPageVal)||25);
