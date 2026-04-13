@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.4</title>
+    <title>Portfolio Manager v3.41</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.4</h1>
+    <h1>Portfolio Manager v3.41</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -695,7 +695,7 @@ function applyFilters() {
 
     // Trigger your existing complex render functions
     renderTradesTable();
-    renderDivsTable();
+    renderDivTable();
 }
 
  function updateFilterDropdowns() {
