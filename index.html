@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.63</title>
+    <title>Portfolio Manager v3.64</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.63</h1>
+    <h1>Portfolio Manager v3.64</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -744,7 +744,7 @@ function applyFilters() {
     console.log("applyFilters() filters: ", filters);
     console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
 
-    if (i === 0) { // Just check the first record to see what's happening
+    if (currentFilteredTrades.length === 0) { // Just check the first record to see what's happening
             console.log("Checking record:", t);
             console.log("Against filters:", filters);
             console.log("Stock match:", safeMatch(t.symbol, filters.stock));
