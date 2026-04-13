@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v3</title>
+    <title>IBKR Portfolio Manager v3.1</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v3</h1>
+    <h1>IBKR Portfolio Manager v3.1</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -91,12 +91,34 @@
             <div class="filters">
                 <div class="filter-group">
                     <label>Search</label>
-                    <input id="f-search" oninput="applyFilters()" placeholder="Symbol, desc...">
+                    <input type="text" id="filter-search" placeholder="Symbol or Name..." oninput="applyFilters()">
                 </div>
                 <div class="filter-group">
                     <label>Account</label>
                     <select id="f-account" onchange="applyFilters()"><option value="">All</option></select>
                 </div>
+                <div class="filter-group">
+                    <label>Stock</label>
+                    <select id="filter-stock" onchange="applyFilters()">
+                        <option value="">All Stocks</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>Year</label>
+                    <select id="filter-year" onchange="applyFilters()">
+                        <option value="">All Years</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>From</label>
+                    <input type="date" id="filter-from" onchange="applyFilters()">
+                </div>
+                <div class="filter-group">
+                    <label>To</label>
+                    <input type="date" id="filter-to" onchange="applyFilters()">
+                </div>
+            </div>
+            <div class="filters">
                 <div class="filter-group">
                     <label>Category</label>
                     <select id="f-category" onchange="applyFilters()">
@@ -105,14 +127,6 @@
                         <option>Forex</option>
                         <option>Options</option>
                         <option>Fixed Income</option>
-                    </select>
-                </div>
-                <div class="filters-group">
-                    <select id="filter-stock" onchange="applyFilters()">
-                        <option value="">All Stocks</option>
-                    </select>            
-                    <select id="filter-year" onchange="applyFilters()">
-                        <option value="">All Years</option>
                     </select>
                 </div>
                 <div class="filter-group">
@@ -622,43 +636,48 @@ async function apiCall(params) {
         }, function(){$('connStat').textContent='Sync failed';$('connStat').className='err';});
     }
 
-    function applyFilters(){
-        tradeCurrentPage = 1;
-        var search = ($('f-search').value||'').toLowerCase();
-        var account = $('f-account').value||'';
-        var category = $('f-category').value||'';
-        var action = $('f-action').value||'';
-        var currency = $('f-currency').value||'';
-        var from = $('f-from').value||'';
-        var to = $('f-to').value||'';
+    // Call this once after your data is loaded/synced
+function updateFilterOptions() {
+    const stockSelect = document.getElementById('filter-stock');
+    const yearSelect = document.getElementById('filter-year');
+    
+    // Extract unique symbols and years from both trades and dividends
+    const allSymbols = [...new Set([...allTrades.map(t => t.symbol), ...allDivs.map(d => d.symbol)])].filter(s => s).sort();
+    const allYears = [...new Set([...allTrades.map(t => new Date(t.date).getFullYear()), ...allDivs.map(d => new Date(d.date).getFullYear())])]
+        .filter(y => !isNaN(y))
+        .sort((a, b) => b - a);
 
-        const selectedStock = document.getElementById('filter-stock').value;
-        const selectedYear = document.getElementById('filter-year').value;
+    stockSelect.innerHTML = '<option value="">All Stocks</option>' + 
+        allSymbols.map(s => `<option value="${s}">${s}</option>`).join('');
+        
+    yearSelect.innerHTML = '<option value="">All Years</option>' + 
+        allYears.map(y => `<option value="${y}">${y}</option>`).join('');
+}
 
-        const filteredData = allData.filter(item => {
-           const itemYear = new Date(item.date).getFullYear().toString();
-        
-        // Check if stock matches (if a stock is selected)
-            const matchesStock = selectedStock === "" || item.symbol === selectedStock;
-        
-        // Check if year matches (if a year is selected)
-            const matchesYear = selectedYear === "" || itemYear === selectedYear;
+function applyFilters() {
+    const search = document.getElementById('filter-search').value.toUpperCase();
+    const stock = document.getElementById('filter-stock').value;
+    const year = document.getElementById('filter-year').value;
 
-            return matchesStock && matchesYear;
-        });
-        
-        filteredTrades = allTrades.filter(function(t){
-            if(search && !(String(t.symbol||'').toLowerCase().includes(search)||String(t.description||'').toLowerCase().includes(search))) return false;
-            if(account && String(t.account||'')!==account) return false;
-            if(category && getAssetType(t)!==category) return false;
-            if(action && String(t.action||'').toLowerCase()!==action.toLowerCase()) return false;
-            if(currency && String(t.currency||'').toLowerCase()!==currency.toLowerCase()) return false;
-            if(from && String(t.date||'')<from) return false;
-            if(to && String(t.date||'')>to) return false;
-            return true;
-        });
-        renderTradesTable();
-    }
+    // Filter Trades
+    const filteredTrades = allTrades.filter(t => {
+        const matchesSearch = t.symbol.includes(search) || (t.name && t.name.toUpperCase().includes(search));
+        const matchesStock = !stock || t.symbol === stock;
+        const matchesYear = !year || new Date(t.date).getFullYear().toString() === year;
+        return matchesSearch && matchesStock && matchesYear;
+    });
+
+    // Filter Dividends
+    const filteredDivs = allDivs.filter(d => {
+        const matchesSearch = d.symbol.includes(search);
+        const matchesStock = !stock || d.symbol === stock;
+        const matchesYear = !year || new Date(d.date).getFullYear().toString() === year;
+        return matchesSearch && matchesStock && matchesYear;
+    });
+
+    renderTrades(filteredTrades);
+    renderDividends(filteredDivs);
+}
 
  function updateFilterDropdowns() {
     const stockSelect = document.getElementById('filter-stock');
@@ -790,6 +809,50 @@ async function getLivePrice(symbol) {
 }
 
 async function updateAllPrices() {
+    const gas_url = localStorage.getItem('ibkr_gas_url'); 
+    if (!gas_url) {
+        alert("Please set your Google Script URL (ibkr_gas_url) in Settings.");
+        return;
+    }
+
+    // Create a unique list of symbols to prevent 414 URI Too Long errors
+    const uniqueMap = new Map();
+    allTrades.forEach(t => {
+        if (t.symbol && !uniqueMap.has(t.symbol)) {
+            uniqueMap.set(t.symbol, { symbol: t.symbol, currency: t.currency });
+        }
+    });
+    const symbols = Array.from(uniqueMap.values());
+
+    const btn = document.getElementById('price-btn');
+    if (btn) btn.textContent = 'Updating...';
+
+    try {
+        const params = new URLSearchParams({
+            action: 'getPrices',
+            symbols: JSON.stringify(symbols)
+        });
+        
+        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?'}${params.toString()}`;
+        
+        const response = await fetch(finalUrl, { redirect: 'follow' });
+        const priceMap = await response.json();
+
+        window.currentPrices = priceMap;
+        localStorage.setItem('finnhub_price_cache', JSON.stringify({
+            timestamp: Date.now(),
+            prices: priceMap
+        }));
+
+        renderPortfolio();
+    } catch (err) {
+        console.error("Price fetch failed:", err);
+    } finally {
+        if (btn) btn.textContent = '$ Refresh Prices';
+    }
+}
+    
+async function updateAllPricesbkup12() {
     // 1. Corrected key name
     const gas_url = localStorage.getItem('ibkr_gas_url'); 
     if (!gas_url) {
@@ -887,282 +950,7 @@ async function updateAllPricesbkup11() {
     }
 }
 
-    
-async function updateAllPricesbkup10() {
-    const gas_url = localStorage.getItem('ibkr_gas_url'); // Ensure we get the latest URL
-    if (!gas_url) {
-        console.error("No Google Apps Script URL found in settings.");
-        return;
-    }
-    
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Fetching...';
 
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    try {
-        // Construct the URL and log it to Eruda to verify it looks correct
-        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?'}action=getPrices&symbols=${encodeURIComponent(JSON.stringify(symbols))}`;
-        console.log("Fetching from:", finalUrl);
-
-        const response = await fetch(finalUrl);
-        
-        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-        
-        const priceMap = await response.json();
-
-        window.currentPrices = priceMap;
-        localStorage.setItem('finnhub_price_cache', JSON.stringify({
-            timestamp: Date.now(),
-            prices: priceMap
-        }));
-
-        renderPortfolio();
-    } catch (err) {
-        console.error("Google Script Price Fetch failed:", err);
-        // If Google fails, try to load from local cache so the UI doesn't break
-        const cached = JSON.parse(localStorage.getItem('finnhub_price_cache') || '{}');
-        if (cached.prices) {
-            window.currentPrices = cached.prices;
-            renderPortfolio();
-        }
-    } finally {
-        if (btn) btn.textContent = '$ Refresh Prices';
-    }
-}
-    
-
-async function updateAllPricesbkup3() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // 1. Format Symbol for Yahoo (e.g., TRI becomes TRI.TO)
-                const ySymbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                
-                // 2. USE A PROXY to bypass CORS restrictions
-                // This wraps the Yahoo URL so the browser thinks it's talking to the proxy
-                const yahooUrl = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${ySymbol}`;
-                const proxiedUrl = `https://corsproxy.io/?${encodeURIComponent(yahooUrl)}`;
-                
-                const response = await fetch(proxiedUrl);
-                const data = await response.json();
-                const quote = data.quoteResponse.result[0];
-
-                if (quote) {
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // US Stocks via Finnhub (usually doesn't need a proxy)
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) {
-                priceMap[item.symbol] = priceData;
-            }
-
-            // Small delay to prevent hitting rate limits
-            await new Promise(r => setTimeout(r, 250)); 
-        } catch (err) {
-            console.error(`Error fetching ${item.symbol}:`, err);
-        }
-    }
-
-    window.currentPrices = priceMap;
-    // Save to cache
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup2() {
-    const FINNHUB_KEY = localStorage.getItem('finnhub_key');
-    const symbols = [...new Set(allTrades.map(t => ({ 
-        symbol: t.symbol, 
-        currency: t.currency 
-    })))].filter(s => s.symbol);
-
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const item of symbols) {
-        try {
-            let priceData = null;
-
-            if (item.currency === 'CAD') {
-                // --- YAHOO FINANCE QUERY2 FOR CA STOCKS ---
-                const symbol = item.symbol.includes('.') ? item.symbol : item.symbol + '.TO';
-                // Note: If this fails due to CORS, you may need a proxy like https://corsproxy.io/?
-                const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`;
-                
-                const response = await fetch(url);
-                const data = await response.json();
-                const quote = data.quoteResponse.result[0];
-
-                if (quote) {
-                    priceData = {
-                        price: quote.regularMarketPrice,
-                        change: quote.regularMarketChange,
-                        pc: quote.regularMarketChangePercent
-                    };
-                }
-            } else if (FINNHUB_KEY) {
-                // --- FINNHUB FOR US STOCKS ---
-                const url = `https://finnhub.io/api/v1/quote?symbol=${item.symbol}&token=${FINNHUB_KEY}`;
-                const response = await fetch(url);
-                const data = await response.json();
-                if (data.c) {
-                    priceData = { price: data.c, change: data.d, pc: data.dp };
-                }
-            }
-
-            if (priceData) {
-                priceMap[item.symbol] = priceData;
-            }
-
-            // Small delay to respect rate limits
-            await new Promise(r => setTimeout(r, 200)); 
-        } catch (err) {
-            console.error(`Error fetching ${item.symbol}:`, err);
-        }
-    }
-
-    // Save to Cache and Global State
-    window.currentPrices = priceMap;
-    localStorage.setItem('finnhub_price_cache', JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-
-async function updateAllPricesbkup() {
-    const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key');
-    if (!FINNHUB_KEY) return;
-
-    // 1. Check Cache first (15-minute expiry)
-    const CACHE_KEY = 'finnhub_price_cache';
-    const cachedData = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
-    const now = Date.now();
-    const cacheExpiry = 15 * 60 * 1000; // 15 minutes
-
-    if (cachedData.timestamp && (now - cachedData.timestamp < cacheExpiry)) {
-        console.log("Using cached prices from " + new Date(cachedData.timestamp).toLocaleTimeString());
-        window.currentPrices = cachedData.prices;
-        renderPortfolio();
-        return;
-    }
-
-    // 2. If no valid cache, fetch new prices
-    const symbols = [...new Set(allTrades.map(t => t.symbol))].filter(Boolean);
-    const priceMap = {};
-    const btn = $('price-btn');
-    if (btn) btn.textContent = 'Updating...';
-
-    for (const symbol of symbols) {
-        try {
-            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.c) {
-                priceMap[symbol] = {
-                    price: data.c,
-                    change: data.d,
-                    pc: data.dp
-                };
-            }
-            // Rate limit safety delay
-            await new Promise(r => setTimeout(r, 150)); 
-        } catch (err) {
-            console.error(`Error fetching ${symbol}:`, err);
-        }
-    }
-
-    // 3. Save to Cache and Global State
-    window.currentPrices = priceMap;
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-        timestamp: Date.now(),
-        prices: priceMap
-    }));
-
-    if (btn) btn.textContent = '$ Refresh Prices';
-    renderPortfolio();
-}
-
-async function updateAllPricesbkup() {
-    const FINNHUB_KEY = localStorage.getItem('ibkr_price_api_key'); // Recommendation: Store key in localStorage
-    if (!FINNHUB_KEY) {
-        console.warn("No Finnhub API key found.");
-        return;
-    }
-
-    // 1. Get unique tickers from your trades
-    const symbols = [...new Set(allTrades.map(t => t.symbol))].filter(Boolean);
-    const priceMap = {};
-
-    console.log(`Fetching prices for ${symbols.length} symbols...`);
-
-    for (const symbol of symbols) {
-        try {
-            // Finnhub API URL
-            const url = `https://finnhub.io/api/v1/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
-            
-            const response = await fetch(url);
-            const data = await response.json();
-
-            if (data.c) {
-                priceMap[symbol] = {
-                    price: data.c,      // Current price
-                    change: data.d,     // Change
-                    pc: data.dp         // Percent change
-                };
-            }
-
-            // 2. Small delay to respect rate limits (100ms = 10 requests per second)
-            await new Promise(resolve => setTimeout(resolve, 100));
-
-        } catch (err) {
-            console.error(`Error fetching ${symbol}:`, err);
-        }
-    }
-
-    // 3. Update your Global State and UI
-    window.currentPrices = priceMap; 
-    console.log("window.currentPrices: ", window.currentPrices);
-    renderPortfolio(); // Re-render the table with new prices
-}
 
 // !!!!Fetch stock prices from API - twelvedata = OBSOLETE!!!!!
 function fetchStockPrices12(symbols, callback) {
