@@ -727,6 +727,7 @@ function applyFilters() {
                (!filters.search || t.symbol.includes(filters.search));
     });
 
+    console.log("currentFilteredTrades: ", currentFilteredTrades);
     // Reset to page 1
     currentTradePage = 1;
     renderTradesTable();
