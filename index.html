@@ -714,7 +714,7 @@ function applyFilters() {
         search: $('filter-search').value.toUpperCase()
     };
 
-    console("applyFilters() filters:", filters);
+    console.log("applyFilters() filters:", filters);
     // Set global flag
     isFilterActive = Object.values(filters).some(val => val !== "");
 
@@ -750,7 +750,7 @@ function applyFilters() {
      //   }
     });
 
-    console.log("applyFilters() filters: ", filters);
+    //console.log("applyFilters() filters: ", filters);
     console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
 
     
