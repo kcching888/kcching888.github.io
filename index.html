@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.64</title>
+    <title>Portfolio Manager v3.65</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.64</h1>
+    <h1>Portfolio Manager v3.65</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -719,37 +719,39 @@ function applyFilters() {
 
     currentFilteredTrades = allTrades.filter(t => {
     // 1. Helper to safely compare strings (handles nulls and extra spaces)
-    const safeMatch = (dataVal, filterVal) => {
-        if (!filterVal) return true; // Filter is empty, so it's a match
-        return String(dataVal || "").trim() === String(filterVal).trim();
-    };
+        const safeMatch = (dataVal, filterVal) => {
+            if (!filterVal) return true; // Filter is empty, so it's a match
+            return String(dataVal || "").trim() === String(filterVal).trim();
+        };
 
     // 2. Defensive Date Check
-    let matchesYear = true;
-    if (filters.year) {
-        const d = new Date(t.date);
-        matchesYear = !isNaN(d.getTime()) && d.getFullYear().toString() === filters.year;
-    }
+        let matchesYear = true;
+        if (filters.year) {
+            const d = new Date(t.date);
+            matchesYear = !isNaN(d.getTime()) && d.getFullYear().toString() === filters.year;
+        }
 
     // 3. The Multi-Condition Check
-    return safeMatch(t.symbol, filters.stock) &&
+        return safeMatch(t.symbol, filters.stock) &&
            matchesYear &&
            safeMatch(t.category, filters.category) &&
            safeMatch(t.account, filters.account) &&
            safeMatch(t.action, filters.action) &&
            safeMatch(t.currency, filters.currency) &&
            (!filters.search || String(t.symbol || "").toUpperCase().includes(filters.search));
-});
 
-    console.log("applyFilters() filters: ", filters);
-    console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
-
-    if (currentFilteredTrades.length === 0) { // Just check the first record to see what's happening
+        if (currentFilteredTrades.length === 0) { // Just check the first record to see what's happening
             console.log("Checking record:", t);
             console.log("Against filters:", filters);
             console.log("Stock match:", safeMatch(t.symbol, filters.stock));
             console.log("Year match:", matchesYear);
-    }
+        }
+    });
+
+    console.log("applyFilters() filters: ", filters);
+    console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
+
+    
     // Reset to page 1
     currentTradePage = 1;
     renderTradesTable();
