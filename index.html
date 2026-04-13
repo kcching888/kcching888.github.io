@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IBKR Portfolio Manager v3.2</title>
+    <title>Portfolio Manager v3.3</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -65,7 +65,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>IBKR Portfolio Manager v3.2</h1>
+    <h1>Portfolio Manager v3.3</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -387,8 +387,8 @@
     let currentFilteredTrades = [];
     let currentFilteredDivs = [];
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
-    var filteredTrades = [];
-    var filteredDivs = [];
+    // var filteredTrades = [];
+    // var filteredDivs = [];
     var tradeCurrentPage = 1;
     var divCurrentPage = 1;
     // Price feed cache
@@ -713,13 +713,13 @@ function applyFilters() {
     function renderTradesTable(){
         const displayData = (currentFilteredTrades.length > 0 || document.getElementById('filter-stock').value || document.getElementById('filter-year').value) ? currentFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
-        var perPage = perPageVal==='all'?filteredTrades.length:(parseInt(perPageVal)||25);
-        var total = filteredTrades.length;
+        var perPage = perPageVal==='all'?currentFilteredTrades.length:(parseInt(perPageVal)||25);
+        var total = currentFilteredTrades.length;
         var totalPages = perPage>0?Math.max(1,Math.ceil(total/perPage)):1;
         if(tradeCurrentPage>totalPages) tradeCurrentPage=totalPages;
 
         var start = (tradeCurrentPage-1)*perPage;
-        var rows = filteredTrades.slice(start, perPage===filteredTrades.length?undefined:start+perPage);
+        var rows = currentFilteredTrades.slice(start, perPage===currentFilteredTrades.length?undefined:start+perPage);
 
         $('trades-info').textContent = 'Showing '+(total===0?0:start+1)+'-'+Math.min(start+rows.length,total)+' of '+total+' records ('+allTrades.length+' total loaded)';
 
@@ -757,7 +757,7 @@ function applyFilters() {
         divCurrentPage=1;
         var from=$('df-from').value||'';
         var to=$('df-to').value||'';
-        filteredDivs=allDivs.filter(function(d){
+        currentFilteredDivs=allDivs.filter(function(d){
             if(from&&String(d.date||'')<from)return false;
             if(to&&String(d.date||'')>to)return false;
             return true;
@@ -768,12 +768,12 @@ function applyFilters() {
     function renderDivTable(){
         const displayData = (currentFilteredDivs.length > 0 || document.getElementById('filter-stock').value || document.getElementById('filter-year').value) ? currentFilteredDivs : allDivs;
         var perPageVal=($('df-perpage')||{}).value||'25';
-        var perPage=perPageVal==='all'?filteredDivs.length:(parseInt(perPageVal)||25);
-        var total=filteredDivs.length;
+        var perPage=perPageVal==='all'?currentFilteredDivs.length:(parseInt(perPageVal)||25);
+        var total=currentFilteredDivs.length;
         var totalPages=Math.max(1,Math.ceil(total/perPage));
         if(divCurrentPage>totalPages)divCurrentPage=totalPages;
         var start=(divCurrentPage-1)*perPage;
-        var rows=filteredDivs.slice(start,start+perPage);
+        var rows=currentFilteredDivs.slice(start,start+perPage);
 
         if(!rows.length){$('div-table-wrap').innerHTML='<div class="loading">No dividends.</div>';$('div-pagination').innerHTML='';return;}
         var html='<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
@@ -1425,12 +1425,12 @@ function renderPortfolio() {
 
     function exportTrades(){
         var csv='Date,Account,Action,Symbol,Description,Quantity,Price,Amount,Commission,Currency';
-        filteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
+        currentFilteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
         dlCsv(csv,'trades.csv');
     }
     function exportDivs(){
         var csv='Date,Account,Symbol,Description,Amount,Currency';
-        filteredDivs.forEach(function(d){csv+=[fmtDate(d.date),d.account,d.symbol,d.description,d.amount,d.currency].join(',')+'';});
+        currentFilteredDivs.forEach(function(d){csv+=[fmtDate(d.date),d.account,d.symbol,d.description,d.amount,d.currency].join(',')+'';});
         dlCsv(csv,'dividends.csv');
     }
     function dlCsv(csv,name){var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download=name;a.click();}
