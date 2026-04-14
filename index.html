@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.9">
+    <meta name="version" content="3.91">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1646,25 +1646,34 @@ function renderTransfers() {
                 var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
                 if(!symbol||symbol===currency)return;
                 trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
-            } else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
+           else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
-                if (!date || isNaN(amount)) return;
+                if (!date || isNaN(amount)) continue;
 
-                    trades.push({
-                        id: 'TR' + Date.now() + '_' + trades.length,
-                        date: date,
-                        account: currentAccount,
-                        action: amount > 0 ? 'Deposit' : 'Withdrawal',
-                        symbol: 'CASH',
-                        description: desc,
-                        quantity: 1,
-                        price: Math.abs(amount),
-                        amount: amount,
-                        commission: 0,
-                        currency: currency,
-                        assetCategory: 'Cash'
+                // Fetch the rate from BoC via a helper (defined below)
+                let rate = 1;
+                if (currency !== 'CAD') {
+                    rate = await fetchBOCRate(currency, date);
+                }
+
+                trades.push({
+                    id: 'TR' + Date.now() + '_' + trades.length,
+                    date: date,
+                    account: currentAccount,
+                    action: amount > 0 ? 'Deposit' : 'Withdrawal',
+                    symbol: 'CASH',
+                    description: desc,
+                    quantity: 1,
+                    price: Math.abs(amount),
+                    amount: amount,
+                    cadAmount: (amount * rate).toFixed(2), // Saved to Sheet
+                    exchRate: rate,                         // Saved to Sheet
+                    commission: 0,
+                    currency: currency,
+                    assetCategory: 'Cash'
                 });
-            } else if((section==='Dividends'||section==='Withholding Tax')&&cols.length>=6){
+            }
+            else if((section==='Dividends'||section==='Withholding Tax')&&cols.length>=6){
                 var currency=cols[2], date=cols[3], desc=cols[4], amount=parseFloat(cols[5]);
                 if(!date||isNaN(new Date(date).getTime()))return;
                 var sym=desc.split(' ')[0]||'';
