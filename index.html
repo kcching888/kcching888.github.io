@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.873">
+    <meta name="version" content="3.874">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -127,7 +127,7 @@
     <div class="nav-tab" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
     <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
-    <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer In / Out</div>        
+    <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer</div>        
 </div>
 
 <div class="content">
@@ -491,7 +491,7 @@
             $('page-'+t).style.display = t===tab?'':'none';
             $('tab-'+t).classList.toggle('active',t===tab);
         });
-        console.log("tab: ", tab);
+        console.log("tab: ", tab, $('page-'+t).style.display,  $('tab-'+t).classList.toggle );
         
         if(tab==='portfolio') renderPortfolio();
         if(tab==='gainloss') renderGainLoss();
@@ -1463,6 +1463,8 @@ function renderTransfers() {
         return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer') || act.includes('funding');
     });
 
+    console.log("transfers: ", transfers);
+    
     if (transfers.length === 0) {
         document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found. Please re-upload CSV.</div>';
         return;
