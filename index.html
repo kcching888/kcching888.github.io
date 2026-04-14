@@ -1646,6 +1646,7 @@ function renderTransfers() {
                 var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
                 if(!symbol||symbol===currency)return;
                 trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
+           }    
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
                 if (!date || isNaN(amount)) continue;
