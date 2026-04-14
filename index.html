@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.81</title>
+    <title>Investment Dashboard</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.81</h1>
+    <h1>Investment Dashboard</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -436,6 +436,17 @@
     var lastPriceUpdate = null;
     var currentUploadTab = 'ibkr';
 
+    const APP_VERSION = "3.83";
+
+    function syncVersion() {
+        document.title = `Investment Dashboard v${APP_VERSION}`;
+    
+    // Find every element with the 'data-version-target' attribute
+        document.querySelectorAll('[data-version-target]').forEach(el => {
+            el.innerText = `Investment Dashboard v${APP_VERSION}`;
+       });
+    }
+    
     // Replace your current function $(id) with this:
     function $(id) {
         if (id.startsWith('#')) id = id.substring(1); // Handle both 'id' and '#id'
@@ -463,7 +474,7 @@
     }
 
     function showTab(tab){
-        ['transactions','portfolio','gainloss','dividends', 'transfer'].forEach(function(t){
+        ['transactions','portfolio','gainloss','dividends', 'transfers'].forEach(function(t){
             $('page-'+t).style.display = t===tab?'':'none';
             $('tab-'+t).classList.toggle('active',t===tab);
         });
