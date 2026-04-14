@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.85">
+    <meta name="version" content="3.86">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -437,7 +437,7 @@
     var lastPriceUpdate = null;
     var currentUploadTab = 'ibkr';
 
-    const APP_VERSION = "3.84";
+    //const APP_VERSION = "3.84";
 
     function syncVersion() {
     // This looks for the content inside the meta tag named 'version'
@@ -470,8 +470,18 @@
         var d = (t.description || '').toLowerCase();
         if (['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD'].indexOf(s) >= 0) return 'Forex';
             if (s.includes('.')) { var parts = s.split('.'); if (parts.length === 2 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[0]) >= 0 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[1]) >= 0) return 'Forex'; }
+        const act = (t.action || '').toLowerCase();
+        // If it's a transfer action, it's 'Forex' (cash balance)
+        if (act.includes('deposit') || act.includes('withdraw') || act.includes('transfer')) {
+            return 'Forex';
+        }
+        // If it's a trade but the symbol is a currency pair
+        if (t.symbol && (t.symbol.includes('.') || t.symbol.includes('=')) && t.symbol.length > 5) {
+            return 'Forex';
+        }
         if (d.includes(' bond ') || d.includes(' bill ') || d.includes(' note ')) return 'Fixed Income';
         if (d.includes(' opt ') || d.includes(' call ') || d.includes(' put ') || (s.length > 6 && /\\d/.test(s))) return 'Options';
+        
         return 'Stock';
     }
 
@@ -1444,14 +1454,14 @@ function renderPortfoliobkup() {
     
 
 function renderTransfers() {
-    // Looks for keywords: Transfer, Deposit, Withdrawal, Funding, etc.
+    // Filter for all cash movements
     const transfers = allTrades.filter(t => {
         const act = (t.action || '').toLowerCase();
-        return act.includes('transfer') || act.includes('deposit') || act.includes('withdraw') || act.includes('fund');
+        return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer') || act.includes('funding');
     });
 
-    if (!transfers.length) {
-        document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found.</div>';
+    if (transfers.length === 0) {
+        document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found. Please re-upload CSV.</div>';
         return;
     }
 
@@ -1464,20 +1474,34 @@ function renderTransfers() {
 
     let html = '<h2>Account Funding & Transfers</h2>';
     Object.keys(byAccount).sort().forEach(acct => {
-        html += `<h3 style="margin-top:20px; border-bottom: 1px solid #333;">${esc(acct)} (Net: $${fmt(byAccount[acct].net)})</h3>`;
-        html += `<table><thead><tr><th>Date</th><th>Action</th><th>Symbol</th><th>Amount</th><th>Currency</th><th>Description</th></tr></thead><tbody>`;
-        
-        byAccount[acct].items.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach(t => {
-            html += `<tr>
-                <td>${fmtDate(t.date)}</td>
-                <td>${esc(t.action)}</td>
-                <td>${esc(t.symbol || '-')}</td>
-                <td class="text-right ${t.amount >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(t.amount)}</td>
-                <td>${esc(t.currency)}</td>
-                <td>${esc(t.description || '')}</td>
-            </tr>`;
-        });
-        html += '</tbody></table>';
+        html += `
+            <div class="account-section" style="margin-bottom: 30px;">
+                <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px;">
+                    ${esc(acct)} <span style="float:right; color:#4caf50;">Net Funding: $${fmt(byAccount[acct].net)}</span>
+                </h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Action</th>
+                            <th class="text-right">Amount</th>
+                            <th>Curr</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${byAccount[acct].items.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => `
+                            <tr>
+                                <td>${fmtDate(item.date)}</td>
+                                <td style="color: ${item.amount > 0 ? '#4caf50' : '#f44336'}">${esc(item.action)}</td>
+                                <td class="text-right">$${fmt(item.amount)}</td>
+                                <td>${esc(item.currency)}</td>
+                                <td style="font-size: 0.85em; color: #aaa;">${esc(item.description)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>`;
     });
 
     document.getElementById('transfer-table-wrap').innerHTML = html;
@@ -1619,6 +1643,24 @@ function renderTransfers() {
                 var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
                 if(!symbol||symbol===currency)return;
                 trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
+            } else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
+                var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
+                if (!date || isNaN(amount)) return;
+
+                    trades.push({
+                        id: 'TR' + Date.now() + '_' + trades.length,
+                        date: date,
+                        account: currentAccount,
+                        action: amount > 0 ? 'Deposit' : 'Withdrawal',
+                        symbol: 'CASH',
+                        description: desc,
+                        quantity: 1,
+                        price: Math.abs(amount),
+                        amount: amount,
+                        commission: 0,
+                        currency: currency,
+                        assetCategory: 'Cash'
+                });
             } else if((section==='Dividends'||section==='Withholding Tax')&&cols.length>=6){
                 var currency=cols[2], date=cols[3], desc=cols[4], amount=parseFloat(cols[5]);
                 if(!date||isNaN(new Date(date).getTime()))return;
