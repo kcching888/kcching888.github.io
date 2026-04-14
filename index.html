@@ -1654,7 +1654,7 @@ function renderTransfers() {
                 // Fetch the rate from BoC via a helper (defined below)
                 let rate = 1;
                 if (currency !== 'CAD') {
-                    rate = await fetchBOCRate(currency, date);
+                    rate = await getBOCRate(currency, date);
                 }
 
                 trades.push({
