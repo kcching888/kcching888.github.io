@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Investment Dashboard</h1>
+    <h1 data-version-target>Investment Dashboard</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -253,7 +253,7 @@
         </div>
     </div>
 
-    <div id="transfers-tab" class="tab-content" style="display:none;">
+    <div id="page-transfers" class="tab-content" style="display:none;">
         <div id="transfer-table-wrap"></div>
     </div>
 </div>
@@ -474,7 +474,7 @@
     }
 
     function showTab(tab){
-        ['transactions','portfolio','gainloss','dividends', 'transfers'].forEach(function(t){
+        ['transactions','portfolio','gainloss','dividends','transfers'].forEach(function(t){
             $('page-'+t).style.display = t===tab?'':'none';
             $('tab-'+t).classList.toggle('active',t===tab);
         });
