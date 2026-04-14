@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.84">
+    <meta name="version" content="3.85">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1256,7 +1256,7 @@ function renderPortfolio() {
             <div style="font-size:0.75em; color:${window.currentPrices ? '#4caf50' : '#aaa'}; font-weight: bold;">
                 ${window.currentPrices ? '● Live prices (' + timeStr + ')' : 'No live data'}
             </div>
-            <button class="btn btn-primary" style="margin-top:8px; width: 100%;" onclick="handlePriceRefresh()">🔄 Refresh Prices</button>
+            <button class="btn btn-primary" id="refresh-prices-btn" style="margin-top:8px; width: 100%;" onclick="handlePriceRefresh()">🔄 Refresh Prices</button>
         </div>`;
     
     // Table Generation Logic
