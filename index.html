@@ -5,7 +5,7 @@
     <script>eruda.init();</script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portfolio Manager v3.8</title>
+    <title>Portfolio Manager v3.81</title>
     <style>
         *{box-sizing:border-box;margin:0;padding:0}
         body{font-family:Arial,sans-serif;background:#1a1a2e;color:#e0e0e0;min-height:100vh}
@@ -107,7 +107,7 @@
 </head>
 <body>
 <div class="header">
-    <h1>Portfolio Manager v3.8</h1>
+    <h1>Portfolio Manager v3.81</h1>
     <div style="display:flex;gap:10px;align-items:center">
         <span id="connStat" class="err">Not connected</span>
                     <span id="sync-status" class="success" style="display:none;margin-left:15px;"></span>
@@ -463,13 +463,14 @@
     }
 
     function showTab(tab){
-        ['transactions','portfolio','gainloss','dividends'].forEach(function(t){
+        ['transactions','portfolio','gainloss','dividends', 'transfer'].forEach(function(t){
             $('page-'+t).style.display = t===tab?'':'none';
             $('tab-'+t).classList.toggle('active',t===tab);
         });
         if(tab==='portfolio') renderPortfolio();
         if(tab==='gainloss') renderGainLoss();
-        if(tab==='dividends') { applyDivFilters(); renderDivStats(); }
+        if(tab==='dividends') { applyDivFilters(); renderDivStats(); 
+        if (tabId === 'transfers') renderTransfers();}
     }
 
     function openModal(id){$(id).classList.add('show');}
@@ -1186,11 +1187,7 @@ async function handlePriceRefresh() {
 
 function renderPortfolio() {
     var positions = {};
-    // Category totals for top cards
-    var totals = {
-        Stock: { cost: 0, mv: 0, pl: 0 },
-        Forex: { cost: 0, mv: 0, pl: 0 }
-    };
+    var totals = { Stock: { cost: 0, mv: 0, pl: 0 }, Forex: { cost: 0, mv: 0, pl: 0 } };
 
     allTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
@@ -1211,16 +1208,11 @@ function renderPortfolio() {
     var posArr = Object.values(positions).filter(function(p) { return Math.abs(p.qty) > 0.0001; });
     var livePrices = window.currentPrices || {};
 
-    // Calculate Global Totals (Top Cards)
     posArr.forEach(function(p) {
         var fxRate = (p.currency === 'USD') ? 1.36 : 1.0; 
         var costInCAD = p.totalCost * fxRate;
         var liveData = livePrices[p.symbol];
-        var mvInCAD = costInCAD; // Default fallback
-
-        if (p.type === 'Stock' && liveData) {
-            mvInCAD = (liveData.price * p.qty) * fxRate;
-        }
+        var mvInCAD = (p.type === 'Stock' && liveData) ? (liveData.price * p.qty) * fxRate : costInCAD;
 
         totals[p.type].cost += costInCAD;
         totals[p.type].mv += mvInCAD;
@@ -1229,30 +1221,32 @@ function renderPortfolio() {
     
     var now = new Date();
     var timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    var priceUpdateText = (window.currentPrices) 
-        ? '<div style="font-size:0.75em;color:#4caf50;margin-top:5px;">● Live prices active (' + timeStr + ')</div>'
-        : '<div style="font-size:0.75em;color:#aaa;margin-top:5px;">No live price data.</div>';
     
-    // UI: Split Summary Cards
+    // UI: Stats Grid with Refresh Button inside
     $('#port-stats').innerHTML = `
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.cost)} / F: $${fmt(totals.Forex.cost)}</div>
-            <div class="lbl">Cost Basis (Stock / Forex)</div>
+            <div class="val">S: $${fmt(totals.Stock.cost)}<br>F: $${fmt(totals.Forex.cost)}</div>
+            <div class="lbl">Cost Basis</div>
         </div>
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.mv)} / F: $${fmt(totals.Forex.mv)}</div>
-            <div class="lbl">Market Value (Stock / Forex)</div>
+            <div class="val">S: $${fmt(totals.Stock.mv)}<br>F: $${fmt(totals.Forex.mv)}</div>
+            <div class="lbl">Market Value</div>
         </div>
         <div class="stat-card">
             <div class="val">
-                <span class="${totals.Stock.pl >= 0 ? 'pos-gain' : 'pos-loss'}">S: $${fmt(totals.Stock.pl)}</span> / 
+                <span class="${totals.Stock.pl >= 0 ? 'pos-gain' : 'pos-loss'}">S: $${fmt(totals.Stock.pl)}</span><br>
                 <span class="${totals.Forex.pl >= 0 ? 'pos-gain' : 'pos-loss'}">F: $${fmt(totals.Forex.pl)}</span>
             </div>
-            <div class="lbl">Unrealized P&L (Stock / Forex)</div>
+            <div class="lbl">Unrealized P&L</div>
         </div>
-        ${priceUpdateText}`;
+        <div class="stat-card" style="display: flex; flex-direction: column; justify-content: center; align-items: center;">
+            <div style="font-size:0.75em; color:${window.currentPrices ? '#4caf50' : '#aaa'}; font-weight: bold;">
+                ${window.currentPrices ? '● Live prices (' + timeStr + ')' : 'No live data'}
+            </div>
+            <button class="btn btn-primary" style="margin-top:8px; width: 100%;" onclick="handlePriceRefresh()">🔄 Refresh Prices</button>
+        </div>`;
     
-    // Grouping and Table Generation
+    // Table Generation Logic
     var grouped = {};
     posArr.forEach(p => {
         var groupKey = p.type + '-' + p.account;
@@ -1261,7 +1255,7 @@ function renderPortfolio() {
     });
 
     var sortOrder = ['Stock-U10455610', 'Stock-U9804531', 'Forex-U10455610', 'Forex-U9804531'];
-    var html = '<div style="margin-bottom:10px;"><button class="btn btn-primary" onclick="handlePriceRefresh()">🔄 Refresh Prices</button></div>';
+    let html = ''; // Button removed from here as it's now in the header
     
     sortOrder.forEach(function(key) {
         if (!grouped[key]) return;
@@ -1291,20 +1285,14 @@ function renderPortfolio() {
 
                 html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
-                sCost += p.totalCost; sMV += p.totalCost; // Forex MV assumes cost for now
+                sCost += p.totalCost; sMV += p.totalCost;
                 html += `<tr><td>${esc(p.symbol)}</td><td>${fmt(p.qty,4)}</td><td>$${fmt(avgP)}</td><td>$${fmt(p.totalCost)}</td>`;
             }
             html += `<td>${esc(p.currency)}</td></tr>`;
         });
 
-        // Add Section Summary Row
         html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;">
-            <td>TOTAL</td>
-            <td class="text-right">$${fmt(sMV)}</td>
-            <td></td>
-            <td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(sPL)}</td>
-            <td colspan="${type === 'Stock' ? 6 : 1}"></td>
-            <td class="text-right">Cost: $${fmt(sCost)}</td>
+            <td>TOTAL</td><td class="text-right">$${fmt(sMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(sPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td>
         </tr></tbody></table>`;
     });
     
@@ -1443,26 +1431,25 @@ function renderPortfoliobkup() {
     
 
 function renderTransfers() {
-    // Filter for transfers (assumes action is 'Transfer', 'Deposit', or 'Withdrawal')
-    const transferActions = ['transfer', 'deposit', 'withdrawal', 'funding'];
-    const transfers = allTrades.filter(t => transferActions.includes((t.action || '').toLowerCase()));
+    // Looks for keywords: Transfer, Deposit, Withdrawal, Funding, etc.
+    const transfers = allTrades.filter(t => {
+        const act = (t.action || '').toLowerCase();
+        return act.includes('transfer') || act.includes('deposit') || act.includes('withdraw') || act.includes('fund');
+    });
 
     if (!transfers.length) {
-        $('#transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found.</div>';
+        document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found.</div>';
         return;
     }
 
-    // Group by Account
     const byAccount = {};
     transfers.forEach(t => {
         if (!byAccount[t.account]) byAccount[t.account] = { items: [], net: 0 };
         byAccount[t.account].items.push(t);
-        // Deposit/Funding usually positive, Withdrawal negative
-        const amt = parseFloat(t.amount) || 0;
-        byAccount[t.account].net += amt;
+        byAccount[t.account].net += (parseFloat(t.amount) || 0);
     });
 
-    let html = '<h2>Account Transfers</h2>';
+    let html = '<h2>Account Funding & Transfers</h2>';
     Object.keys(byAccount).sort().forEach(acct => {
         html += `<h3 style="margin-top:20px; border-bottom: 1px solid #333;">${esc(acct)} (Net: $${fmt(byAccount[acct].net)})</h3>`;
         html += `<table><thead><tr><th>Date</th><th>Action</th><th>Symbol</th><th>Amount</th><th>Currency</th><th>Description</th></tr></thead><tbody>`;
@@ -1480,7 +1467,7 @@ function renderTransfers() {
         html += '</tbody></table>';
     });
 
-    $('#transfer-table-wrap').innerHTML = html;
+    document.getElementById('transfer-table-wrap').innerHTML = html;
 }
     
     
