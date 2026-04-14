@@ -126,7 +126,7 @@
     <div class="nav-tab" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
     <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
-    <div class="nav-tab" onclick="showTab('transfers')">Transfer In / Out</div>        
+    <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer In / Out</div>        
 </div>
 
 <div class="content">
@@ -1716,6 +1716,8 @@ window.addEventListener('load', function() {
     // Still call updateAllPrices to check if cache is expired
     updateAllPrices();
 });
+
+syncVersion();
 </script>
 </body>
 </html>
