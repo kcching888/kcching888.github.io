@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.877">
+    <meta name="version" content="3.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1457,58 +1457,55 @@ function renderPortfoliobkup() {
     
 
 function renderTransfers() {
-    // Filter for all cash movements
     const transfers = allTrades.filter(t => {
         const act = (t.action || '').toLowerCase();
-        return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer') || act.includes('funding');
+        return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer');
     });
 
-    console.log("transfers: ", transfers);
-    
     if (transfers.length === 0) {
-        document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No transfer records found. Please re-upload CSV.</div>';
+        document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No records found.</div>';
         return;
     }
 
     const byAccount = {};
     transfers.forEach(t => {
-        if (!byAccount[t.account]) byAccount[t.account] = { items: [], net: 0 };
+        if (!byAccount[t.account]) byAccount[t.account] = { items: [], netCAD: 0 };
         byAccount[t.account].items.push(t);
-        byAccount[t.account].net += (parseFloat(t.amount) || 0);
+        // Use cadAmount for the summation
+        byAccount[t.account].netCAD += (parseFloat(t.cadAmount) || parseFloat(t.amount) || 0);
     });
 
-    let html = '<h2>Account Funding & Transfers</h2>';
+    let html = '<h2>Account Funding (CAD Equivalent)</h2>';
     Object.keys(byAccount).sort().forEach(acct => {
         html += `
-            <div class="account-section" style="margin-bottom: 30px;">
-                <h3 style="border-bottom: 1px solid #333; padding-bottom: 5px;">
-                    ${esc(acct)} <span style="float:right; color:#4caf50;">Net Funding: $${fmt(byAccount[acct].net)}</span>
-                </h3>
+            <div class="card" style="margin-bottom: 20px;">
+                <h3>${esc(acct)} <span style="float:right;">Total Funding: $${fmt(byAccount[acct].netCAD)} CAD</span></h3>
                 <table>
                     <thead>
                         <tr>
                             <th>Date</th>
                             <th>Action</th>
-                            <th class="text-right">Amount</th>
+                            <th class="text-right">Original Amt</th>
                             <th>Curr</th>
-                            <th>Description</th>
+                            <th class="text-right">CAD Value</th>
+                            <th>Rate</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${byAccount[acct].items.sort((a,b) => new Date(b.date) - new Date(a.date)).map(item => `
                             <tr>
                                 <td>${fmtDate(item.date)}</td>
-                                <td style="color: ${item.amount > 0 ? '#4caf50' : '#f44336'}">${esc(item.action)}</td>
-                                <td class="text-right">$${fmt(item.amount)}</td>
+                                <td>${esc(item.action)}</td>
+                                <td class="text-right">${fmt(item.amount)}</td>
                                 <td>${esc(item.currency)}</td>
-                                <td style="font-size: 0.85em; color: #aaa;">${esc(item.description)}</td>
+                                <td class="text-right" style="font-weight:bold;">$${fmt(item.cadAmount || item.amount)}</td>
+                                <td style="font-size:0.8em; color:#888;">${item.exchRate ? item.exchRate.toFixed(4) : '1.0000'}</td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
             </div>`;
     });
-     console.log("transfer html:", html);
      $('transfer-table-wrap').innerHTML=html;
      //document.getElementById('transfer-table-wrap').innerHTML = html;
 }
