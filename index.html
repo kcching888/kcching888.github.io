@@ -1630,7 +1630,7 @@ function renderTransfers() {
         return res;
     }
 
-    function parseIBKR(text){
+    async function parseIBKR(text){
         var trades=[]; var divs=[]; var currentAccount='';
         var lines=text.split(/\r?\n/);
         lines.forEach(function(line){
