@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.2">
+    <meta name="version" content="3.10.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -754,7 +754,7 @@ function applyFilters() {
     currentFilteredTrades = allTrades.filter(t => {
     // 1. Helper to safely compare strings (handles nulls and extra spaces)
         const safeMatch = (dataVal, filterVal) => {
-            console.log("dataVal, filterVal: ", dataVal, filterVal);
+          //  console.log("dataVal, filterVal: ", dataVal, filterVal);
             if (!filterVal) return true; // Filter is empty, so it's a match
             return String(dataVal || "").trim() === String(filterVal).trim();
         };
