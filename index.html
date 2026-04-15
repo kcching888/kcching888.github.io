@@ -1633,7 +1633,7 @@ function renderTransfers() {
     async function parseIBKR(text){
         var trades=[]; var divs=[]; var currentAccount='';
         var lines=text.split(/\r?\n/);
-        lines.forEach(function(line){
+      for (const line of lines) {
             var cols=parseCSVLine(line);
             if(!cols||cols.length<4)return;
             var section=(cols[0]||'').trim();
