@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.4">
+    <meta name="version" content="3.10.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1345,6 +1345,8 @@ function renderTransfers() {
         byAccount[t.account].items.push(t);
         // Use cadAmount for the summation
         byAccount[t.account].netCAD += (parseFloat(t.cadAmount) || parseFloat(t.amount) || 0);
+        
+        console.log("renderTransfer byAccount: ", byAccount);
     });
 
     let html = '<h2>Account Funding (CAD Equivalent)</h2>';
