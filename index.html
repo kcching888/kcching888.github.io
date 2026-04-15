@@ -1608,7 +1608,7 @@ function renderTransfers() {
             var file=$('up-ibkr-file').files[0];
             var text=$('up-ibkr-text').value.trim();
             if(file){var r=new FileReader();r.onload=async function(e){await parseIBKR(e.target.result);};r.readAsText(file);}
-            else if(text) {async () => {await parseIBKR(text);}) (); }
+            else if(text) (async () => {await parseIBKR(text);}) (); }
         } else if(currentUploadTab==='trades'){
             var f=$('up-trades-file').files[0]; if(!f)return;
             var r=new FileReader();r.onload=function(e){parseTradesCsv(e.target.result);};r.readAsText(f);
