@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.6">
+    <meta name="version" content="3.10.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1645,9 +1645,9 @@ function renderTransfers() {
                console.log("currency date desc amount: ", currency, date, desc, amount);
                 // Fetch the rate from BoC via a helper (defined below)
               //  let rate = 1;
-              //  if (currency !== 'CAD') {
-              //      rate = await getBOCRate(currency, date);
-              //  }
+              if (currency !== 'CAD') {
+                   rate = await getBOCRate(currency, date);
+                }
 
                 trades.push({
                     id: 'TR' + Date.now() + '_' + trades.length,
@@ -1708,7 +1708,9 @@ function renderTransfers() {
             const url = GAS_URL + "?action=getRate&currency=" + currency + "&date=" + date;
             const response = await fetch(url);
             const data = await response.json();
-        
+            
+            console.log("getBOCRate data: ", data);
+            
             return data.rate || 1; 
         } catch (e) {
             console.error("Proxy Rate Error for " + currency + " on " + date + ":", e);
