@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.7">
+    <meta name="version" content="3.10.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1666,7 +1666,9 @@ function renderTransfers() {
                     assetCategory: 'Cash'
                 });
             }
-            else if ((section === 'Dividends' || section === 'Withholding Tax') && cols.length >= 6) {
+            else if (section==='Dividends' || section==='Withholding Tax'){
+                if(rowType !== 'data' || cols[2].includes('Total')) continue;
+                
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
     
                 // CHANGE THIS LINE: Only process if date exists and looks like a date (YYYY-MM-DD)
