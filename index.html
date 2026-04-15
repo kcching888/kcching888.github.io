@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.93">
+    <meta name="version" content="3.94">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1606,7 +1606,9 @@ function renderTransfers() {
     async function processUpload() {
         const btn = $('btn-success'); // Change this ID if your button has a different name
         const fileInput = $('up-ibkr-file');
-    
+
+        console.log("btn fileInput: ", btn, fileInput);
+        
         if (!fileInput.files[0] && !$('up-ibkr-text').value) {
             alert("Please select a file or paste text.");
             return;
@@ -1722,7 +1724,8 @@ function renderTransfers() {
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
                 if (!date || isNaN(amount)) return;
-
+                
+               console.log("currency date desc amount: ", currency, date, desc, amount);
                 // Fetch the rate from BoC via a helper (defined below)
                 let rate = 1;
                 if (currency !== 'CAD') {
