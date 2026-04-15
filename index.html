@@ -1680,7 +1680,7 @@ function renderTransfers() {
                 var sym=desc.split(' ')[0]||'';
                 divs.push({id:'D'+Date.now()+'_'+divs.length, date:date, account:currentAccount, symbol:sym, description:desc, amount:amount, currency:currency});
             }
-        });
+        };
         var addedT=0; var addedD=0;
         trades.forEach(function(t){ if(!allTrades.some(function(x){return x.date===t.date&&x.symbol===t.symbol&&x.quantity===t.quantity;})){allTrades.push(t);addedT++;} });
         divs.forEach(function(d){ if(!allDivs.some(function(x){return x.date===d.date&&x.symbol===d.symbol&&x.amount===d.amount;})){allDivs.push(d);addedD++;} });
