@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.97">
+    <meta name="version" content="3.98">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1603,7 +1603,48 @@ function renderTransfers() {
         saveLocal();if(GAS_URL)gasPost({action:'deleteDividend',id:id});applyDivFilters();
     }
 
+
     async function processUpload() {
+    const file = $('up-ibkr-file').files[0];
+    const text = $('up-ibkr-text').value.trim();
+    let csvContent = text;
+
+    if (file) {
+        csvContent = await file.text();
+    }
+
+    if (!csvContent) return alert("Please provide CSV data.");
+
+    // UI Feedback
+    const btn = $('upload-btn');
+    if(btn) { btn.innerText = "Processing..."; btn.disabled = true; }
+
+    try {
+        // We send the RAW CSV to the Apps Script action 'importCsv'
+        const response = await fetch(SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'importCsv',
+                csvString: csvContent
+            })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert("Success! Processed " + result.count + " records.");
+            location.reload(); 
+        } else {
+            throw new Error(result.error || "Unknown error");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Upload failed: " + e.message);
+    } finally {
+        if(btn) { btn.innerText = "Import"; btn.disabled = false; }
+    }
+}
+    
+    async function processUploadbkup3() {
         const btn = $('import-btn'); // Change this ID if your button has a different name
         const fileInput = $('up-ibkr-file');
 
@@ -1727,10 +1768,10 @@ function renderTransfers() {
                 
                console.log("currency date desc amount: ", currency, date, desc, amount);
                 // Fetch the rate from BoC via a helper (defined below)
-                let rate = 1;
-                if (currency !== 'CAD') {
-                    rate = await getBOCRate(currency, date);
-                }
+              //  let rate = 1;
+              //  if (currency !== 'CAD') {
+              //      rate = await getBOCRate(currency, date);
+              //  }
 
                 trades.push({
                     id: 'TR' + Date.now() + '_' + trades.length,
