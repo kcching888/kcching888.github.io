@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.96">
+    <meta name="version" content="3.97">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1709,21 +1709,21 @@ function renderTransfers() {
       for (const line of lines) {
             console.log("parseIBKR line: ", line);
             var cols=parseCSVLine(line);
-            if(!cols||cols.length<4)return;
+            if(!cols||cols.length<4) continue;
             var section=(cols[0]||'').trim();
             var rowType=(cols[1]||'').trim().toLowerCase();
             if(section==='Account Information'&&rowType==='data'){
                 if((cols[2]||'').trim()==='Account') currentAccount=(cols[3]||'').trim();
             }
-            if(rowType!=='data')return;
+            if(rowType!=='data') continue;
             if(section==='Trades'&&cols.length>=12){
                 var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
-                if(!symbol||symbol===currency)return;
+                if(!symbol||symbol===currency) continue;
                 trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
            }    
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
-                if (!date || isNaN(amount)) return;
+                if (!date || isNaN(amount)) continue;
                 
                console.log("currency date desc amount: ", currency, date, desc, amount);
                 // Fetch the rate from BoC via a helper (defined below)
