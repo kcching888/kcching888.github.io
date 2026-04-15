@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.92">
+    <meta name="version" content="3.93">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1604,6 +1604,35 @@ function renderTransfers() {
     }
 
     async function processUpload() {
+        const btn = $('btn-success'); // Change this ID if your button has a different name
+        const fileInput = $('up-ibkr-file');
+    
+        if (!fileInput.files[0] && !$('up-ibkr-text').value) {
+            alert("Please select a file or paste text.");
+            return;
+        }
+
+        // Defensive check: only update the button if it exists
+        if (btn) {
+            btn.innerText = "Processing...";
+            btn.disabled = true;
+        }
+
+        try {
+            const text = fileInput.files[0] ? await fileInput.files[0].text() : $('up-ibkr-text').value;
+            await parseIBKR(text); // Ensure parseIBKR is defined as 'async function'
+        } catch (e) {
+            console.error("Upload Error:", e);
+            alert("Process failed. Check console for details.");
+        } finally {
+            if (btn) {
+                btn.innerText = "Import";
+                btn.disabled = false;
+            }
+        }
+    }
+        
+    async function processUploadbkup2() {
         const file = $('up-ibkr-file').files[0];
         const text = $('up-ibkr-text').value.trim();
         let csvContent = text;
