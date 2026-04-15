@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.99">
+    <meta name="version" content="3.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1790,11 +1790,22 @@ function renderTransfers() {
                     assetCategory: 'Cash'
                 });
             }
-            else if((section==='Dividends'||section==='Withholding Tax')&&cols.length>=6){
-                var currency=cols[2], date=cols[3], desc=cols[4], amount=parseFloat(cols[5]);
-                if(!date||isNaN(new Date(date).getTime()))return;
-                var sym=desc.split(' ')[0]||'';
-                divs.push({id:'D'+Date.now()+'_'+divs.length, date:date, account:currentAccount, symbol:sym, description:desc, amount:amount, currency:currency});
+            else if ((section === 'Dividends' || section === 'Withholding Tax') && cols.length >= 6) {
+                var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
+    
+                // CHANGE THIS LINE: Only process if date exists and looks like a date (YYYY-MM-DD)
+                if (!date || date.length < 10) continue; 
+    
+                var sym = desc.split(' ')[0] || '';
+                divs.push({
+                    id: 'D' + Date.now() + '_' + divs.length, 
+                    date: date, 
+                    account: currentAccount, 
+                    symbol: sym, 
+                    description: desc, 
+                    amount: amount, 
+                    currency: currency 
+                });
             }
         };
         var addedT=0; var addedD=0;
