@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.3">
+    <meta name="version" content="3.10.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1331,11 +1331,14 @@ function renderTransfers() {
         return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer');
     });
 
+    console.log ("renderTransfers transfer: ", transfer);
+    
     if (transfers.length === 0) {
         document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No records found.</div>';
         return;
     }
 
+    
     const byAccount = {};
     transfers.forEach(t => {
         if (!byAccount[t.account]) byAccount[t.account] = { items: [], netCAD: 0 };
@@ -1346,6 +1349,7 @@ function renderTransfers() {
 
     let html = '<h2>Account Funding (CAD Equivalent)</h2>';
     Object.keys(byAccount).sort().forEach(acct => {
+        
         html += `
             <div class="card" style="margin-bottom: 20px;">
                 <h3>${esc(acct)} <span style="float:right;">Total Funding: $${fmt(byAccount[acct].netCAD)} CAD</span></h3>
