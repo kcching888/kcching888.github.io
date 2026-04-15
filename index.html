@@ -1331,7 +1331,7 @@ function renderTransfers() {
         return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer');
     });
 
-    console.log ("renderTransfers transfer: ", transfer);
+    console.log ("renderTransfers transfers: ", transfers);
     
     if (transfers.length === 0) {
         document.getElementById('transfer-table-wrap').innerHTML = '<div class="loading">No records found.</div>';
