@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.1">
+    <meta name="version" content="3.10.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1325,137 +1325,6 @@ function renderPortfolio() {
     $('#port-table-wrap').innerHTML = html;
 }
     
-function renderPortfoliobkup() {
-    var positions = {};
-    allTrades.forEach(function(t) {
-        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
-        var q = parseFloat(t.quantity) || 0;
-        var a = parseFloat(t.amount) || 0;
-        var act = (t.action || '').toLowerCase();
-        if (act === 'buy') {
-            positions[key].qty += q;
-            positions[key].totalCost += Math.abs(a);
-        } else if (act === 'sell') {
-            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
-            positions[key].qty -= q;
-            positions[key].totalCost -= avg * q;
-        }
-    });
-    
-    var posArr = Object.values(positions).filter(function(p) { return Math.abs(p.qty) > 0.0001; });
-    var livePrices = window.currentPrices || {};
-    var totalCost = 0, totalMarketValue = 0, totalGainLoss = 0;
-
-    posArr.forEach(function(p) {
-        var costInCAD = p.currency === 'USD' ? p.totalCost * 1.36 : p.totalCost;
-        totalCost += costInCAD;
-        var liveData = livePrices[p.symbol];
-        if (p.type === 'Stock' && liveData) {
-            var marketValueCAD = p.currency === 'USD' ? (liveData.price * p.qty) * 1.36 : (liveData.price * p.qty);
-            totalMarketValue += marketValueCAD;
-            totalGainLoss += (marketValueCAD - costInCAD);
-        } else {
-            totalMarketValue += costInCAD;
-        }
-    });
-    
-    var now = new Date();
-    var timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    var priceUpdateText = (window.currentPrices) 
-        ? '<div style="font-size:0.75em;color:#4caf50;margin-top:5px;">● Live prices active (Last Update: ' + timeStr + ')</div>'
-        : '<div style="font-size:0.75em;color:#aaa;margin-top:5px;">No live price data. Click Refresh.</div>';
-    
-    $('#port-stats').innerHTML = 
-        '<div class="stat-card"><div class="val">' + posArr.length + '</div><div class="lbl">Open Positions</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalCost) + '</div><div class="lbl">Cost Basis (CAD)</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalMarketValue) + '</div><div class="lbl">Market Value (CAD)</div></div>' +
-        '<div class="stat-card"><div class="val ' + (totalGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGainLoss) + '</div><div class="lbl">Unrealized P&L</div></div>' +
-        priceUpdateText;
-    
-    if (!posArr.length) {
-        $('#port-table-wrap').innerHTML = '<div class="loading">No positions.</div>';
-        return;
-    }
-    
-    var grouped = {};
-    posArr.forEach(function(p) {
-        var groupKey = p.type + '-' + p.account;
-        if (!grouped[groupKey]) grouped[groupKey] = [];
-        grouped[groupKey].push(p);
-    });
-
-    var sortOrder = [
-        'Stock-U10455610',
-        'Stock-U9804531',
-        'Forex-U10455610',
-        'Forex-U9804531'
-    ];
-    
-    var html = '<div style="margin-bottom:10px;"><button class="btn btn-primary" id="refresh-prices-btn" onclick="handlePriceRefresh()">🔄 Refresh Prices</button></div>';
-    
-    sortOrder.forEach(function(key) {
-        if (!grouped[key]) return;
-        
-        var split = key.split('-');
-        var type = split[0];
-        var acct = split[1];
-
-        html += '<h3 style="margin-top:20px;border-bottom:1px solid #333">' + esc(acct) + ' (' + type + ')</h3>';
-        
-        html += '<table><thead><tr><th>Symbol</th>';
-        if (type === 'Stock') {
-            html += '<th class="text-right">MV</th>' +
-                    '<th class="text-right">Quantity</th>' + // Added here
-                    '<th class="text-right">Gain/Loss</th>' +
-                    '<th class="text-right">G/L%</th>' +
-                    '<th class="text-right">Today G/L</th>' +
-                    '<th class="text-right">Current Price</th>' +
-                    '<th class="text-right">Today Price Chg%</th>' +
-                    '<th class="text-right">Avg Purchase Price</th>' +
-                    '<th class="text-right">Chg%</th>';
-        } else {
-            html += '<th>Quantity</th><th>Avg Cost</th><th>Total Cost</th>';
-        }
-        html += '<th>Curr</th></tr></thead><tbody>';
-
-        grouped[key].forEach(function(p) {
-            var avgPurchase = p.qty > 0 ? p.totalCost / p.qty : 0;
-            var liveData = livePrices[p.symbol] || {};
-            var curPrice = liveData.price || 0;
-            var prevClose = liveData.previousClose || curPrice;
-            
-            html += '<tr><td>' + esc(p.symbol) + '</td>';
-            
-            if (type === 'Stock') {
-                var marketValue = curPrice * p.qty;
-                var totalGL = marketValue - p.totalCost;
-                var glPct = p.totalCost > 0 ? (totalGL / p.totalCost * 100) : 0;
-                var todayGL = (curPrice - prevClose) * p.qty;
-                var todayPriceChgPct = prevClose > 0 ? ((curPrice - prevClose) / prevClose * 100) : 0;
-                var overallChgPct = avgPurchase > 0 ? ((curPrice - avgPurchase) / avgPurchase * 100) : 0;
-
-                html += '<td class="text-right">$' + fmt(marketValue) + '</td>' +
-                        '<td class="text-right">' + fmt(p.qty, 4) + '</td>' + // Added here
-                        '<td class="text-right ' + (totalGL >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGL) + '</td>' +
-                        '<td class="text-right ' + (glPct >= 0 ? 'pos-gain' : 'pos-loss') + '">' + glPct.toFixed(2) + '%</td>' +
-                        '<td class="text-right ' + (todayGL >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(todayGL) + '</td>' +
-                        '<td class="text-right">$' + fmt(curPrice) + '</td>' +
-                        '<td class="text-right ' + (todayPriceChgPct >= 0 ? 'pos-gain' : 'pos-loss') + '">' + todayPriceChgPct.toFixed(2) + '%</td>' +
-                        '<td class="text-right">$' + fmt(avgPurchase) + '</td>' +
-                        '<td class="text-right ' + (overallChgPct >= 0 ? 'pos-gain' : 'pos-loss') + '">' + overallChgPct.toFixed(2) + '%</td>';
-            } else {
-                html += '<td>' + fmt(p.qty, 4) + '</td><td>' + fmt(avgPurchase) + '</td><td>' + fmt(p.totalCost) + '</td>';
-            }
-            html += '<td>' + esc(p.currency) + '</td></tr>';
-        });
-        html += '</tbody></table>';
-    });
-    
-    $('#port-table-wrap').innerHTML = html;
-}
-    
-
 function renderTransfers() {
     const transfers = allTrades.filter(t => {
         const act = (t.action || '').toLowerCase();
@@ -1629,6 +1498,7 @@ function renderTransfers() {
             })
         });
         const result = await response.json();
+        console.log("processUpload result: ", result);
         
         if (result.success) {
             alert("Success! Processed " + result.count + " records.");
