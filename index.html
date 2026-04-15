@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10">
+    <meta name="version" content="3.10.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1795,7 +1795,14 @@ function renderTransfers() {
     
                 // CHANGE THIS LINE: Only process if date exists and looks like a date (YYYY-MM-DD)
                 if (!date || date.length < 10) continue; 
-    
+
+                // 2. Safely check if it's a valid date string before creating the object
+                var timestamp = Date.parse(date);
+                if (isNaN(timestamp)) {
+                    console.log("Skipping invalid date row:", date);
+                    continue; 
+                }
+                
                 var sym = desc.split(' ')[0] || '';
                 divs.push({
                     id: 'D' + Date.now() + '_' + divs.length, 
