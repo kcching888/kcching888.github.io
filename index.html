@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.5">
+    <meta name="version" content="3.10.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1699,6 +1699,23 @@ function renderTransfers() {
         closeModal('modal-upload'); applyFilters(); updateAccountFilter();
     }
 
+    // Put this in your index.html script section
+    async function getBOCRate(currency, date) {
+        if (currency === 'CAD') return 1;
+    
+        try {
+            // Ask your Apps Script for the rate instead of BoC directly
+            const url = GAS_URL + "?action=getRate&currency=" + currency + "&date=" + date;
+            const response = await fetch(url);
+            const data = await response.json();
+        
+            return data.rate || 1; 
+        } catch (e) {
+            console.error("Proxy Rate Error for " + currency + " on " + date + ":", e);
+            return 1; // Fallback so the upload doesn't fail
+        }
+    }
+    
     function parseTradesCsv(text){
         var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
         if(lines.length<2)return;
