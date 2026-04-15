@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.911">
+    <meta name="version" content="3.92">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1603,7 +1603,45 @@ function renderTransfers() {
         saveLocal();if(GAS_URL)gasPost({action:'deleteDividend',id:id});applyDivFilters();
     }
 
-    function processUpload(){
+    async function processUpload() {
+        const file = $('up-ibkr-file').files[0];
+        const text = $('up-ibkr-text').value.trim();
+        let csvContent = text;
+
+        if (file) {
+            csvContent = await file.text();
+        }
+
+        if (!csvContent) return alert("Please select a file or paste text.");
+
+        // Show a loading state so it doesn't look hung
+        $('upload-btn').innerText = "Processing...";
+        $('upload-btn').disabled = true;
+
+        try {
+            const response = await fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'importCsv',
+                    csvString: csvContent
+                })
+            });
+            const result = await response.json();
+        
+            if (result.success) {
+                alert("Import successful! " + result.count + " records processed.");
+                location.reload(); // Refresh to see new data
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error: " + e.message);
+        } finally {
+            $('upload-btn').innerText = "Import";
+            $('upload-btn').disabled = false;
+        }
+    }
+
+    function processUploadbkup(){
         if(currentUploadTab==='ibkr'){
             var file=$('up-ibkr-file').files[0];
             var text=$('up-ibkr-text').value.trim();
