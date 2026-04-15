@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.98">
+    <meta name="version" content="3.99">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1621,7 +1621,7 @@ function renderTransfers() {
 
     try {
         // We send the RAW CSV to the Apps Script action 'importCsv'
-        const response = await fetch(SCRIPT_URL, {
+        const response = await fetch(GAS_URL, {
             method: 'POST',
             body: JSON.stringify({
                 action: 'importCsv',
@@ -1691,7 +1691,7 @@ function renderTransfers() {
         $('upload-btn').disabled = true;
 
         try {
-            const response = await fetch(SCRIPT_URL, {
+            const response = await fetch(GAS_URL, {
                 method: 'POST',
                 body: JSON.stringify({
                     action: 'importCsv',
