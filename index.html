@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11">
+    <meta name="version" content="3.11.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -552,7 +552,7 @@ function syncData() {
         // Here we prioritize the cloud as the "Source of Truth"
         allTrades = cloudData.trades || [];
         allDivs = cloudData.dividends || [];
-        allTransfers = data.transfers || [];
+        allTransfers = cloudData.transfers || [];
         
         saveLocal();
         updateFilterOptions();
