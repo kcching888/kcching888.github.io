@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.10.9">
+    <meta name="version" content="3.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -552,6 +552,7 @@ function syncData() {
         // Here we prioritize the cloud as the "Source of Truth"
         allTrades = cloudData.trades || [];
         allDivs = cloudData.dividends || [];
+        allTransfers = data.transfers || [];
         
         saveLocal();
         updateFilterOptions();
@@ -559,6 +560,7 @@ function syncData() {
         updateAccountFilter();
         renderPortfolio();
         renderDivStats();
+        renderTransfers();
 
         // 2. Immediate confirmation UI update
         const ts = new Date().toLocaleString();
@@ -818,7 +820,8 @@ function applyFilters() {
     yearSelect.innerHTML = '<option value="">All Years</option>' + 
         uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('');
 }
-    
+
+
     function renderTradesTable(){
         const displayData = isFilterActive ? currentFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
