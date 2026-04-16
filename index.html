@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.1">
+    <meta name="version" content="3.11.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1215,6 +1215,15 @@ function renderPortfolio() {
         var liveData = livePrices[p.symbol];
         var mvInCAD = (p.type === 'Stock' && liveData) ? (liveData.price * p.qty) * fxRate : costInCAD;
 
+        if(!totals[p.type]) {
+            totals[p.type] = {
+                cost: 0,
+                marketValue: 0,
+                gain: 0,
+                dayGain: 0
+            };
+        }
+        
         totals[p.type].cost += costInCAD;
         totals[p.type].mv += mvInCAD;
         totals[p.type].pl += (mvInCAD - costInCAD);
