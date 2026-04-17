@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.2">
+    <meta name="version" content="3.11.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -169,7 +169,7 @@
                     <select id="filter-category" onchange="applyFilters()">
                         <option value="">All</option>
                         <option>Stocks</option>
-                        <option>Forex</option>
+                        <option>Funds</option>
                         <option>Options</option>
                         <option>Fixed Income</option>
                     </select>
@@ -466,19 +466,19 @@
 
     function getAssetType(t) {
         if (!t.symbol) return 'Stocks';
-            if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('forex')) return 'Forex'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
+            if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('funds')) return 'Funds'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
         var s = String(t.symbol).toUpperCase();
         var d = (t.description || '').toLowerCase();
-        if (['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD'].indexOf(s) >= 0) return 'Forex';
-            if (s.includes('.')) { var parts = s.split('.'); if (parts.length === 2 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[0]) >= 0 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[1]) >= 0) return 'Forex'; }
+        if (['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD'].indexOf(s) >= 0) return 'Funds';
+            if (s.includes('.')) { var parts = s.split('.'); if (parts.length === 2 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[0]) >= 0 && ['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD','HKD'].indexOf(parts[1]) >= 0) return 'Funds'; }
         const act = (t.action || '').toLowerCase();
-        // If it's a transfer action, it's 'Forex' (cash balance)
+        // If it's a transfer action, it's 'Funds' (cash balance)
         if (act.includes('deposit') || act.includes('withdraw') || act.includes('transfer')) {
-            return 'Forex';
+            return 'Funds';
         }
         // If it's a trade but the symbol is a currency pair
         if (t.symbol && (t.symbol.includes('.') || t.symbol.includes('=')) && t.symbol.length > 5) {
-            return 'Forex';
+            return 'Funds';
         }
         if (d.includes(' bond ') || d.includes(' bill ') || d.includes(' note ')) return 'Fixed Income';
         if (d.includes(' opt ') || d.includes(' call ') || d.includes(' put ') || (s.length > 6 && /\\d/.test(s))) return 'Options';
@@ -1188,7 +1188,7 @@ async function handlePriceRefresh() {
 
 function renderPortfolio() {
     var positions = {};
-    var totals = { Stock: { cost: 0, mv: 0, pl: 0 }, Forex: { cost: 0, mv: 0, pl: 0 } };
+    var totals = { Stock: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
 
     allTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
@@ -1235,17 +1235,17 @@ function renderPortfolio() {
     // UI: Stats Grid with Refresh Button inside
     $('#port-stats').innerHTML = `
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.cost)}<br>F: $${fmt(totals.Forex.cost)}</div>
+            <div class="val">S: $${fmt(totals.Stock.cost)}<br>F: $${fmt(totals.Funds.cost)}</div>
             <div class="lbl">Cost Basis</div>
         </div>
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.mv)}<br>F: $${fmt(totals.Forex.mv)}</div>
+            <div class="val">S: $${fmt(totals.Stock.mv)}<br>F: $${fmt(totals.Funds.mv)}</div>
             <div class="lbl">Market Value</div>
         </div>
         <div class="stat-card">
             <div class="val">
                 <span class="${totals.Stock.pl >= 0 ? 'pos-gain' : 'pos-loss'}">S: $${fmt(totals.Stock.pl)}</span><br>
-                <span class="${totals.Forex.pl >= 0 ? 'pos-gain' : 'pos-loss'}">F: $${fmt(totals.Forex.pl)}</span>
+                <span class="${totals.Funds.pl >= 0 ? 'pos-gain' : 'pos-loss'}">F: $${fmt(totals.Funds.pl)}</span>
             </div>
             <div class="lbl">Unrealized P&L</div>
         </div>
@@ -1264,7 +1264,7 @@ function renderPortfolio() {
         grouped[groupKey].push(p);
     });
 
-    var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Forex-U10455610', 'Forex-U9804531'];
+    var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
     let html = ''; // Button removed from here as it's now in the header
     
     sortOrder.forEach(function(key) {
@@ -1402,15 +1402,15 @@ function renderTransfers() {
     
     var glArr=Object.values(realized).filter(function(r){return Math.abs(r.gain)>0.001;});
     
-    // Separate stocks and forex
+    // Separate stocks and funds
     var stockGains=glArr.filter(function(r){return r.type==='Stocks';});
-    var forexGains=glArr.filter(function(r){return r.type==='Forex';});
+    var fundGains=glArr.filter(function(r){return r.type==='Funds';});
     
     var totalStockGain=stockGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
-    var totalForexGain=forexGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
-    var totalGain=totalStockGain+totalForexGain;
+    var totalFundGain=fundGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
+    var totalGain=totalStockGain+totalFundGain;
     
-    $('gl-stats').innerHTML='<div class="stat-card"><div class="val '+(totalGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalGain)+'</div><div class="lbl">Total Realized Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalStockGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalStockGain)+'</div><div class="lbl">Stock Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalForexGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalForexGain)+'</div><div class="lbl">Forex Gain/Loss (est CAD)</div></div>';
+    $('gl-stats').innerHTML='<div class="stat-card"><div class="val '+(totalGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalGain)+'</div><div class="lbl">Total Realized Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalStockGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalStockGain)+'</div><div class="lbl">Stock Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalFundGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalFundGain)+'</div><div class="lbl">Funds Gain/Loss (est CAD)</div></div>';
     
     var html='';
     if(stockGains.length>0){
@@ -1422,10 +1422,10 @@ function renderTransfers() {
         html+='</tbody></table>';
     }
     
-    if(forexGains.length>0){
-        html+='<h4 style="margin-top:20px;color:#e94560;">Forex Realized Gain/Loss</h4>';
+    if(fundGains.length>0){
+        html+='<h4 style="margin-top:20px;color:#e94560;">Funds Realized Gain/Loss</h4>';
         html+='<table><thead><tr><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
-        forexGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
+        fundGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
             html+='<tr><td>'+esc(r.symbol)+'</td><td>'+fmt(r.proceeds)+'</td><td>'+fmt(r.cost)+'</td><td class="'+(r.gain>=0?'pos-gain':'pos-loss')+'">'+fmt(r.gain)+'</td><td>'+esc(r.currency)+'</td></tr>';
         });
         html+='</tbody></table>';
