@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.3">
+    <meta name="version" content="3.11.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1310,7 +1310,7 @@ function renderPortfolio() {
 }
     
 function renderTransfers() {
-    const transfers = allTrades.filter(t => {
+    const transfers = allTransfers.filter(t => {
         const act = (t.action || '').toLowerCase();
         return act.includes('deposit') || act.includes('withdraw') || act.includes('transfer');
     });
