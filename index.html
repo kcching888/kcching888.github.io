@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.4">
+    <meta name="version" content="3.11.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -821,8 +821,117 @@ function applyFilters() {
         uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('');
 }
 
+function updateTradeCurrencyDropdown() {
+    const dropdown = $('f-currency'); // Ensure your HTML ID is f-currency
+    if (!dropdown) return;
+    
+    // Get unique currencies from all loaded trades
+    const currencies = [...new Set(allTrades.map(t => t.currency))].filter(Boolean).sort();
+    
+    const currentVal = dropdown.value;
+    dropdown.innerHTML = '<option value="">All Currencies</option>';
+    currencies.forEach(curr => {
+        const opt = document.createElement('option');
+        opt.value = curr;
+        opt.textContent = curr;
+        dropdown.appendChild(opt);
+    });
+    dropdown.value = currentVal; // Maintain selection
+}
 
-    function renderTradesTable(){
+function renderTradesTable() {
+    // --- 1. DYNAMIC CURRENCY FILTER ---
+    updateTradeCurrencyDropdown();
+
+    // --- 2. APPLY FILTERS (Fixes Category and excludes Transfers) ---
+    const fCat = ($('f-category') || {}).value || '';
+    const fCurr = ($('f-currency') || {}).value || '';
+
+    currentFilteredTrades = allTrades.filter(t => {
+        // ISSUE 1 FIX: Exclude transfers from the Trades tab
+        if (t.type === 'Forex' || t.action === 'Deposit' || t.action === 'Withdrawal') {
+            return false;
+        }
+
+        // ISSUE 2 FIX: Case-insensitive category matching
+        const matchesCategory = !fCat || (t.type && t.type.toLowerCase() === fCat.toLowerCase());
+        const matchesCurrency = !fCurr || t.currency === fCurr;
+
+        return matchesCategory && matchesCurrency;
+    });
+
+    // --- 3. PAGINATION AND SETUP ---
+    var perPageVal = ($('f-perpage') || {}).value || '25';
+    var total = currentFilteredTrades.length;
+    var perPage = perPageVal === 'all' ? total : (parseInt(perPageVal) || 25);
+    var totalPages = perPage > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
+    
+    if (tradeCurrentPage > totalPages) tradeCurrentPage = totalPages;
+
+    var start = (tradeCurrentPage - 1) * perPage;
+    var rows = currentFilteredTrades.slice(start, perPage === total ? undefined : start + perPage);
+
+    // Update info text
+    $('trades-info').textContent = 'Showing ' + (total === 0 ? 0 : start + 1) + '-' + 
+        Math.min(start + rows.length, total) + ' of ' + total + 
+        ' records (' + allTrades.length + ' total loaded)';
+
+    if (!rows.length) {
+        $('trades-table-wrap').innerHTML = '<div class="loading">No transactions match filters.</div>';
+        $('trades-pagination').innerHTML = '';
+        return;
+    }
+
+    // --- 4. RENDER TABLE ---
+    var html = '<div class="table-scroll-container"><table><thead><tr>' +
+               '<th>Date</th><th>Account</th><th>Action</th><th>Symbol</th>' +
+               '<th>Type</th><th>Qty</th>' +
+               '<th class="text-right">Price</th>' +
+               '<th class="text-right">Amount</th>' +
+               '<th class="text-right">Comm</th>' +
+               '<th>Currency</th><th></th></tr></thead><tbody>';
+
+    rows.forEach(function(t, i) {
+        var idx = allTrades.indexOf(t);
+        var assetType = getAssetType(t);
+
+        var fmtMoney = function(num) {
+            var val = parseFloat(num) || 0;
+            return '$' + val.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+
+        html += '<tr>' +
+            '<td>' + fmtDate(t.date) + '</td>' +
+            '<td>' + esc(t.account) + '</td>' +
+            '<td>' + esc(t.action) + '</td>' +
+            '<td>' + esc(t.symbol) + '</td>' +
+            '<td>' + assetType + '</td>' +
+            '<td>' + (t.quantity ? parseFloat(t.quantity).toFixed(4) : '0.0000') + '</td>' +
+            '<td class="text-right">' + fmtMoney(t.price) + '</td>' +
+            '<td class="text-right" style="font-weight:bold;">' + fmtMoney(t.amount) + '</td>' +
+            '<td class="text-right">' + fmtMoney(t.commission || t.comm) + '</td>' +
+            '<td>' + esc(t.currency) + '</td>' +
+            '<td>' +
+                '<button class="btn btn-danger" onclick="deleteTrade(\'' + String(t.id || idx) + '\')" ' +
+                'style="padding:3px 8px;font-size:0.75em">Del</button>' +
+            '</td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    $('trades-table-wrap').innerHTML = html;
+    
+    renderPagination('trades-pagination', totalPages, tradeCurrentPage, function(p) {
+        tradeCurrentPage = p;
+        renderTradesTable();
+    });
+}
+
+
+    function renderTradesTablebkup(){
         const displayData = isFilterActive ? currentFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
         var perPage = perPageVal==='all'?currentFilteredTrades.length:(parseInt(perPageVal)||25);
