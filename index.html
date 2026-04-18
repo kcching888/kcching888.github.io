@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.3">
+    <meta name="version" content="3.13.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1263,7 +1263,7 @@ async function handlePriceRefresh() {
     alert("Prices updated successfully.");
 }
 
-function renderPortfolio(portfolio) {
+function renderPortfolio() {
     const stockContainer = $('port-stocks-wrap');
     const fundContainer = $('port-funds-wrap');
     if (!stockContainer || !fundContainer) return;
@@ -1276,7 +1276,7 @@ function renderPortfolio(portfolio) {
         '<th>Symbol</th><th>MV</th><th>Last</th><th>Tdy%</th><th>Today G/L</th>' +
         '<th>Avg P</th><th>Chg%</th><th>CCY</th></tr></thead><tbody>';
 
-    portfolio.filter(p => p.type === 'Stock').forEach(p => {
+    allTrades.filter(p => p.type === 'Stock').forEach(p => {
         const rate = parseFloat(p.exchRate || 1);
         const mv = parseFloat(p.marketValue || 0);
         const cost = parseFloat(p.totalCost || 0);
