@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.6">
+    <meta name="version" content="3.13.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1339,6 +1339,15 @@ function renderFundsTable() {
     let fundHtml = '<h3>Funds & Liquidity</h3><table class="portfolio-table"><thead><tr>' +
         '<th>CCY</th><th>Total Cost</th><th>CAD Equivalent</th></tr></thead><tbody>';
 
+ // Specific helper for $ symbol and 2 decimal places
+    var fmtMoney = function(num) {
+        var val = parseFloat(num) || 0;
+        return '$' + val.toLocaleString(undefined, { 
+            minimumFractionDigits: 2, 
+            maximumFractionDigits: 2 
+        });
+    };
+    
     // allTransfers should contain rows where type === 'Forex'
     allTransfers.forEach(f => {
         const amt = parseFloat(f.amount || 0);
