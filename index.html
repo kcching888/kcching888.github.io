@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.4">
+    <meta name="version" content="3.13.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1285,6 +1285,16 @@ function renderPortfolio() {
         const tdyPct = parseFloat(p.dayChangePct || 0);
         const totalChgPct = cost !== 0 ? (gl / cost) * 100 : 0;
 
+    // Specific helper for $ symbol and 2 decimal places
+        var fmtMoney = function(num) {
+            var val = parseFloat(num) || 0;
+            return '$' + val.toLocaleString(undefined, { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+            });
+        };
+
+        
         // Accumulate CAD Totals
         totalMV_CAD += mv * rate;
         totalGL_CAD += gl * rate;
