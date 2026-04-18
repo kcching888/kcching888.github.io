@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.8">
+    <meta name="version" content="3.11.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -848,6 +848,8 @@ function renderTradesTable() {
     const fCat = ($('filter-category') || {}).value || '';
     const fCurr = ($('filter-currency') || {}).value || '';
 
+    console.log("fCat, fCurr: ", fCat, fCurr);
+    
     currentFilteredTrades = allTrades.filter(t => {
         // ISSUE 1 FIX: Exclude transfers from the Trades tab
         if (t.type === 'Forex' || t.action === 'Deposit' || t.action === 'Withdrawal') {
