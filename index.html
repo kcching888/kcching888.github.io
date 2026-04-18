@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.9">
+    <meta name="version" content="3.11.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -823,7 +823,7 @@ function applyFilters() {
 }
 
 function updateTradeCurrencyDropdown() {
-    const dropdown = $('f-currency'); // Ensure your HTML ID is f-currency
+    const dropdown = $('filter-currency'); // Ensure your HTML ID is f-currency
     if (!dropdown) return;
     
     // Get unique currencies from all loaded trades
@@ -848,7 +848,7 @@ function renderTradesTable() {
     const fCat = ($('filter-category') || {}).value || '';
     const fCurr = ($('filter-currency') || {}).value || '';
 
-    console.log("fCat, fCurr: ", fCat, fCurr);
+    console.log("fCat, fCurr: ", fCat, fCurr, $('filter-category'), $('filter-currency'));
     
     currentFilteredTrades = allTrades.filter(t => {
         // ISSUE 1 FIX: Exclude transfers from the Trades tab
