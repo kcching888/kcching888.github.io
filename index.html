@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.11">
+    <meta name="version" content="3.11.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -840,7 +840,7 @@ function updateTradeCurrencyDropdown() {
     dropdown.value = currentVal; // Maintain selection
 }
 
-function renderTradesTable() {
+function renderTradesTableABC() {
     // --- 1. DYNAMIC CURRENCY FILTER ---
     updateTradeCurrencyDropdown();
 
@@ -934,7 +934,7 @@ function renderTradesTable() {
 }
 
 
-    function renderTradesTablebkup(){
+    function renderTradesTable(){
         const displayData = isFilterActive ? currentFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
         var perPage = perPageVal==='all'?currentFilteredTrades.length:(parseInt(perPageVal)||25);
