@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.12">
+    <meta name="version" content="3.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -131,7 +131,15 @@
 </div>
 
 <div class="content">
-    <div id="page-transactions">
+    
+    <div id="page-portfolio">
+        <div id="port-stats" class="stat-grid"></div>
+        <div class="card">
+            <div id="port-table-wrap"></div>
+        </div>
+    </div>
+
+    <div id="page-transactions" style="display:none">
         <div class="card">
             <div class="filters">
                 <div class="filter-group">
@@ -207,13 +215,6 @@
             <div id="trades-pagination" class="pagination"></div>
         </div>
         
-    </div>
-
-    <div id="page-portfolio" style="display:none">
-        <div id="port-stats" class="stat-grid"></div>
-        <div class="card">
-            <div id="port-table-wrap"></div>
-        </div>
     </div>
 
     <div id="page-gainloss" style="display:none">
@@ -1274,6 +1275,7 @@ function renderPortfolio() {
         }
     });
 
+    console.log("renderPortfolio allTrades: ", allTrades);
     console.log("renderPortfolio positions: ", positions);
 
      allTransfers.forEach(function(t) {
@@ -1291,6 +1293,10 @@ function renderPortfolio() {
             positions[key].totalCost -= avg * q;
         }
     });
+
+    console.log("renderPortfolio allTrades: ", allTransfers);
+    console.log("renderPortfolio positions: ", positions);
+    
     
     var posArr = Object.values(positions).filter(function(p) { return Math.abs(p.qty) > 0.0001; });
     var livePrices = window.currentPrices || {};
