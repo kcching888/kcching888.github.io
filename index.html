@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.11.13">
+    <meta name="version" content="3.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -123,8 +123,8 @@
 </div>
 
 <div class="nav-tabs">
-    <div class="nav-tab active" onclick="showTab('transactions')" id="tab-transactions">Transactions</div>
-    <div class="nav-tab" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
+    <div class="nav-tab active" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
+    <div class="nav-tab" onclick="showTab('transactions')" id="tab-transactions">Transactions</div>
     <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
     <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer</div>        
@@ -1173,54 +1173,6 @@ async function updateAllPricesbkup12() {
     }
 }
 
-async function updateAllPricesbkup11() {
-    const gas_url = localStorage.getItem('ibkr_gas_url');
-    if (!gas_url) return;
-
-    // 1. Create a UNIQUE list of symbols
-    // We use a Map to ensure we only have one entry per symbol name
-    const uniqueMap = new Map();
-    allTrades.forEach(t => {
-        if (t.symbol && !uniqueMap.has(t.symbol)) {
-            uniqueMap.set(t.symbol, { 
-                symbol: t.symbol, 
-                currency: t.currency 
-            });
-        }
-    });
-    const symbols = Array.from(uniqueMap.values());
-
-    try {
-        const btn = $('price-btn');
-        if (btn) btn.textContent = 'Updating...';
-
-        // 2. Properly encode the parameters
-        const params = new URLSearchParams({
-            action: 'getPrices',
-            symbols: JSON.stringify(symbols)
-        });
-        
-        const finalUrl = `${gas_url}${gas_url.includes('?') ? '&' : '?'}${params.toString()}`;
-        
-        // Log the cleaned URL to console to verify
-        console.log("Requesting unique symbols:", finalUrl);
-
-        const response = await fetch(finalUrl);
-        const priceMap = await response.json();
-
-        window.currentPrices = priceMap;
-        localStorage.setItem('finnhub_price_cache', JSON.stringify({
-            timestamp: Date.now(),
-            prices: priceMap
-        }));
-
-        renderPortfolio();
-    } catch (err) {
-        console.error("Price fetch failed:", err);
-    } finally {
-        if ($('price-btn')) $('price-btn').textContent = '$ Refresh Prices';
-    }
-}
 
 
 
@@ -1307,6 +1259,24 @@ function renderPortfolio() {
     var totals = { Stock: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
 
     allTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
+        var q = parseFloat(t.quantity) || 0;
+        var a = parseFloat(t.amount) || 0;
+        var act = (t.action || '').toLowerCase();
+        if (act === 'buy') {
+            positions[key].qty += q;
+            positions[key].totalCost += Math.abs(a);
+        } else if (act === 'sell') {
+            var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
+            positions[key].qty -= q;
+            positions[key].totalCost -= avg * q;
+        }
+    });
+
+    console.log("renderPortfolio positions: ", positions);
+
+     allTransfers.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
         var q = parseFloat(t.quantity) || 0;
