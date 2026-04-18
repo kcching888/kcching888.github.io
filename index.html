@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13">
+    <meta name="version" content="3.13.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -467,7 +467,8 @@
 
     function getAssetType(t) {
         if (!t.symbol) return 'Stocks';
-            if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('funds')) return 'Funds'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
+          //  if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('funds')) return 'Funds'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
+            if (t.type) { var cat = String(t.type).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('funds')) return 'Funds'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; if(cat.includes('dividends')) return 'Dividends'; }
         var s = String(t.symbol).toUpperCase();
         var d = (t.description || '').toLowerCase();
         if (['USD','CAD','EUR','GBP','JPY','CHF','AUD','NZD'].indexOf(s) >= 0) return 'Funds';
@@ -1284,17 +1285,17 @@ function renderPortfolio() {
         var q = parseFloat(t.quantity) || 0;
         var a = parseFloat(t.amount) || 0;
         var act = (t.action || '').toLowerCase();
-        if (act === 'buy') {
+        if (act === 'deposit') {
             positions[key].qty += q;
             positions[key].totalCost += Math.abs(a);
-        } else if (act === 'sell') {
+        } else if (act === 'withdrawal') {
             var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
             positions[key].qty -= q;
             positions[key].totalCost -= avg * q;
         }
     });
 
-    console.log("renderPortfolio allTrades: ", allTransfers);
+    console.log("renderPortfolio allTransfers: ", allTransfers);
     console.log("renderPortfolio positions: ", positions);
     
     
