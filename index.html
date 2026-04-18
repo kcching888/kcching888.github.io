@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.1">
+    <meta name="version" content="3.13.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -82,6 +82,13 @@
         .pos-gain{color:#4caf50}
         .pos-loss{color:#f44336}
         .loading{padding:20px;text-align:center;color:#aaa;font-style:italic}
+        .total-row {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            border-top: 2px solid #dee2e6;
+        }
+        .text-success { color: #28a745; }
+        .text-danger { color: #dc3545; }
         /* Container to allow scrolling */
         .table-scroll-container {
             max-height: 65vh; /* Adjust as needed */
@@ -89,7 +96,7 @@
             border: 1px solid #0f3460;
             margin-top: 10px;
         }
-
+        
         /* Make headers sticky */
         #trades-list-table thead th {
             position: sticky;
@@ -1255,8 +1262,96 @@ async function handlePriceRefresh() {
     alert("Prices updated successfully.");
 }
 
+function renderPortfolio(portfolio) {
+    const stockContainer = $('portfolio-stocks-wrap');
+    const fundContainer = $('portfolio-funds-wrap');
+    if (!stockContainer || !fundContainer) return;
 
-function renderPortfolio() {
+    // Totals for Stocks (CAD)
+    let totalMV_CAD = 0, totalGL_CAD = 0, totalTodayGL_CAD = 0;
+
+    // Filter and Render Stocks
+    let stockHtml = '<table class="portfolio-table"><thead><tr>' +
+        '<th>Symbol</th><th>MV</th><th>Last</th><th>Tdy%</th><th>Today G/L</th>' +
+        '<th>Avg P</th><th>Chg%</th><th>CCY</th></tr></thead><tbody>';
+
+    portfolio.filter(p => p.type === 'Stock').forEach(p => {
+        const rate = parseFloat(p.exchRate || 1);
+        const mv = parseFloat(p.marketValue || 0);
+        const cost = parseFloat(p.totalCost || 0);
+        const gl = mv - cost;
+        const todayGL = parseFloat(p.todayGain || 0);
+        const tdyPct = parseFloat(p.dayChangePct || 0);
+        const totalChgPct = cost !== 0 ? (gl / cost) * 100 : 0;
+
+        // Accumulate CAD Totals
+        totalMV_CAD += mv * rate;
+        totalGL_CAD += gl * rate;
+        totalTodayGL_CAD += todayGL * rate;
+
+        stockHtml += `<tr>
+            <td>${esc(p.symbol)}</td>
+            <td>${fmtMoney(mv)}</td>
+            <td>${fmtMoney(p.price)}</td>
+            <td class="${tdyPct >= 0 ? 'text-success' : 'text-danger'}">${tdyPct.toFixed(2)}%</td>
+            <td class="${todayGL >= 0 ? 'text-success' : 'text-danger'}">${fmtMoney(todayGL)}</td>
+            <td>${fmtMoney(p.avgPrice)}</td>
+            <td class="${totalChgPct >= 0 ? 'text-success' : 'text-danger'}">${totalChgPct.toFixed(2)}%</td>
+            <td>${esc(p.currency)}</td>
+        </tr>`;
+    });
+
+    stockHtml += `</tbody><tfoot>
+        <tr class="total-row">
+            <td colspan="1">TOTAL (CAD)</td>
+            <td>${fmtMoney(totalMV_CAD)}</td>
+            <td colspan="2"></td>
+            <td class="${totalTodayGL_CAD >= 0 ? 'text-success' : 'text-danger'}">${fmtMoney(totalTodayGL_CAD)}</td>
+            <td></td>
+            <td class="${totalGL_CAD >= 0 ? 'text-success' : 'text-danger'}">${fmtMoney(totalGL_CAD)}</td>
+            <td>CAD</td>
+        </tr></tfoot></table>`;
+
+    stockContainer.innerHTML = stockHtml;
+    
+    // Trigger Funds rendering
+    renderFundsTable();
+}
+
+function renderFundsTable() {
+    const fundContainer = $('portfolio-funds-wrap');
+    let totalIn_CAD = 0, totalOut_CAD = 0;
+
+    let fundHtml = '<h3>Funds & Liquidity</h3><table class="portfolio-table"><thead><tr>' +
+        '<th>CCY</th><th>Total Cost</th><th>CAD Equivalent</th></tr></thead><tbody>';
+
+    // allTransfers should contain rows where type === 'Forex'
+    allTransfers.forEach(f => {
+        const amt = parseFloat(f.amount || 0);
+        const cadAmt = parseFloat(f.cadAmount || 0);
+
+        if (amt > 0) totalIn_CAD += cadAmt;
+        else totalOut_CAD += Math.abs(cadAmt);
+
+        fundHtml += `<tr>
+            <td>${esc(f.currency)}</td>
+            <td>${fmtMoney(amt)}</td>
+            <td>${fmtMoney(cadAmt)}</td>
+        </tr>`;
+    });
+
+    const netFund_CAD = totalIn_CAD - totalOut_CAD;
+
+    fundHtml += `</tbody><tfoot>
+        <tr><td>Total Fund In</td><td colspan="1"></td><td>${fmtMoney(totalIn_CAD)}</td></tr>
+        <tr><td>Total Fund Out</td><td colspan="1"></td><td>${fmtMoney(totalOut_CAD)}</td></tr>
+        <tr class="total-row"><td>Net Fund (CAD)</td><td colspan="1"></td><td>${fmtMoney(netFund_CAD)}</td></tr>
+    </tfoot></table>`;
+
+    fundContainer.innerHTML = fundHtml;
+}
+    
+function renderPortfoliobkup() {
     var positions = {};
     var totals = { Stock: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
 
