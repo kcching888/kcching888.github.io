@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.7">
+    <meta name="version" content="3.13.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1287,7 +1287,7 @@ function renderPortfolio() {
         '<th>Symbol</th><th>MV</th><th>Last</th><th>Tdy%</th><th>Today G/L</th>' +
         '<th>Avg P</th><th>Chg%</th><th>CCY</th></tr></thead><tbody>';
 
-    allTrades.filter(p => p.type === 'Stock').forEach(p => {
+    allTrades.filter(p => p.type === 'Stocks').forEach(p => {
         const rate = parseFloat(p.exchRate || 1);
         const mv = parseFloat(p.marketValue || 0);
         const cost = parseFloat(p.totalCost || 0);
@@ -1567,6 +1567,7 @@ function renderTransfers() {
                                 <td>${fmtDate(item.date)}</td>
                                 <td>${esc(item.action)}</td>
                                 <td class="text-right">${fmt(item.amount)}</td>
+                                <td class="text-right">${fmt(item.comm)}</td>
                                 <td>${esc(item.currency)}</td>
                                 <td class="text-right" style="font-weight:bold;">$${fmt(item.cadAmount || item.amount)}</td>
                                 <td style="font-size:0.8em; color:#888;">${item.exchRate ? item.exchRate.toFixed(4) : '1.0000'}</td>
