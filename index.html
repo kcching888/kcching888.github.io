@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.2">
+    <meta name="version" content="3.13.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -142,7 +142,8 @@
     <div id="page-portfolio">
         <div id="port-stats" class="stat-grid"></div>
         <div class="card">
-            <div id="port-table-wrap"></div>
+            <div id="port-stocks-wrap"></div>
+            <div id="port-funds-wrap"></div>
         </div>
     </div>
 
@@ -1263,8 +1264,8 @@ async function handlePriceRefresh() {
 }
 
 function renderPortfolio(portfolio) {
-    const stockContainer = $('portfolio-stocks-wrap');
-    const fundContainer = $('portfolio-funds-wrap');
+    const stockContainer = $('port-stocks-wrap');
+    const fundContainer = $('port-funds-wrap');
     if (!stockContainer || !fundContainer) return;
 
     // Totals for Stocks (CAD)
@@ -1319,7 +1320,7 @@ function renderPortfolio(portfolio) {
 }
 
 function renderFundsTable() {
-    const fundContainer = $('portfolio-funds-wrap');
+    const fundContainer = $('port-funds-wrap');
     let totalIn_CAD = 0, totalOut_CAD = 0;
 
     let fundHtml = '<h3>Funds & Liquidity</h3><table class="portfolio-table"><thead><tr>' +
