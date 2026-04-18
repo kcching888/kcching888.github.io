@@ -1486,16 +1486,7 @@ function renderPortfolio() {
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
         if (type === 'Stocks') {
-            html += '<table><thead><tr><th>Symbol</th>
-                    <th class="text-right">Last</th>
-                    <th class="text-right">Chg %</th>
-                    <th class="text-right">Today G/L</th>
-                    <th class="text-right">Avg P</th>
-                    <th class="text-right">Chg%</th>
-                    <th class="text-right">Qty</th>
-                    <th class="text-right">MV</th>
-                    <th class="text-right">G/L</th>
-                    <th class="text-right">G/L%</th>';
+            html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">G/L</th><th class="text-right">G/L%</th>';
             //html += '<th class="text-right">MV</th><th class="text-right">Qty</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th class="text-right">Today G/L</th><th class="text-right">Price</th><th class="text-right">Tdy%</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th>';
         } else {
             html += '<th>Quantity</th><th>Avg Cost</th><th>Total Cost</th>';
@@ -1517,16 +1508,7 @@ function renderPortfolio() {
                     ochg = avgP > 0 ? ((curPrice-avgP)/avgP*100) : 0;
                 sCost += p.totalCost; sMV += mv; sPL += gl;
 
-                html += `<tr><td>${esc(p.symbol)}</td>
-                        <td class="text-right">$${fmt(curPrice)}</td>
-                        <td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td>
-                        <td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td>
-                        <td class="text-right">$${fmt(avgP)}</td>
-                        <td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>
-                        <td class="text-right">${fmt(p.qty,4)}</td>
-                        <td class="text-right">$${fmt(mv)}</td>
-                        <td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td>
-                        <td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td>';
+                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td>';
                                                                       
      //            html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
