@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.9">
+    <meta name="version" content="3.13.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -435,6 +435,7 @@
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
+    var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
     var currentFilteredTrades = [];
     var currentFilteredDivs = [];
     let isFilterActive = false; // This helps the UI know when to override the full list
@@ -701,22 +702,6 @@ async function apiCall(params) {
     function syncFromSheets() {
         syncData();
     }
-
-    function syncFromSheets_old(){
-        if(!GAS_URL){alert('Configure URL first.');return;}
-        $('connStat').textContent='Syncing...';
-        gasCall({action:'getTrades'}, function(r){
-            if(r&&r.data){allTrades=r.data;}
-            gasCall({action:'getDividends'}, function(r2){
-                if(r2&&r2.data){allDivs=r2.data;}
-                saveLocal();
-                applyFilters();
-                renderPortfolio();
-                $('connStat').textContent='Synced';$('connStat').className='ok';
-            });
-        }, function(){$('connStat').textContent='Sync failed';$('connStat').className='err';});
-    }
-
   
 function updateFilterOptions() {
     const stockSelect = $('filter-stock');
@@ -1486,12 +1471,12 @@ function renderPortfolio() {
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
         if (type === 'Stocks') {
-            html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">G/L</th><th class="text-right">G/L%</th>';
+            html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th>CCY</th></tr></thead><tbody>';
             //html += '<th class="text-right">MV</th><th class="text-right">Qty</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th class="text-right">Today G/L</th><th class="text-right">Price</th><th class="text-right">Tdy%</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th>';
         } else {
-            html += '<th>CCY</th><th>Cost</th><th>CAD Equivalent</th><th>Ex. Rate</th>';
+            html += '<table><th>CCY</th><th>Cost</th><th>CAD Equivalent</th><th>Ex. Rate</th></tr></thead><tbody>';
         }
-        html += '<th>Curr</th></tr></thead><tbody>';
+   
 
         grouped[key].forEach(function(p) {
             var avgP = p.qty > 0 ? p.totalCost / p.qty : 0;
@@ -1514,7 +1499,7 @@ function renderPortfolio() {
             } else {
                 sCost += p.totalCost; sMV += p.totalCost;
                 var cadEq = p.totalCost * p.exchRate;
-                html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadEq)}</td><td>${fmt(p.exchRate)}</td>`;
+                html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadEq)}</td><td>${fmt(p.exchRate)}</td></tr>`;
             }
        
         });
