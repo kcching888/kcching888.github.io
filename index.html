@@ -1498,6 +1498,14 @@ function renderTransfersTable() {
     // 1. DYNAMICALLY POPULATE FILTERS (First time or on data change)
     updateTransferFilterOptions();
 
+        var fmtMoney = function(num) {
+            var val = parseFloat(num) || 0;
+            return '$' + val.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            });
+        };
+
     // 2. FILTER DATA
     const filteredTransfers = allTransfers.filter(t => {
         const tYear = new Date(t.date).getFullYear().toString();
