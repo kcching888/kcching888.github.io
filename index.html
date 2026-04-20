@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.18">
+    <meta name="version" content="3.13.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1505,7 +1505,7 @@ function renderPortfolio() {
                 console.log("stock html: ", html);                                                      
      //         html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
-                sCost += p.totalCost; sMV += p.totalCost;
+                sfCost += p.totalCost; sMV += p.totalCost;
                 var cadAmt = p.totalCost * p.exchRate;
                 sfCadAmt += cadAmt;
                 html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadAmt)}</td><td>${fmt(p.exchRate)}</td></tr>`;
@@ -1517,7 +1517,7 @@ function renderPortfolio() {
         if (type === 'Stocks')
             html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(ssMV)}</td><td></td><td class="text-right ${ssPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(ssCost)}</td></tr></tbody></table>`;
         else
-            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sCadAmt)}</td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sCadAmt)}</td><td colspan="2" class="text-right">Cost: $${fmt(sfCost)}</td></tr></tbody></table>`;
     });
     
     $('#port-table-wrap').innerHTML = html;
