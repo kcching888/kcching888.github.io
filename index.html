@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.14">
+    <meta name="version" content="3.13.15">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1390,12 +1390,12 @@ function renderPortfolio() {
         var c = Math.abs(a);
         var act = (t.action || '').toLowerCase();
         if (act === 'deposit') {
-            //positions[key].qty += q;
+            positions[key].qty += q;
             positions[key].totalCost += c;
             positions[key].cadEq += c * positions[key].exchRate;
         } else if (act === 'withdrawal') {
             //var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
-            //positions[key].qty -= q;
+            positions[key].qty -= q;
             positions[key].totalCost -= c;
             positions[key].cadEq -= c * positions[key].exchRate;
         }
