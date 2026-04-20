@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.15.11">
+    <meta name="version" content="3.15.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1279,17 +1279,19 @@ function renderPortfolio() {
 
     allTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, account: t.account, type: getAssetType(t)};
+        if (!positions[key]) positions[key] = {symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, exchRate: 0, account: t.account, type: getAssetType(t)};
         var q = parseFloat(t.quantity) || 0;
         var a = parseFloat(t.amount) || 0;
         var act = (t.action || '').toLowerCase();
         if (act === 'buy') {
             positions[key].qty += q;
             positions[key].totalCost += Math.abs(a);
+            positions[key].exchRate = t.exchRate;
         } else if (act === 'sell') {
             var avg = positions[key].qty > 0 ? positions[key].totalCost / positions[key].qty : 0;
             positions[key].qty -= q;
             positions[key].totalCost -= avg * q;
+            positions[key].exchRate = t.exchRate;
         }
     });
 
