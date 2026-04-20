@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.17">
+    <meta name="version" content="3.13.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1515,7 +1515,7 @@ function renderPortfolio() {
         });
 
         if (type === 'Stocks')
-            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(ssMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(ssCost)}</td></tr></tbody></table>`;
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(ssMV)}</td><td></td><td class="text-right ${ssPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(ssCost)}</td></tr></tbody></table>`;
         else
             html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sCadAmt)}</td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
     });
