@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.15.15">
+    <meta name="version" content="3.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -285,9 +285,20 @@
     </div>
 
     <div id="page-transfers" style="display:none;">
-        <div class="card">
-            <div id="transfer-table-wrap" class="tab-content" ></div>
-        </div>
+        <div class="filter-bar">
+        <select id="ft-currency" onchange="renderTransfersTable()">
+            <option value="">All CCY</option>
+        </select>
+        <select id="ft-year" onchange="renderTransfersTable()">
+            <option value="">All Years</option>
+        </select>
+    </div>
+
+    <div id="transfer-summary-wrap" class="funds-container"></div>
+
+    <hr>
+
+    <div id="transfer-table-wrap"></div>
     </div>
 </div>
 
@@ -529,7 +540,7 @@
         if(tab==='portfolio') renderPortfolio();
         if(tab==='gainloss') renderGainLoss();
         if(tab==='dividends') { applyDivFilters(); renderDivStats();}
-        if(tab === 'transfers') renderTransfers();
+        if(tab === 'transfers') renderTransfersTable();
     }
 
     function openModal(id){$(id).classList.add('show');}
@@ -593,7 +604,7 @@ function syncData() {
         updateAccountFilter();
         renderPortfolio();
         renderDivStats();
-        renderTransfers();
+        renderTransfersTable();
 
         // 2. Immediate confirmation UI update
         const ts = new Date().toLocaleString();
@@ -1477,6 +1488,103 @@ function renderPortfolio() {
     });
     
     $('#port-table-wrap').innerHTML = html;
+}
+
+
+function renderTransfersTable() {
+    const fCurr = ($('ft-currency') || {}).value || '';
+    const fYear = ($('ft-year') || {}).value || '';
+    
+    // 1. DYNAMICALLY POPULATE FILTERS (First time or on data change)
+    updateTransferFilterOptions();
+
+    // 2. FILTER DATA
+    const filteredTransfers = allTransfers.filter(t => {
+        const tYear = new Date(t.date).getFullYear().toString();
+        const matchesCurr = !fCurr || t.currency === fCurr;
+        const matchesYear = !fYear || tYear === fYear;
+        return matchesCurr && matchesYear;
+    });
+
+    // 3. CALCULATE ACCOUNT SUMMARIES (CAD)
+    renderTransferSummary(filteredTransfers);
+
+    // 4. RENDER MAIN TABLE
+    let html = '<table class="portfolio-table"><thead><tr>' +
+               '<th>Date</th><th>Account</th><th>Action</th><th>CCY</th>' +
+               '<th class="text-right">Amount</th><th class="text-right">CAD Amt</th>' +
+               '</tr></thead><tbody>';
+
+    filteredTransfers.forEach(t => {
+        html += `<tr>
+            <td>${fmtDate(t.date)}</td>
+            <td>${esc(t.account)}</td>
+            <td>${esc(t.action)}</td>
+            <td>${esc(t.currency)}</td>
+            <td class="text-right">${fmtMoney(t.amount)}</td>
+            <td class="text-right">${fmtMoney(t.cadAmount)}</td>
+        </tr>`;
+    });
+
+    html += '</tbody></table>';
+    $('transfers-table-wrap').innerHTML = html;
+}
+
+function renderTransferSummary(data) {
+    const summaryWrap = $('transfer-summary-wrap');
+    if (!summaryWrap) return;
+
+    const accTotals = {};
+
+    data.forEach(t => {
+        const acc = t.account || 'Unknown';
+        const cadAmt = parseFloat(t.cadAmount || 0);
+
+        if (!accTotals[acc]) {
+            accTotals[acc] = { deposit: 0, withdrawal: 0 };
+        }
+
+        if (cadAmt > 0) accTotals[acc].deposit += cadAmt;
+        else accTotals[acc].withdrawal += Math.abs(cadAmt);
+    });
+
+    let html = '<h3>Account Summary (CAD)</h3>' +
+               '<table class="portfolio-table" style="width: 100%;"><thead><tr>' +
+               '<th>Account</th><th class="text-right">Total Deposit</th>' +
+               '<th class="text-right">Total Withdrawal</th></tr></thead><tbody>';
+
+    for (const acc in accTotals) {
+        html += `<tr>
+            <td>${esc(acc)}</td>
+            <td class="text-right text-success">${fmtMoney(accTotals[acc].deposit)}</td>
+            <td class="text-right text-danger">${fmtMoney(accTotals[acc].withdrawal)}</td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    summaryWrap.innerHTML = html;
+}
+
+function updateTransferFilterOptions() {
+    const currSelect = $('ft-currency');
+    const yearSelect = $('ft-year');
+    if (!currSelect || !yearSelect || currSelect.options.length > 1) return;
+
+    // Extract distinct values
+    const currencies = [...new Set(allTransfers.map(t => t.currency))].filter(Boolean).sort();
+    const years = [...new Set(allTransfers.map(t => new Date(t.date).getFullYear()))].filter(Boolean).sort((a,b) => b-a);
+
+    currencies.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = c;
+        currSelect.appendChild(opt);
+    });
+
+    years.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = y;
+        yearSelect.appendChild(opt);
+    });
 }
     
 function renderTransfers() {
