@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16">
+    <meta name="version" content="3.16.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1535,7 +1535,13 @@ function renderTransferSummary(data) {
     if (!summaryWrap) return;
 
     const accTotals = {};
-
+    var fmtMoney = function(num) {
+                var val = parseFloat(num) || 0;
+                return '$' + val.toLocaleString(undefined, { 
+                    minimumFractionDigits: 2, 
+                    maximumFractionDigits: 2 
+                });
+    
     data.forEach(t => {
         const acc = t.account || 'Unknown';
         const cadAmt = parseFloat(t.cadAmount || 0);
