@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.19">
+    <meta name="version" content="3.13.20">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1472,7 +1472,7 @@ function renderPortfolio() {
         var split = key.split('-');
         var type = split[0], acct = split[1];
         var ssCost = 0, ssMV = 0, ssPL = 0, ssCadAmt = 0;
-        var sfCost = 0, sfMV = 0, sfPL = 0, sfCadAmt = 0;
+        var sfCost = 0, sfPL = 0, sfCadAmt = 0;
 
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
@@ -1505,7 +1505,7 @@ function renderPortfolio() {
                 console.log("stock html: ", html);                                                      
      //         html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
-                sfCost += p.totalCost; sMV += p.totalCost;
+                sfCost += p.totalCost; 
                 var cadAmt = p.totalCost * p.exchRate;
                 sfCadAmt += cadAmt;
                 html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadAmt)}</td><td>${fmt(p.exchRate)}</td></tr>`;
