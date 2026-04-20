@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.15.2">
+    <meta name="version" content="3.15.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1477,7 +1477,7 @@ function renderPortfolio() {
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
         if (type === 'Stocks') {
-            html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th>CCY</th></tr></thead><tbody>';
+            html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">Cost</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th>CCY</th></tr></thead><tbody>';
             //html += '<th class="text-right">MV</th><th class="text-right">Qty</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th class="text-right">Today G/L</th><th class="text-right">Price</th><th class="text-right">Tdy%</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th>';
             //console.log("stock hd html: ", html);                                                      
         } else {
@@ -1501,7 +1501,7 @@ function renderPortfolio() {
                     ochg = avgP > 0 ? ((curPrice-avgP)/avgP*100) : 0;
                 ssCost += p.totalCost; ssMV += mv; ssPL += gl;
 
-                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td>${esc(p.currency)}</td></tr>`;
+                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">$${fmt(p.totalCost)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td>${esc(p.currency)}</td></tr>`;
                 console.log("stock html: ", html);                                                      
      //         html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
@@ -1515,7 +1515,7 @@ function renderPortfolio() {
         });
 
         if (type === 'Stocks')
-            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td colspan = "7" class="text-right">$${fmt(ssMV)}</td><td></td><td class="text-right ${ssPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(ssCost)}</td></tr></tbody></table>`;
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td colspan = "7" class="text-right">$${fmt(ssMV)}</td><td class="text-right">$${fmt(ssCost)}</td><td class="text-right ${ssPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td></tr></tbody></table>`;
         else
             html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sfCadAmt)}</td><td colspan="5"> </td></tr></tbody></table>`;
     });
