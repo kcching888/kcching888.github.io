@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.15">
+    <meta name="version" content="3.13.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1471,17 +1471,18 @@ function renderPortfolio() {
         if (!grouped[key]) return;
         var split = key.split('-');
         var type = split[0], acct = split[1];
-        var sCost = 0, sMV = 0, sPL = 0;
+        var ssCost = 0, ssMV = 0, sPL = 0, scadEq = 0;
+        var sfCost = 0, sfMV = 0, sPL = 0, sfCadAmt = 0;
 
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
         if (type === 'Stocks') {
             html += '<table><thead><tr><th>Symbol</th><th class="text-right">Last</th><th class="text-right">Chg %</th><th class="text-right">Today G/L</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th><th class="text-right">Qty</th><th class="text-right">MV</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th>CCY</th></tr></thead><tbody>';
             //html += '<th class="text-right">MV</th><th class="text-right">Qty</th><th class="text-right">G/L</th><th class="text-right">G/L%</th><th class="text-right">Today G/L</th><th class="text-right">Price</th><th class="text-right">Tdy%</th><th class="text-right">Avg P</th><th class="text-right">Chg%</th>';
-            console.log("stock hd html: ", html);                                                      
+            //console.log("stock hd html: ", html);                                                      
         } else {
             html += '<table><thead><tr><th>CCY</th><th>Cost</th><th>CAD Equivalent</th><th>Ex. Rate</th></tr></thead><tbody>';
-            console.log("fund hd html: ", html);                                                      
+            //console.log("fund hd html: ", html);                                                      
         }
    
 
@@ -1505,16 +1506,18 @@ function renderPortfolio() {
      //         html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td>`;
             } else {
                 sCost += p.totalCost; sMV += p.totalCost;
-                var cadEq = p.totalCost * p.exchRate;
-                html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadEq)}</td><td>${fmt(p.exchRate)}</td></tr>`;
+                var cadAmt = p.totalCost * p.exchRate;
+                sfCadAmt += cadAmt;
+                html += `<tr><td>${esc(p.currency)}</td><td>$${fmt(p.totalCost)}</td><td>$${fmt(cadAmt)}</td><td>${fmt(p.exchRate)}</td></tr>`;
                 console.log("fund html: ", html);                                                      
             }
        
         });
 
-        html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;">
-            <td>TOTAL</td><td class="text-right">$${fmt(sMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(sPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td>
-        </tr></tbody></table>`;
+        if (type === 'Stocks')
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(sMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(sPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
+        else
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sCadAmt)}</td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
     });
     
     $('#port-table-wrap').innerHTML = html;
