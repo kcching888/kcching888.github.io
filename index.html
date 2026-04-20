@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.13.16">
+    <meta name="version" content="3.13.17">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1471,8 +1471,8 @@ function renderPortfolio() {
         if (!grouped[key]) return;
         var split = key.split('-');
         var type = split[0], acct = split[1];
-        var ssCost = 0, ssMV = 0, sPL = 0, scadEq = 0;
-        var sfCost = 0, sfMV = 0, sPL = 0, sfCadAmt = 0;
+        var ssCost = 0, ssMV = 0, ssPL = 0, ssCadAmt = 0;
+        var sfCost = 0, sfMV = 0, sfPL = 0, sfCadAmt = 0;
 
         html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
         //html += `<table><thead><tr><th>Symbol</th>`;
@@ -1499,7 +1499,7 @@ function renderPortfolio() {
                 var tgl = (curPrice - prevClose) * p.qty, 
                     tpc = prevClose > 0 ? ((curPrice-prevClose)/prevClose*100) : 0, 
                     ochg = avgP > 0 ? ((curPrice-avgP)/avgP*100) : 0;
-                sCost += p.totalCost; sMV += mv; sPL += gl;
+                ssCost += p.totalCost; ssMV += mv; ssPL += gl;
 
                 html += `<tr><td>${esc(p.symbol)}</td><td class="text-right">$${fmt(curPrice)}</td><td class="text-right ${tpc>=0?'pos-gain':'pos-loss'}">${tpc.toFixed(2)}%</td><td class="text-right ${tgl>=0?'pos-gain':'pos-loss'}">$${fmt(tgl)}</td><td class="text-right">$${fmt(avgP)}</td><td class="text-right ${ochg>=0?'pos-gain':'pos-loss'}">${ochg.toFixed(2)}%</td><td class="text-right">${fmt(p.qty,4)}</td><td class="text-right">$${fmt(mv)}</td><td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td><td class="text-right ${glP>=0?'pos-gain':'pos-loss'}">${glP.toFixed(2)}%</td><td>${esc(p.currency)}</td></tr>`;
                 console.log("stock html: ", html);                                                      
@@ -1515,7 +1515,7 @@ function renderPortfolio() {
         });
 
         if (type === 'Stocks')
-            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(sMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(sPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
+            html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td class="text-right">$${fmt(ssMV)}</td><td></td><td class="text-right ${sPL>=0?'pos-gain':'pos-loss'}">$${fmt(ssPL)}</td><td colspan="${type === 'Stock' ? 5 : 0}"></td><td colspan="2" class="text-right">Cost: $${fmt(ssCost)}</td></tr></tbody></table>`;
         else
             html += `<tr style="background: #1a1a2e; font-weight: bold; border-top: 2px solid #333;"><td>TOTAL</td><td></td><td class="text-right">$${fmt(sCadAmt)}</td><td colspan="2" class="text-right">Cost: $${fmt(sCost)}</td></tr></tbody></table>`;
     });
