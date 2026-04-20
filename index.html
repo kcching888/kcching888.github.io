@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.15.9">
+    <meta name="version" content="3.15.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1350,16 +1350,16 @@ function renderPortfolio() {
     // UI: Stats Grid with Refresh Button inside
     $('#port-stats').innerHTML = `
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.cost)}<br>F: $${fmt(totals.Funds.cost)}</div>
+            <div class="val">S: $${fmt(totals.Stocks.cost)}<br>F: $${fmt(totals.Funds.cost)}</div>
             <div class="lbl">Cost Basis</div>
         </div>
         <div class="stat-card">
-            <div class="val">S: $${fmt(totals.Stock.mv)}<br>F: $${fmt(totals.Funds.mv)}</div>
+            <div class="val">S: $${fmt(totals.Stocks.mv)}<br>F: $${fmt(totals.Funds.mv)}</div>
             <div class="lbl">Market Value</div>
         </div>
         <div class="stat-card">
             <div class="val">
-                <span class="${totals.Stock.pl >= 0 ? 'pos-gain' : 'pos-loss'}">S: $${fmt(totals.Stock.pl)}</span><br>
+                <span class="${totals.Stocks.pl >= 0 ? 'pos-gain' : 'pos-loss'}">S: $${fmt(totals.Stocks.pl)}</span><br>
                 <span class="${totals.Funds.pl >= 0 ? 'pos-gain' : 'pos-loss'}">F: $${fmt(totals.Funds.pl)}</span>
             </div>
             <div class="lbl">Unrealized P&L</div>
