@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16.1">
+    <meta name="version" content="3.16.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1282,9 +1282,195 @@ async function handlePriceRefresh() {
 }
 
 
-
-    
 function renderPortfolio() {
+    var positions = {};
+    // Extended totals to include Today G/L and Fund metrics
+    var totals = { 
+        Stocks: { cost: 0, mv: 0, pl: 0, todayGL: 0 }, 
+        Funds: { in: 0, out: 0, net: 0 } 
+    };
+
+    // 1. Chronological processing for accurate WAC
+    var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    sortedTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) {
+            positions[key] = { 
+                symbol: t.symbol, currency: t.currency, qty: 0, totalCost: 0, 
+                exchRate: t.exchRate || 1, account: t.account, type: getAssetType(t) 
+            };
+        }
+        
+        var q = Math.abs(parseFloat(t.quantity)) || 0;
+        var a = Math.abs(parseFloat(t.amount)) || 0; // Amount usually includes commission
+        var act = (t.action || '').toLowerCase();
+
+        if (act.includes('buy')) {
+            positions[key].qty += q;
+            positions[key].totalCost += a;
+        } else if (act.includes('sell')) {
+            if (positions[key].qty > 0) {
+                var avg = positions[key].totalCost / positions[key].qty;
+                positions[key].qty -= q;
+                positions[key].totalCost -= avg * q;
+            }
+        }
+        positions[key].exchRate = t.exchRate || positions[key].exchRate;
+    });
+
+    // 2. Process Transfers (Funds)
+    allTransfers.forEach(function(t) {
+        var key = 'CASH|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) {
+            positions[key] = { 
+                symbol: 'CASH', currency: t.currency, qty: 0, totalCost: 0, 
+                account: t.account, exchRate: t.exchRate || 1, type: 'Funds' 
+            };
+        }
+        var a = parseFloat(t.amount) || 0;
+        var rate = parseFloat(t.exchRate || 1);
+        
+        positions[key].totalCost += a;
+        
+        // Track Global Fund In/Out in CAD
+        if (a > 0) totals.Funds.in += (a * rate);
+        else totals.Funds.out += Math.abs(a * rate);
+    });
+
+    var posArr = Object.values(positions).filter(p => Math.abs(p.qty) > 0.0001 || (p.type === 'Funds' && Math.abs(p.totalCost) > 0.01));
+    var livePrices = window.currentPrices || {};
+
+    // 3. Calculate CAD Totals for the Header Stats
+    posArr.forEach(function(p) {
+        var rate = p.exchRate || 1;
+        if (p.type === 'Stocks') {
+            var live = livePrices[p.symbol] || { price: 0, previousClose: 0 };
+            var mvCAD = (live.price * p.qty) * rate;
+            var costCAD = p.totalCost * rate;
+            var tglCAD = ((live.price - (live.previousClose || live.price)) * p.qty) * rate;
+
+            totals.Stocks.mv += mvCAD;
+            totals.Stocks.cost += costCAD;
+            totals.Stocks.pl += (mvCAD - costCAD);
+            totals.Stocks.todayGL += tglCAD;
+        }
+    });
+    totals.Funds.net = totals.Funds.in - totals.Funds.out;
+
+    // 4. UI: Stats Grid
+    var now = new Date();
+    var timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    $('#port-stats').innerHTML = `
+        <div class="stat-card">
+            <div class="pos-gain">$${fmt(totals.Stocks.mv)}</div>
+            <div class="lbl">Total MV (CAD)</div>
+        </div>
+        <div class="stat-card">
+            <div class="${totals.Stocks.pl >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(totals.Stocks.pl)}</div>
+            <div class="lbl">Total G/L (CAD)</div>
+        </div>
+        <div class="stat-card">
+            <div class="${totals.Stocks.todayGL >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(totals.Stocks.todayGL)}</div>
+            <div class="lbl">Today G/L (CAD)</div>
+        </div>
+        <div class="stat-card">
+            <div style="font-size:0.75em; color:${window.currentPrices ? '#4caf50' : '#aaa'}; font-weight: bold;">
+                ● ${window.currentPrices ? 'Live (' + timeStr + ')' : 'No live data'}
+            </div>
+            <button class="btn btn-primary" style="margin-top:4px; width: 100%; padding: 2px;" onclick="handlePriceRefresh()">🔄 Refresh</button>
+        </div>`;
+
+    // 5. Table Generation (Account Grouped)
+    var grouped = {};
+    posArr.forEach(p => {
+        var groupKey = p.type + '-' + p.account;
+        if (!grouped[groupKey]) grouped[groupKey] = [];
+        grouped[groupKey].push(p);
+    });
+
+    var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
+    let html = '';
+    
+    sortOrder.forEach(function(key) {
+        if (!grouped[key]) return;
+        var split = key.split('-');
+        var type = split[0], acct = split[1];
+        
+        html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
+
+        if (type === 'Stocks') {
+            html += `<table class="portfolio-table"><thead><tr>
+                <th>Symbol</th><th>MV</th><th>Last</th><th>Tdy%</th><th>Today G/L</th>
+                <th>Avg P</th><th>Chg%</th><th>CCY</th></tr></thead><tbody>`;
+
+            let subMV = 0, subGL = 0, subTGL = 0;
+
+            grouped[key].forEach(p => {
+                var live = livePrices[p.symbol] || {};
+                var curP = live.price || 0;
+                var preC = live.previousClose || curP;
+                var avgP = p.qty > 0 ? p.totalCost / p.qty : 0;
+                
+                var mv = curP * p.qty;
+                var tgl = (curP - preC) * p.qty;
+                var tpct = preC > 0 ? ((curP - preC) / preC * 100) : 0;
+                var chgPct = avgP > 0 ? ((curP - avgP) / avgP * 100) : 0;
+                var rate = p.exchRate || 1;
+
+                subMV += (mv * rate);
+                subGL += (mv - p.totalCost) * rate;
+                subTGL += (tgl * rate);
+
+                html += `<tr>
+                    <td>${esc(p.symbol)}</td>
+                    <td class="text-right">$${fmt(mv)}</td>
+                    <td class="text-right">$${fmt(curP)}</td>
+                    <td class="text-right ${tpct >= 0 ? 'pos-gain' : 'pos-loss'}">${tpct.toFixed(2)}%</td>
+                    <td class="text-right ${tgl >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(tgl)}</td>
+                    <td class="text-right">$${fmt(avgP)}</td>
+                    <td class="text-right ${chgPct >= 0 ? 'pos-gain' : 'pos-loss'}">${chgPct.toFixed(2)}%</td>
+                    <td>${esc(p.currency)}</td>
+                </tr>`;
+            });
+
+            html += `<tr class="total-row">
+                <td>TOTAL (CAD)</td><td>$${fmt(subMV)}</td><td colspan="2"></td>
+                <td class="${subTGL >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(subTGL)}</td>
+                <td></td><td class="${subGL >= 0 ? 'pos-gain' : 'pos-loss'}">$${fmt(subGL)}</td>
+                <td>CAD</td></tr></tbody></table>`;
+
+        } else {
+            // Funds Section (50% Width)
+            html += `<div class="funds-container"><table class="portfolio-table"><thead><tr>
+                <th>CCY</th><th>Total Cost</th><th>CAD Equivalent</th></tr></thead><tbody>`;
+
+            let subIn = 0, subOut = 0;
+
+            grouped[key].forEach(p => {
+                var cad = p.totalCost * p.exchRate;
+                if (p.totalCost > 0) subIn += cad; else subOut += Math.abs(cad);
+
+                html += `<tr>
+                    <td>${esc(p.currency)}</td>
+                    <td class="text-right">$${fmt(p.totalCost)}</td>
+                    <td class="text-right">$${fmt(cad)}</td>
+                </tr>`;
+            });
+
+            html += `<tr class="total-row"><td>Net (CAD)</td><td colspan="2" class="text-right">$${fmt(subIn - subOut)}</td></tr>
+                </tbody></table>
+                <div style="font-size:0.8em; padding: 5px;">
+                    In: $${fmt(subIn)} | Out: $${fmt(subOut)}
+                </div></div>`;
+        }
+    });
+    
+    $('#port-table-wrap').innerHTML = html;
+}
+    
+function renderPortfolio_bkup() {
     var positions = {};
     var totals = { Stocks: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
 
