@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16.9">
+    <meta name="version" content="3.17.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -248,6 +248,11 @@
     </div>
 
     <div id="page-gainloss" style="display:none">
+        <div id="gl-filters" class="filter-bar">
+            <select id="f-gl-account"><option value="">All Accounts</option></select>
+            <select id="f-gl-year"><option value="">All Years</option></select>
+            <select id="f-gl-stock"><option value="">All Stocks</option></select>
+        </div>
         <div id="gl-stats" class="stat-grid"></div>
         <div class="card">
             <h3>Realized Gain/Loss</h3>
@@ -256,6 +261,10 @@
     </div>
 
     <div id="page-dividends" style="display:none">
+        <div id="div-filters" class="filter-bar">
+             <select id="f-div-year"><option value="">All Years</option></select>
+             <select id="f-div-stock"><option value="">All Stocks</option></select>
+        </div>
         <div id="div-stats" class="stat-grid"></div>
         <div class="card">
             <div class="filters">
@@ -736,8 +745,69 @@ async function apiCall(params) {
     function syncFromSheets() {
         syncData();
     }
-  
+
 function updateFilterOptions() {
+    const divYear = $('f-div-year');
+    const divStock = $('f-div-stock');
+    const glAccount = $('f-gl-account');
+    const glYear = $('f-gl-year');
+    const glStock = $('f-gl-stock');
+
+    // 1. Get Distinct Values
+    const allSymbols = [...new Set([...allTrades.map(t => t.symbol), ...allDivs.map(d => d.symbol)])]
+        .filter(Boolean).sort();
+
+    const allYears = [...new Set([...allTrades.map(t => t.date), ...allDivs.map(d => d.date)])]
+        .map(d => new Date(d).getFullYear())
+        .filter(y => !isNaN(y))
+        .sort((a, b) => b - a);
+
+    const allAccounts = [...new Set(allTrades.map(t => t.account))]
+        .filter(Boolean).sort();
+
+    // Helper to generate options
+    const makeOpts = (list, label) => `<option value="">All ${label}</option>` + 
+        list.map(item => `<option value="${item}">${item}</option>`).join('');
+
+    // 2. Populate Dropdowns
+    if (divYear) divYear.innerHTML = makeOpts(allYears, 'Years');
+    if (divStock) divStock.innerHTML = makeOpts(allSymbols, 'Stocks');
+    if (glAccount) glAccount.innerHTML = makeOpts(allAccounts, 'Accounts');
+    if (glYear) glYear.innerHTML = makeOpts(allYears, 'Years');
+    if (glStock) glStock.innerHTML = makeOpts(allSymbols, 'Stocks');
+}
+
+// Triggered when Dividend filters change
+function applyDivFilters() {
+    const yearVal = $('f-div-year').value;
+    const stockVal = $('f-div-stock').value;
+
+    currentFilteredDivs = allDivs.filter(d => {
+        const matchYear = !yearVal || new Date(d.date).getFullYear().toString() === yearVal;
+        const matchStock = !stockVal || d.symbol === stockVal;
+        return matchYear && matchStock;
+    });
+
+    divCurrentPage = 1; // Reset to page 1
+    renderDivTable(); // This is the function you provided
+}
+
+// Triggered when Gain/Loss filters change
+function applyGLFilters() {
+    // This will trigger your renderPortfolio function
+    // We will add the filtering logic inside renderPortfolio itself 
+    // so calculations (FIFO/ACB) remain accurate.
+    renderPortfolio(); 
+}
+
+// Add event listeners to your dropdowns
+$('f-div-year').onchange = applyDivFilters;
+$('f-div-stock').onchange = applyDivFilters;
+$('f-gl-account').onchange = applyGLFilters;
+$('f-gl-year').onchange = applyGLFilters;
+$('f-gl-stock').onchange = applyGLFilters;
+    
+function updateFilterOptions_bkup() {
     const stockSelect = $('filter-stock');
     const yearSelect = $('filter-year');
     if (!stockSelect || !yearSelect) return;
@@ -1216,7 +1286,7 @@ function renderPortfolio() {
     var positions = {};
     var livePrices = window.currentPrices || {};
 
-    // 1. CHRONOLOGICAL ENGINE
+    // 1. DUAL-TRACKING ENGINE (Always calculate on full history for accuracy)
     var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     sortedTrades.forEach(function(t) {
@@ -1248,21 +1318,43 @@ function renderPortfolio() {
                 positions[key].qty -= q;
             }
         }
-        // Round-trip reset
         if (Math.abs(positions[key].qty) < 0.0001) {
             positions[key].qty = 0; positions[key].fifoLots = []; positions[key].acbTotalCost = 0;
         }
         positions[key].exchRate = t.exchRate || positions[key].exchRate;
     });
 
-    // 2. CASH BALANCE (NON-TICKER)
+    // 2. CASH BALANCE
     allTransfers.forEach(function(t) {
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
         positions[key].acbTotalCost += parseFloat(t.amount) || 0;
     });
 
+    // 3. APPLY FILTERS (Account, Stock, Year)
     var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
+    
+    const fAcct = $('f-gl-account').value;
+    const fStock = $('f-gl-stock').value;
+    const fYear = $('f-gl-year').value;
+
+    posArr = posArr.filter(p => {
+        const matchAcct = !fAcct || p.account === fAcct;
+        const matchStock = !fStock || p.symbol === fStock;
+        
+        // Year filter: Show position if it had ANY activity in that year
+        let matchYear = true;
+        if (fYear) {
+            matchYear = allTrades.some(t => 
+                t.symbol === p.symbol && 
+                t.account === p.account && 
+                new Date(t.date).getFullYear().toString() === fYear
+            );
+        }
+        return matchAcct && matchStock && matchYear;
+    });
+
+    // 4. GROUPING
     var grouped = {};
     posArr.forEach(p => {
         var k = p.type + '-' + p.account;
@@ -1270,6 +1362,7 @@ function renderPortfolio() {
         grouped[k].push(p);
     });
 
+    // 5. RENDERING
     let html = '';
     var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
     
@@ -1327,7 +1420,6 @@ function renderPortfolio() {
                 <td>CAD</td>
             </tr></tbody></table>`;
         } else {
-            // Funds rendering
             html += `<table class="portfolio-table"><thead><tr><th>Balance</th><th class="text-right">Amount</th><th>CCY</th></tr></thead><tbody>`;
             grouped[key].forEach(p => {
                 html += `<tr><td>${esc(p.symbol)}</td><td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td><td>${esc(p.currency)}</td></tr>`;
