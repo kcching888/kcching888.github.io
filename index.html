@@ -1216,7 +1216,7 @@ function renderPortfolio() {
     var positions = {};
     var livePrices = window.currentPrices || {};
 
-    // 1. DUAL-TRACKING ENGINE (FIFO & ACB)
+    // 1. CHRONOLOGICAL ENGINE
     var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     sortedTrades.forEach(function(t) {
@@ -1248,20 +1248,20 @@ function renderPortfolio() {
                 positions[key].qty -= q;
             }
         }
+        // Round-trip reset
         if (Math.abs(positions[key].qty) < 0.0001) {
             positions[key].qty = 0; positions[key].fifoLots = []; positions[key].acbTotalCost = 0;
         }
         positions[key].exchRate = t.exchRate || positions[key].exchRate;
     });
 
-    // 2. PROCESS CASH TRANSFERS
+    // 2. CASH BALANCE (NON-TICKER)
     allTransfers.forEach(function(t) {
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
         positions[key].acbTotalCost += parseFloat(t.amount) || 0;
     });
 
-    // 3. GROUPING & TABLE RENDERING
     var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     var grouped = {};
     posArr.forEach(p => {
@@ -1280,49 +1280,59 @@ function renderPortfolio() {
 
         if (type === 'Stocks') {
             html += `<table class="portfolio-table"><thead><tr>
-                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">MV</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#aaa">Basis (FIFO)</th>
-                <th class="text-right" style="color:#aaa">G/L (FIFO)</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#4caf50">Total ACB</th>
-                <th class="text-right" style="color:#4caf50">G/L (ACB)</th><th>CCY</th>
+                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">MV</th>
+                <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
+                <th class="text-right" style="color:#aaa">Basis</th>
+                <th class="text-right" style="color:#aaa">G/L</th>
+                <th class="text-right" style="border-left:2px solid #444; color:#4caf50">Avg (ACB)</th>
+                <th class="text-right" style="color:#4caf50">Total ACB</th>
+                <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
             </tr></thead><tbody>`;
 
-            // Totals trackers in CAD
             let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
 
             grouped[key].forEach(p => {
                 var curP = (livePrices[p.symbol] || {}).price || 0, rate = p.exchRate || 1;
                 var fifoBasis = p.fifoLots.reduce((s, l) => s + l.c, 0);
+                var fifoAvg = p.qty > 0 ? fifoBasis / p.qty : 0;
+                var acbAvg = p.qty > 0 ? p.acbTotalCost / p.qty : 0;
                 var mv = curP * p.qty, glF = mv - fifoBasis, glA = mv - p.acbTotalCost;
 
-                // Accumulate CAD Totals
                 tMV += (mv * rate); tBasis += (fifoBasis * rate); tGLF += (glF * rate); tACB += (p.acbTotalCost * rate); tGLA += (glA * rate);
 
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
+                    <td class="text-right">$${fmt(curP)}</td>
                     <td class="text-right">$${fmt(mv)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoBasis)}</td>
+                    <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
+                    <td class="text-right" style="color:#aaa">$${fmt(fifoBasis)}</td>
                     <td class="text-right ${glF>=0?'pos-gain':'pos-loss'}" style="opacity:0.8">$${fmt(glF)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; color:#4caf50">$${fmt(p.acbTotalCost)}</td>
+                    <td class="text-right" style="border-left:2px solid #444; font-weight:bold; color:#4caf50">$${fmt(acbAvg, 3)}</td>
+                    <td class="text-right" style="color:#4caf50">$${fmt(p.acbTotalCost)}</td>
                     <td class="text-right ${glA>=0?'pos-gain':'pos-loss'}" style="font-weight:bold">$${fmt(glA)}</td>
                     <td>${esc(p.currency)}</td>
                 </tr>`;
             });
 
-            // TOTAL ROW (CAD)
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-                <td>TOTAL (CAD)</td><td></td>
+                <td>TOTAL (CAD)</td><td colspan="2"></td>
                 <td class="text-right">$${fmt(tMV)}</td>
-                <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(tBasis)}</td>
+                <td style="border-left:2px solid #444"></td>
+                <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
                 <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
-                <td class="text-right" style="border-left:2px solid #444; color:#4caf50">$${fmt(tACB)}</td>
+                <td style="border-left:2px solid #444"></td>
+                <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
                 <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
                 <td>CAD</td>
             </tr></tbody></table>`;
         } else {
-            // Funds rendering...
-            html += `<table class="portfolio-table">...</table>`;
+            // Funds rendering
+            html += `<table class="portfolio-table"><thead><tr><th>Balance</th><th class="text-right">Amount</th><th>CCY</th></tr></thead><tbody>`;
+            grouped[key].forEach(p => {
+                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td><td>${esc(p.currency)}</td></tr>`;
+            });
+            html += `</tbody></table>`;
         }
     });
     document.getElementById('port-table-wrap').innerHTML = html;
