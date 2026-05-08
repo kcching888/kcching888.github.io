@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16.2">
+    <meta name="version" content="3.16.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1282,7 +1282,7 @@ async function handlePriceRefresh() {
 }
 
 
-function renderPortfolio() {
+function renderPortfolio_bkup() {
     var positions = {};
     // Extended totals to include Today G/L and Fund metrics
     var totals = { 
@@ -1470,7 +1470,7 @@ function renderPortfolio() {
     $('#port-table-wrap').innerHTML = html;
 }
     
-function renderPortfolio_bkup() {
+function renderPortfolio() {
     var positions = {};
     var totals = { Stocks: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
 
