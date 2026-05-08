@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16.6">
+    <meta name="version" content="3.16.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1214,21 +1214,24 @@ async function handlePriceRefresh() {
 
 
 function renderPortfolio() {
+    // 1. INITIALIZE DATA STRUCTURES
     var positions = {};
     var totals = { Stocks: { cost: 0, mv: 0, pl: 0, todayGL: 0 }, Funds: { in: 0, out: 0, net: 0 } };
+    
+    // Safety check: Ensure livePrices is defined early to prevent ReferenceErrors
+    var livePrices = window.currentPrices || {};
 
-    // 1. CHRONOLOGICAL SORT
+    // 2. CHRONOLOGICAL DUAL-TRACKING (FIFO & ACB)
     var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // 2. PARALLEL TRACKING
     sortedTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
         
         if (!positions[key]) {
             positions[key] = { 
                 symbol: t.symbol, currency: t.currency, account: t.account, type: getAssetType(t),
-                fifoLots: [],       // Array for FIFO tracking
-                acbTotalCost: 0,    // Running total for Weighted Average
+                fifoLots: [],       // FIFO Queue
+                acbTotalCost: 0,    // Weighted Average Pool
                 qty: 0, 
                 exchRate: t.exchRate || 1
             };
@@ -1241,15 +1244,15 @@ function renderPortfolio() {
 
         if (act.includes('buy')) {
             var tradeCost = (q * p) + comm;
-            // FIFO: Push a new specific lot
+            // Add to FIFO Queue
             positions[key].fifoLots.push({ q: q, c: tradeCost });
-            // ACB: Add to the pool
+            // Add to ACB Pool
             positions[key].acbTotalCost += tradeCost;
             positions[key].qty += q;
         } 
         else if (act.includes('sell')) {
             if (positions[key].qty > 0) {
-                // UPDATE FIFO: Drain the oldest lots first
+                // Drain FIFO Lots (Oldest first)
                 var remToSell = q;
                 while (remToSell > 0 && positions[key].fifoLots.length > 0) {
                     var oldest = positions[key].fifoLots[0];
@@ -1263,14 +1266,14 @@ function renderPortfolio() {
                         remToSell = 0;
                     }
                 }
-                // UPDATE ACB: Reduce basis by the current weighted average
+                // Reduce ACB Pool by current weighted average
                 var currentAvg = positions[key].acbTotalCost / positions[key].qty;
                 positions[key].acbTotalCost -= (currentAvg * q);
                 positions[key].qty -= q;
             }
         }
 
-        // RESET: Wipe clean if position is closed
+        // Round-trip reset
         if (Math.abs(positions[key].qty) < 0.0001) {
             positions[key].qty = 0;
             positions[key].fifoLots = [];
@@ -1278,31 +1281,41 @@ function renderPortfolio() {
         }
     });
 
-    // ... (Transfers and totals logic here) ...
+    // 3. PROCESS TRANSFERS (CASH)
+    allTransfers.forEach(function(t) {
+        var key = 'CASH|' + esc(t.currency) + '|' + esc(t.account);
+        if (!positions[key]) {
+            positions[key] = { symbol: 'CASH', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
+        }
+        var a = parseFloat(t.amount) || 0;
+        positions[key].acbTotalCost += a;
+    });
 
-    // 3. TABLE GENERATION
+    // 4. GROUP DATA FOR UI
+    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     var grouped = {};
-    Object.values(positions).forEach(p => {
+    posArr.forEach(p => {
         var groupKey = p.type + '-' + p.account;
         if (!grouped[groupKey]) grouped[groupKey] = [];
         grouped[groupKey].push(p);
     });
 
+    // 5. RENDER TABLES
     let html = '';
     var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
     
     sortOrder.forEach(function(key) {
         if (!grouped[key]) return;
         var type = key.split('-')[0], acct = key.split('-')[1];
-        html += `<h3 style="margin-top:20px;border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
+        html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
 
         if (type === 'Stocks') {
             html += `<table class="portfolio-table"><thead><tr>
                 <th>Symbol</th><th class="text-right">Last</th><th class="text-right">Qty</th>
-                <th class="text-right" style="border-left:2px solid #444">Avg (FIFO)</th>
-                <th class="text-right">Cost (FIFO)</th>
-                <th class="text-right" style="border-left:2px solid #444">Avg (ACB)</th>
-                <th class="text-right">Total ACB</th>
+                <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
+                <th class="text-right" style="color:#aaa">Basis (FIFO)</th>
+                <th class="text-right" style="border-left:2px solid #444; color:#4caf50">Avg (ACB)</th>
+                <th class="text-right" style="color:#4caf50">Total ACB</th>
                 <th class="text-right">G/L (ACB)</th><th>CCY</th>
             </tr></thead><tbody>`;
 
@@ -1310,32 +1323,37 @@ function renderPortfolio() {
                 var live = livePrices[p.symbol] || { price: 0 };
                 var curP = live.price || 0;
                 
-                // FIFO Calculations (Sum of remaining lots)
-                var fifoTotal = p.fifoLots.reduce((sum, lot) => sum + lot.c, 0);
+                var fifoTotal = p.fifoLots ? p.fifoLots.reduce((sum, lot) => sum + lot.c, 0) : 0;
                 var fifoAvg = p.qty > 0 ? fifoTotal / p.qty : 0;
-                
-                // ACB Calculations
                 var acbAvg = p.qty > 0 ? p.acbTotalCost / p.qty : 0;
-                var mv = curP * p.qty;
-                var gl = mv - p.acbTotalCost;
+                var mv = curP * p.qty, gl = mv - p.acbTotalCost;
 
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">$${fmt(curP)}</td>
-                    <td class="text-right">${fmt(p.qty,2)}</td>
+                    <td class="text-right">${fmt(p.qty, 2)}</td>
                     <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
                     <td class="text-right" style="color:#aaa">$${fmt(fifoTotal)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; font-weight:bold">$${fmt(acbAvg, 3)}</td>
-                    <td class="text-right">$${fmt(p.acbTotalCost)}</td>
+                    <td class="text-right" style="border-left:2px solid #444; font-weight:bold; color:#4caf50">$${fmt(acbAvg, 3)}</td>
+                    <td class="text-right" style="color:#4caf50">$${fmt(p.acbTotalCost)}</td>
                     <td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td>
                     <td>${esc(p.currency)}</td>
                 </tr>`;
             });
             html += `</tbody></table>`;
+        } else {
+            // Standard Funds rendering
+            html += `<table class="portfolio-table"><thead><tr><th>CCY</th><th class="text-right">Balance</th><th>Rate</th></tr></thead><tbody>`;
+            grouped[key].forEach(p => {
+                html += `<tr><td>${esc(p.currency)}</td><td class="text-right">$${fmt(p.acbTotalCost)}</td><td>${fmt(p.exchRate, 4)}</td></tr>`;
+            });
+            html += `</tbody></table>`;
         }
     });
-    $('#port-table-wrap').innerHTML = html;
+
+    document.getElementById('port-table-wrap').innerHTML = html;
 }
+    
 function renderPortfolio_bkup() {
     var positions = {};
     var totals = { Stocks: { cost: 0, mv: 0, pl: 0 }, Funds: { cost: 0, mv: 0, pl: 0 } };
