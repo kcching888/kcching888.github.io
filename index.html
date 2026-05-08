@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.16.7">
+    <meta name="version" content="3.16.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1283,9 +1283,9 @@ function renderPortfolio() {
 
     // 3. PROCESS TRANSFERS (CASH)
     allTransfers.forEach(function(t) {
-        var key = 'CASH|' + esc(t.currency) + '|' + esc(t.account);
+        var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) {
-            positions[key] = { symbol: 'CASH', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
+            positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
         }
         var a = parseFloat(t.amount) || 0;
         positions[key].acbTotalCost += a;
