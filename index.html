@@ -807,15 +807,16 @@ function applyDivFilters() {
     const yearVal = $('f-div-year').value;
     const stockVal = $('f-div-stock').value;
 
-    // Set the flag to true if any filter is selected
-    isFilterActive = (yearVal !== "" || stockVal !== "");
-    
+ 
     currentFilteredDivs = allDivs.filter(d => {
         const matchYear = !yearVal || new Date(d.date).getFullYear().toString() === yearVal;
         const matchStock = !stockVal || d.symbol === stockVal;
         return matchYear && matchStock;
     });
 
+   // Set the flag to true if any filter is selected
+    isFilterActive = (yearVal !== "" || stockVal !== "");
+        
     divCurrentPage = 1; // Reset to page 1
     renderDivTable(); // This is the function you provided
 }
