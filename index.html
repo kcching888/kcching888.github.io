@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.0">
+    <meta name="version" content="3.17.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -609,6 +609,7 @@ function syncData() {
         
         saveLocal();
         updateFilterOptions();
+        attachFilterListeners()
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
@@ -633,7 +634,24 @@ function syncData() {
     });
 }
     
-
+function attachFilterListeners() {
+    // We use onclick or onchange directly to ensure they overwrite any old listeners
+    const ids = ['f-div-year', 'f-div-stock', 'f-gl-account', 'f-gl-year', 'f-gl-stock'];
+    
+    ids.forEach(id => {
+        const el = $(id);
+        if (el) {
+            el.onchange = () => {
+                if (id.startsWith('f-div')) {
+                    applyDivFilters();
+                } else {
+                    renderPortfolio();
+                }
+            };
+        }
+    });
+}
+    
     function openAddTradeModal(){
         $('at-date').value = new Date().toISOString().slice(0,10);
         openModal('modal-add-trade');
@@ -757,11 +775,17 @@ function updateFilterOptions() {
     const allSymbols = [...new Set([...allTrades.map(t => t.symbol), ...allDivs.map(d => d.symbol)])]
         .filter(Boolean).sort();
 
-    const allYears = [...new Set([...allTrades.map(t => t.date), ...allDivs.map(d => d.date)])]
-        .map(d => new Date(d).getFullYear())
-        .filter(y => !isNaN(y))
-        .sort((a, b) => b - a);
-
+  //  const allYears = [...new Set([...allTrades.map(t => t.date), ...allDivs.map(d => d.date)])]
+  //      .map(d => new Date(d).getFullYear())
+    //     .filter(y => !isNaN(y))
+    //     .sort((a, b) => b - a);
+    const allYears = [...new Set([
+       ...allTrades.map(t => new Date(t.date).getFullYear()),
+       ...allDivs.map(d => new Date(d.date).getFullYear())
+    ])]
+    .filter(y => !isNaN(y))
+    .sort((a, b) => b - a);
+    
     const allAccounts = [...new Set(allTrades.map(t => t.account))]
         .filter(Boolean).sort();
 
@@ -777,11 +801,17 @@ function updateFilterOptions() {
     if (glStock) glStock.innerHTML = makeOpts(allSymbols, 'Stocks');
 }
 
+    // Add this at the top of your script area
+let isFilterActive = false;
+    
 // Triggered when Dividend filters change
 function applyDivFilters() {
     const yearVal = $('f-div-year').value;
     const stockVal = $('f-div-stock').value;
 
+    // Set the flag to true if any filter is selected
+    isFilterActive = (yearVal !== "" || stockVal !== "");
+    
     currentFilteredDivs = allDivs.filter(d => {
         const matchYear = !yearVal || new Date(d.date).getFullYear().toString() === yearVal;
         const matchStock = !stockVal || d.symbol === stockVal;
@@ -1131,11 +1161,13 @@ function renderTradesTableABC() {
         const displayData = isFilterActive ? currentFilteredDivs : allDivs;
         var perPageVal=($('df-perpage')||{}).value||'25';
         var perPage=perPageVal==='all'?currentFilteredDivs.length:(parseInt(perPageVal)||25);
-        var total=currentFilteredDivs.length;
+        //var total=currentFilteredDivs.length;
+        var total = displayData.length;
         var totalPages=Math.max(1,Math.ceil(total/perPage));
         if(divCurrentPage>totalPages)divCurrentPage=totalPages;
         var start=(divCurrentPage-1)*perPage;
-        var rows=currentFilteredDivs.slice(start,start+perPage);
+        //var rows=currentFilteredDivs.slice(start,start+perPage);
+        var rows = displayData.slice(start, start + perPage);
 
         if(!rows.length){$('div-table-wrap').innerHTML='<div class="loading">No dividends.</div>';$('div-pagination').innerHTML='';return;}
         var html='<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
