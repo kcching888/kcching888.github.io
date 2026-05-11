@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.4">
+    <meta name="version" content="3.17.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1373,13 +1373,13 @@ function renderPortfolio() {
         return el ? el.value : "";
     };
 
-    const fAcct = getVal('f-gl-account');
-    const fStock = getVal('f-gl-stock');
-    const fYear = getVal('f-gl-year');
+    const fAcct  = ($('f-gl-account') ? $('f-gl-account').value.trim() : "");
+    const fStock = ($('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : "");
+    const fYear  = ($('f-gl-year') ? $('f-gl-year').value.trim() : "");
     
     posArr = posArr.filter(p => {
-        const matchAcct = !fAcct || String(p.account) === fAcct;
-        const matchStock = !fStock || String(p.symbol) === fStock;
+        const matchAcct = !fAcct || String(p.account).trim() === fAcct;
+        const matchStock = !fStock || String(p.symbol).trim().toUpperCase() === fStock;
         
         // Year filter: Show position if it had ANY activity in that year
         let matchYear = true;
@@ -1400,7 +1400,8 @@ function renderPortfolio() {
         if (!grouped[k]) grouped[k] = [];
         grouped[k].push(p);
     });
-
+    console.log("Filtered Positions Remaining:", posArr.length);
+    console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
     // 5. RENDERING
     let html = '';
     var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
