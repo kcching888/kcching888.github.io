@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.3">
+    <meta name="version" content="3.17.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -641,11 +641,12 @@ function attachFilterListeners() {
     ids.forEach(id => {
         const el = $(id);
         if (el) {
-            el.onchange = () => {
+            el.onchange = function(e) {
+                console.log("Filter changed:", id, e.target.value);
                 if (id.startsWith('f-div')) {
                     applyDivFilters();
                 } else {
-                    console.log("Filter changed:", id, this.value);
+                    
                     renderPortfolio();
                 }
             };
@@ -1366,15 +1367,19 @@ function renderPortfolio() {
     // 3. APPLY FILTERS (Account, Stock, Year)
     var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     
-    const fAcct = ($('f-gl-account') || {}).value || "";
-    const fStock = ($('f-gl-stock') || {}).value || "";
-    const fYear = ($('f-gl-year') || {}).value || "";
+// Use a helper to get the value safely
+    const getVal = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.value : "";
+    };
+
+    const fAcct = getVal('f-gl-account');
+    const fStock = getVal('f-gl-stock');
+    const fYear = getVal('f-gl-year');
     
     posArr = posArr.filter(p => {
-    // Account Match
-    const matchAcct = !fAcct || String(p.account).trim() === String(fAcct).trim();
-    // Stock Match
-    const matchStock = !fStock || String(p.symbol).toUpperCase() === String(fStock).toUpperCase();
+        const matchAcct = !fAcct || String(p.account) === fAcct;
+        const matchStock = !fStock || String(p.symbol) === fStock;
         
         // Year filter: Show position if it had ANY activity in that year
         let matchYear = true;
@@ -1382,7 +1387,7 @@ function renderPortfolio() {
             matchYear = allTrades.some(t => 
                 t.symbol === p.symbol && 
                 t.account === p.account && 
-                new Date(t.date).getFullYear().toString() === fYear.toString()
+                new Date(t.date).getFullYear().toString() === fYear
             );
         }
         return matchAcct && matchStock && matchYear;
