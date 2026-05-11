@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.2">
+    <meta name="version" content="3.17.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -609,7 +609,7 @@ function syncData() {
         
         saveLocal();
         updateFilterOptions();
-        attachFilterListeners()
+        attachFilterListeners();
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
@@ -645,6 +645,7 @@ function attachFilterListeners() {
                 if (id.startsWith('f-div')) {
                     applyDivFilters();
                 } else {
+                    console.log(("Filter changed:", id, this.value);
                     renderPortfolio();
                 }
             };
@@ -1365,13 +1366,15 @@ function renderPortfolio() {
     // 3. APPLY FILTERS (Account, Stock, Year)
     var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     
-    const fAcct = $('f-gl-account').value;
-    const fStock = $('f-gl-stock').value;
-    const fYear = $('f-gl-year').value;
-
+    const fAcct = ($('f-gl-account') || {}).value || "";
+    const fStock = ($('f-gl-stock') || {}).value || "";
+    const fYear = ($('f-gl-year') || {}).value || "";
+    
     posArr = posArr.filter(p => {
-        const matchAcct = !fAcct || p.account === fAcct;
-        const matchStock = !fStock || p.symbol === fStock;
+    // Account Match
+    const matchAcct = !fAcct || String(p.account).trim() === String(fAcct).trim();
+    // Stock Match
+    const matchStock = !fStock || String(p.symbol).toUpperCase() === String(fStock).toUpperCase();
         
         // Year filter: Show position if it had ANY activity in that year
         let matchYear = true;
@@ -1379,7 +1382,7 @@ function renderPortfolio() {
             matchYear = allTrades.some(t => 
                 t.symbol === p.symbol && 
                 t.account === p.account && 
-                new Date(t.date).getFullYear().toString() === fYear
+                new Date(t.date).getFullYear().toString() === fYear.toString()
             );
         }
         return matchAcct && matchStock && matchYear;
