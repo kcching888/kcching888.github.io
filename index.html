@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.5">
+    <meta name="version" content="3.17.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1387,12 +1387,15 @@ function renderPortfolio() {
             matchYear = allTrades.some(t => 
                 t.symbol === p.symbol && 
                 t.account === p.account && 
-                new Date(t.date).getFullYear().toString() === fYear
+                new Date(t.date).getFullYear().toString() <= parseInt(fYear)
             );
         }
         return matchAcct && matchStock && matchYear;
     });
 
+    console.log("Filtered Positions Remaining:", posArr.length);
+    console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
+    
     // 4. GROUPING
     var grouped = {};
     posArr.forEach(p => {
@@ -1400,9 +1403,10 @@ function renderPortfolio() {
         if (!grouped[k]) grouped[k] = [];
         grouped[k].push(p);
     });
-    console.log("Filtered Positions Remaining:", posArr.length);
-    console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
+   
+    
     // 5. RENDERING
+    document.getElementById('port-table-wrap').innerHTML = '';
     let html = '';
     var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
     
