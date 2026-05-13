@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.10">
+    <meta name="version" content="3.17.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -846,7 +846,7 @@ function applyGLFilters() {
     // This will trigger your renderPortfolio function
     // We will add the filtering logic inside renderPortfolio itself 
     // so calculations (FIFO/ACB) remain accurate.
-    renderPortfolio(); 
+    renderGainLoss(); 
 }
 
 // Add event listeners to your dropdowns
