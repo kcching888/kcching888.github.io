@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.9">
+    <meta name="version" content="3.17.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -644,7 +644,7 @@ function attachFilterListeners() {
             
             // Route to the correct refresh function based on the ID prefix
             if (id.startsWith('f-gl-')) {
-                renderPortfolio(); // Refresh Gain/Loss
+                renderGainLoss(); // Refresh Gain/Loss
             } else if (id.startsWith('f-div-')) {
                 renderDivTable();  // Refresh Dividends
             }
