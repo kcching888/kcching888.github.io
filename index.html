@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.8">
+    <meta name="version" content="3.17.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -950,12 +950,12 @@ function applyFilters() {
 
     // Get unique symbols from both Trades and Dividends
     const tradeSymbols = allTrades.map(t => t.symbol);
-    const divSymbols = allDividends.map(d => d.symbol);
+    const divSymbols = allDivs.map(d => d.symbol);
     const uniqueStocks = [...new Set([...tradeSymbols, ...divSymbols])].filter(s => s).sort();
 
     // Get unique years from both
     const tradeYears = allTrades.map(t => new Date(t.date).getFullYear());
-    const divYears = allDividends.map(d => new Date(d.date).getFullYear());
+    const divYears = allDivs.map(d => new Date(d.date).getFullYear());
     const uniqueYears = [...new Set([...tradeYears, ...divYears])]
         .filter(y => !isNaN(y))
         .sort((a, b) => b - a);
@@ -1190,7 +1190,7 @@ function renderDivTable() {
     const fYear = ($('f-div-year') ? $('f-div-year').value.trim() : "");
 
     // 3. Filter Data
-    let filteredDivs = allDividends.filter(d => {
+    let filteredDivs = allDivs.filter(d => {
         const mAcct = !fAcct || String(d.account).trim() === fAcct;
         const mStock = !fStock || String(d.symbol).trim().toUpperCase() === fStock;
         const mYear = !fYear || new Date(d.date).getFullYear().toString() === fYear;
