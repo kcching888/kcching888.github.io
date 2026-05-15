@@ -1240,35 +1240,47 @@ function renderDivTable() {
 
     if (!rows.length) {
         container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
-        $('div-pagination').innerHTML = '';
+        const pag = $('div-pagination');
+        if (pag) pag.innerHTML = '';
         return;
     }
 
-    let html = '<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
+    const bodyRows = rows.map(function(d) {
+        const rowId = esc(String(d.id || ''));
+        return `
+            <tr>
+                <td>${fmtDate(d.date)}</td>
+                <td>${esc(d.account)}</td>
+                <td>${esc(d.symbol)}</td>
+                <td>${esc(d.description)}</td>
+                <td class="pos-gain">${fmt(d.amount)}</td>
+                <td>${esc(d.currency)}</td>
+                <td><button class="btn btn-danger div-del-btn" data-id="${rowId}" style="padding:3px 8px;font-size:0.75em">Del</button></td>
+            </tr>`;
+    }).join('');
 
-    rows.forEach(function(d) {
-      const rowId = String(d.id || '');
-      html += `
-        <tr>
-            <td>${fmtDate(d.date)}</td>
-            <td>${esc(d.account)}</td>
-            <td>${esc(d.symbol)}</td>
-            <td>${esc(d.description)}</td>
-            <td class="pos-gain">${fmt(d.amount)}</td>
-            <td>${esc(d.currency)}</td>
-            <td><button class="btn btn-danger div-del-btn" data-id="${esc(rowId)}" style="padding:3px 8px;font-size:0.75em">Del</button></td>
-        </tr>`;
-   });
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Symbol</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>${bodyRows}</tbody>
+        </table>`;
 
-    html += '</tbody></table>';
-    container.innerHTML = html;
-   
     container.querySelectorAll('.div-del-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             deleteDiv(this.getAttribute('data-id') || '');
         });
     });
-    
+
     renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
         divCurrentPage = p;
         renderDivTable();
