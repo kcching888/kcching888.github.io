@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.11">
+    <meta name="version" content="3.17.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2007,8 +2007,56 @@ function renderTransfers() {
 }
     
     
+function renderGainLoss(){
+         const fAcct = $('f-gl-account') ? $('f-gl-account').value.trim() : '';
+         const fYear = $('f-gl-year') ? $('f-gl-year').value.trim() : '';
+         const fStock = $('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : '';
 
-    function renderGainLoss(){
+        const filteredTrades = allTrades
+        .filter(function(t) {
+            const matchAcct = !fAcct || String(t.account || '').trim() === fAcct;
+            const matchYear = !fYear || new Date(t.date).getFullYear().toString() === fYear;
+            const matchStock = !fStock || String(t.symbol || '').trim().toUpperCase() === fStock;
+            return matchAcct && matchYear && matchStock;
+        })
+        .sort(function(a, b) {
+            return String(a.date || '').localeCompare(String(b.date || ''));
+        });
+
+    var realized = {};
+    var costBasis = {};
+
+    filteredTrades.forEach(function(t) {
+        var key = esc(t.symbol) + '|' + esc(t.currency);
+        if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
+        if (!realized[key]) realized[key] = {
+            symbol: t.symbol,
+            currency: t.currency,
+            proceeds: 0,
+            cost: 0,
+            gain: 0,
+            type: getAssetType(t)
+        };
+
+        var q = parseFloat(t.quantity) || 0;
+        var a = Math.abs(parseFloat(t.amount) || 0);
+        var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
+        var act = (t.action || '').toLowerCase();
+
+        if (act === 'buy') {
+            costBasis[key].qty += q;
+            costBasis[key].totalCost += a + comm;
+        } else if (act === 'sell' && costBasis[key].qty > 0) {
+            var avgCost = costBasis[key].totalCost / costBasis[key].qty;
+            var costOfSold = avgCost * q;
+            realized[key].proceeds += a - comm;
+            realized[key].cost += costOfSold;
+            realized[key].gain += a - comm - costOfSold;
+            costBasis[key].qty -= q;
+            costBasis[key].totalCost -= costOfSold;
+        }
+    });
+    
     var realized={};
     var costBasis={};
     allTrades.sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
