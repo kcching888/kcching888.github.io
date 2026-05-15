@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.13">
+    <meta name="version" content="3.17.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -540,6 +540,19 @@
     }
 
     function showTab(tab){
+    ['transactions','portfolio','gainloss','dividends','transfers'].forEach(function(t){
+        $('page-'+t).style.display = t===tab ? '' : 'none';
+        $('tab-'+t).classList.toggle('active', t === tab);
+    });
+    console.log("tab: ", tab);
+
+    if (tab === 'portfolio') renderPortfolio();
+    if (tab === 'gainloss') renderGainLoss();
+    if (tab === 'dividends') applyDivFilters();
+    if (tab === 'transfers') renderTransfersTable();
+}
+    
+    function showTab_bkp(tab){
         ['transactions','portfolio','gainloss','dividends','transfers'].forEach(function(t){
             $('page-'+t).style.display = t===tab?'':'none';
             $('tab-'+t).classList.toggle('active',t===tab);
@@ -548,7 +561,7 @@
         
         if(tab==='portfolio') renderPortfolio();
         if(tab==='gainloss') renderGainLoss();
-        if(tab==='dividends') { applyDivFilters(); renderDivStats();}
+        if(tab==='dividends') { applyDivFilters();}
         if(tab === 'transfers') renderTransfersTable();
     }
 
@@ -635,6 +648,23 @@ function syncData() {
 }
 
 function attachFilterListeners() {
+    ['f-gl-account', 'f-gl-stock', 'f-gl-year', 'f-div-account', 'f-div-stock', 'f-div-year', 'df-from', 'df-to', 'df-perpage'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el) return;
+
+        el.onchange = function() {
+            console.log("Filter action triggered on:", id);
+
+            if (id.startsWith('f-gl-')) {
+                renderGainLoss();
+            } else if (id.startsWith('f-div-') || id === 'df-from' || id === 'df-to' || id === 'df-perpage') {
+                applyDivFilters();
+            }
+        };
+    });
+}
+    
+function attachFilterListeners_bkp() {
     ['f-gl-account', 'f-gl-stock', 'f-gl-year', 'f-div-account', 'f-div-stock', 'f-div-year'].forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -652,25 +682,7 @@ function attachFilterListeners() {
     });
 }
     
-function attachFilterListeners_bkup() {
-    // We use onclick or onchange directly to ensure they overwrite any old listeners
-    const ids = ['f-div-year', 'f-div-stock', 'f-gl-account', 'f-gl-year', 'f-gl-stock'];
-    
-    ids.forEach(id => {
-        const el = $(id);
-        if (el) {
-            el.onchange = function(e) {
-                console.log("Filter changed:", id, e.target.value);
-                if (id.startsWith('f-div')) {
-                    applyDivFilters();
-                } else {
-                    
-                    renderPortfolio();
-                }
-            };
-        }
-    });
-}
+
     
     function openAddTradeModal(){
         $('at-date').value = new Date().toISOString().slice(0,10);
@@ -821,9 +833,66 @@ function updateFilterOptions() {
     if (glStock) glStock.innerHTML = makeOpts(allSymbols, 'Stocks');
 }
 
-   
-// Triggered when Dividend filters change
 function applyDivFilters() {
+    divCurrentPage = 1;
+
+    const fAcct = $('f-div-account') ? $('f-div-account').value.trim() : '';
+    const fStock = $('f-div-stock') ? $('f-div-stock').value.trim().toUpperCase() : '';
+    const fYear = $('f-div-year') ? $('f-div-year').value.trim() : '';
+    const from = $('df-from') ? $('df-from').value : '';
+    const to = $('df-to') ? $('df-to').value : '';
+
+    currentFilteredDivs = allDivs.filter(function(d) {
+        const acct = String(d.account || '').trim();
+        const symbol = String(d.symbol || '').trim().toUpperCase();
+        const dateStr = String(d.date || '');
+        const year = dateStr ? new Date(dateStr).getFullYear().toString() : '';
+
+        if (fAcct && acct !== fAcct) return false;
+        if (fStock && symbol !== fStock) return false;
+        if (fYear && year !== fYear) return false;
+        if (from && dateStr < from) return false;
+        if (to && dateStr > to) return false;
+
+        return true;
+    });
+
+    isFilterActive = !!(fAcct || fStock || fYear || from || to);
+
+    renderDivStats();
+    renderDivTable();
+}
+
+function applyDivFilters_bkp() {
+    divCurrentPage = 1;
+
+    const fAcct = $('f-div-account') ? $('f-div-account').value.trim() : '';
+    const fStock = $('f-div-stock') ? $('f-div-stock').value.trim().toUpperCase() : '';
+    const fYear = $('f-div-year') ? $('f-div-year').value.trim() : '';
+    const from = $('df-from') ? $('df-from').value : '';
+    const to = $('df-to') ? $('df-to').value : '';
+
+    currentFilteredDivs = allDivs.filter(function(d) {
+        const acct = String(d.account || '').trim();
+        const symbol = String(d.symbol || '').trim().toUpperCase();
+        const dateStr = String(d.date || '');
+        const year = !dateStr ? '' : new Date(dateStr).getFullYear().toString();
+
+        if (fAcct && acct !== fAcct) return false;
+        if (fStock && symbol !== fStock) return false;
+        if (fYear && year !== fYear) return false;
+        if (from && dateStr < from) return false;
+        if (to && dateStr > to) return false;
+
+        return true;
+    });
+
+    renderDivStats();
+    renderDivTable();
+}
+    
+// Triggered when Dividend filters change
+function applyDivFilters_bkup() {
     const yearVal = $('f-div-year').value;
     const stockVal = $('f-div-stock').value;
 
@@ -885,7 +954,7 @@ function updateFilterOptions_bkup() {
         uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('');
 }
 
-function applyFilters() {
+function applyFilters_bkp() {
     const filters = {
         stock: $('filter-stock').value,
         year: $('filter-year').value,
@@ -987,98 +1056,7 @@ function updateTradeCurrencyDropdown() {
     dropdown.value = currentVal; // Maintain selection
 }
 
-function renderTradesTableABC() {
-    // --- 1. DYNAMIC CURRENCY FILTER ---
-    updateTradeCurrencyDropdown();
 
-    // --- 2. APPLY FILTERS (Fixes Category and excludes Transfers) ---
-    const fCat = ($('filter-category') || {}).value || '';
-    const fCurr = ($('filter-currency') || {}).value || '';
-
-    console.log("fCat, fCurr: ", fCat, fCurr, $('filter-category').value, $('filter-currency').value);
-    
-    currentFilteredTrades = allTrades.filter(t => {
-        // ISSUE 1 FIX: Exclude transfers from the Trades tab
-        if (t.type === 'Forex' || t.action === 'Deposit' || t.action === 'Withdrawal') {
-            return false;
-        }
-
-        // ISSUE 2 FIX: Case-insensitive category matching
-        const matchesCategory = !fCat || (t.type && t.type.toLowerCase() === fCat.toLowerCase());
-        const matchesCurrency = !fCurr || t.currency === fCurr;
-
-        return matchesCategory && matchesCurrency;
-    });
-
-    // --- 3. PAGINATION AND SETUP ---
-    var perPageVal = ($('f-perpage') || {}).value || '25';
-    var total = currentFilteredTrades.length;
-    var perPage = perPageVal === 'all' ? total : (parseInt(perPageVal) || 25);
-    var totalPages = perPage > 0 ? Math.max(1, Math.ceil(total / perPage)) : 1;
-    
-    if (tradeCurrentPage > totalPages) tradeCurrentPage = totalPages;
-
-    var start = (tradeCurrentPage - 1) * perPage;
-    var rows = currentFilteredTrades.slice(start, perPage === total ? undefined : start + perPage);
-
-    // Update info text
-    $('trades-info').textContent = 'Showing ' + (total === 0 ? 0 : start + 1) + '-' + 
-        Math.min(start + rows.length, total) + ' of ' + total + 
-        ' records (' + allTrades.length + ' total loaded)';
-
-    if (!rows.length) {
-        $('trades-table-wrap').innerHTML = '<div class="loading">No transactions match filters.</div>';
-        $('trades-pagination').innerHTML = '';
-        return;
-    }
-
-    // --- 4. RENDER TABLE ---
-    var html = '<div class="table-scroll-container"><table><thead><tr>' +
-               '<th>Date</th><th>Account</th><th>Action</th><th>Symbol</th>' +
-               '<th>Type</th><th>Qty</th>' +
-               '<th class="text-right">Price</th>' +
-               '<th class="text-right">Amount</th>' +
-               '<th class="text-right">Comm</th>' +
-               '<th>Currency</th><th></th></tr></thead><tbody>';
-
-    rows.forEach(function(t, i) {
-        var idx = allTrades.indexOf(t);
-        var assetType = getAssetType(t);
-
-        var fmtMoney = function(num) {
-            var val = parseFloat(num) || 0;
-            return '$' + val.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        };
-
-        html += '<tr>' +
-            '<td>' + fmtDate(t.date) + '</td>' +
-            '<td>' + esc(t.account) + '</td>' +
-            '<td>' + esc(t.action) + '</td>' +
-            '<td>' + esc(t.symbol) + '</td>' +
-            '<td>' + assetType + '</td>' +
-            '<td>' + (t.quantity ? parseFloat(t.quantity).toFixed(4) : '0.0000') + '</td>' +
-            '<td class="text-right">' + fmtMoney(t.price) + '</td>' +
-            '<td class="text-right" style="font-weight:bold;">' + fmtMoney(t.amount) + '</td>' +
-            '<td class="text-right">' + fmtMoney(t.commission || t.comm) + '</td>' +
-            '<td>' + esc(t.currency) + '</td>' +
-            '<td>' +
-                '<button class="btn btn-danger" onclick="deleteTrade(\'' + String(t.id || idx) + '\')" ' +
-                'style="padding:3px 8px;font-size:0.75em">Del</button>' +
-            '</td>' +
-        '</tr>';
-    });
-
-    html += '</tbody></table></div>';
-    $('trades-table-wrap').innerHTML = html;
-    
-    renderPagination('trades-pagination', totalPages, tradeCurrentPage, function(p) {
-        tradeCurrentPage = p;
-        renderTradesTable();
-    });
-}
 
 
     function renderTradesTable(){
@@ -1177,7 +1155,7 @@ function renderTradesTableABC() {
     }
 
 
-function renderDivTable() {
+function renderDivTable_bkup() {
     const container = document.getElementById('div-table-wrap');
     if (!container) return;
 
@@ -1212,29 +1190,128 @@ function renderDivTable() {
     container.innerHTML = html;
 }
     
-    function renderDivTable_bkup(){
-        const displayData = isFilterActive ? currentFilteredDivs : allDivs;
-        var perPageVal=($('df-perpage')||{}).value||'25';
-        var perPage=perPageVal==='all'?currentFilteredDivs.length:(parseInt(perPageVal)||25);
-        //var total=currentFilteredDivs.length;
-        var total = displayData.length;
-        var totalPages=Math.max(1,Math.ceil(total/perPage));
-        if(divCurrentPage>totalPages)divCurrentPage=totalPages;
-        var start=(divCurrentPage-1)*perPage;
-        //var rows=currentFilteredDivs.slice(start,start+perPage);
-        var rows = displayData.slice(start, start + perPage);
+function renderDivStats() {
+    const data = currentFilteredDivs || [];
+    let totalCAD = 0;
+    let totalUSD = 0;
 
-        if(!rows.length){$('div-table-wrap').innerHTML='<div class="loading">No dividends.</div>';$('div-pagination').innerHTML='';return;}
-        var html='<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
-        rows.forEach(function(d){
-            html+='<tr><td>'+fmtDate(d.date)+'</td><td>'+esc(d.account)+'</td><td>'+esc(d.symbol)+'</td><td>'+esc(d.description)+'</td><td class="pos-gain">'+fmt(d.amount)+'</td><td>'+esc(d.currency)+'</td><td><button class="btn btn-danger" onclick="deleteDiv(\''+esc(d.id)+'\')" style="padding:3px 8px;font-size:0.75em">Del</button></td></tr>';
-        });
-        html+='</tbody></table>';
-        $('div-table-wrap').innerHTML=html;
-        renderPagination('div-pagination', totalPages, divCurrentPage, function(p){divCurrentPage=p;renderDivTable();});
+    data.forEach(function(d) {
+        const amt = parseFloat(d.amount) || 0;
+        if ((d.currency || '').toUpperCase() === 'USD') totalUSD += amt;
+        else totalCAD += amt;
+    });
+
+    $('div-stats').innerHTML =
+        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">Total Dividends (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">Total Dividends (USD)</div></div>' +
+        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
+}
+
+  function renderDivStats_bkp() {
+    const data = currentFilteredDivs || [];
+    var totalCAD = 0, totalUSD = 0;
+
+    data.forEach(function(d) {
+        var amt = parseFloat(d.amount) || 0;
+        if ((d.currency || '').toUpperCase() === 'USD') totalUSD += amt;
+        else totalCAD += amt;
+    });
+
+    $('div-stats').innerHTML =
+        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">Total Dividends (CAD)</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">Total Dividends (USD)</div></div>' +
+        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
+}
+
+    function renderDivTable() {
+    const container = $('div-table-wrap');
+    if (!container) return;
+
+    const data = currentFilteredDivs || [];
+    const perPageVal = ($('df-perpage') || {}).value || '25';
+    const total = data.length;
+    const perPage = perPageVal === 'all' ? Math.max(total, 1) : (parseInt(perPageVal, 10) || 25);
+    const totalPages = Math.max(1, Math.ceil(Math.max(total, 1) / perPage));
+
+    if (divCurrentPage > totalPages) divCurrentPage = totalPages;
+
+    const start = (divCurrentPage - 1) * perPage;
+    const rows = perPageVal === 'all' ? data : data.slice(start, start + perPage);
+
+    if (!rows.length) {
+        container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
+        $('div-pagination').innerHTML = '';
+        return;
     }
 
-    function renderDivStats(){
+    let html = '<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
+
+    rows.forEach(function(d) {
+        const rowId = String(d.id || '');
+        html += '<tr>' +
+            '<td>' + fmtDate(d.date) + '</td>' +
+            '<td>' + esc(d.account) + '</td>' +
+            '<td>' + esc(d.symbol) + '</td>' +
+            '<td>' + esc(d.description) + '</td>' +
+            '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
+            '<td>' + esc(d.currency) + '</td>' +
+            '<td><button class="btn btn-danger" onclick="deleteDiv(' + JSON.stringify(rowId) + ')" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
+        divCurrentPage = p;
+        renderDivTable();
+    });
+}
+function renderDivTable_bkp() {
+    const container = $('div-table-wrap');
+    if (!container) return;
+
+    const data = currentFilteredDivs || [];
+    const perPageVal = ($('df-perpage') || {}).value || '25';
+    const total = data.length;
+    const perPage = perPageVal === 'all' ? total || 1 : (parseInt(perPageVal, 10) || 25);
+    const totalPages = Math.max(1, Math.ceil((total || 1) / perPage));
+
+    if (divCurrentPage > totalPages) divCurrentPage = totalPages;
+
+    const start = (divCurrentPage - 1) * perPage;
+    const rows = perPageVal === 'all' ? data : data.slice(start, start + perPage);
+
+    if (!rows.length) {
+        container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
+        $('div-pagination').innerHTML = '';
+        return;
+    }
+
+    let html = '<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
+
+    rows.forEach(function(d) {
+        html += '<tr>' +
+            '<td>' + fmtDate(d.date) + '</td>' +
+            '<td>' + esc(d.account) + '</td>' +
+            '<td>' + esc(d.symbol) + '</td>' +
+            '<td>' + esc(d.description) + '</td>' +
+            '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
+            '<td>' + esc(d.currency) + '</td>' +
+            '<td><button class="btn btn-danger" onclick="deleteDiv(\\'' + esc(d.id) + '\\')" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
+
+    renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
+        divCurrentPage = p;
+        renderDivTable();
+    });
+}
+    
+    function renderDivStats_bkup(){
         var totalCAD=0, totalUSD=0;
         allDivs.forEach(function(d){
             if((d.currency||'').toUpperCase()==='USD') totalUSD+=parseFloat(d.amount)||0;
@@ -2120,117 +2197,7 @@ function renderGainLoss() {
     $('gl-table-wrap').innerHTML = html;
 }
     
-function renderGainLoss_bkup(){
-         const fAcct = $('f-gl-account') ? $('f-gl-account').value.trim() : '';
-         const fYear = $('f-gl-year') ? $('f-gl-year').value.trim() : '';
-         const fStock = $('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : '';
 
-        const filteredTrades = allTrades
-        .filter(function(t) {
-            const matchAcct = !fAcct || String(t.account || '').trim() === fAcct;
-            const matchYear = !fYear || new Date(t.date).getFullYear().toString() === fYear;
-            const matchStock = !fStock || String(t.symbol || '').trim().toUpperCase() === fStock;
-            return matchAcct && matchYear && matchStock;
-        })
-        .sort(function(a, b) {
-            return String(a.date || '').localeCompare(String(b.date || ''));
-        });
-
-    var realized = {};
-    var costBasis = {};
-
-    filteredTrades.forEach(function(t) {
-        var key = esc(t.symbol) + '|' + esc(t.currency);
-        if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
-        if (!realized[key]) realized[key] = {
-            symbol: t.symbol,
-            currency: t.currency,
-            proceeds: 0,
-            cost: 0,
-            gain: 0,
-            type: getAssetType(t)
-        };
-
-        var q = parseFloat(t.quantity) || 0;
-        var a = Math.abs(parseFloat(t.amount) || 0);
-        var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
-        var act = (t.action || '').toLowerCase();
-
-        if (act === 'buy') {
-            costBasis[key].qty += q;
-            costBasis[key].totalCost += a + comm;
-        } else if (act === 'sell' && costBasis[key].qty > 0) {
-            var avgCost = costBasis[key].totalCost / costBasis[key].qty;
-            var costOfSold = avgCost * q;
-            realized[key].proceeds += a - comm;
-            realized[key].cost += costOfSold;
-            realized[key].gain += a - comm - costOfSold;
-            costBasis[key].qty -= q;
-            costBasis[key].totalCost -= costOfSold;
-        }
-    });
-    
-    var realized={};
-    var costBasis={};
-    allTrades.sort(function(a,b){return String(a.date||'').localeCompare(String(b.date||''));});
-    
-    allTrades.forEach(function(t){
-        var key=esc(t.symbol)+'|'+esc(t.currency);
-        if(!costBasis[key])costBasis[key]={qty:0,totalCost:0};
-        if(!realized[key])realized[key]={symbol:t.symbol,currency:t.currency,proceeds:0,cost:0,gain:0,type:getAssetType(t)};
-        
-        var q=parseFloat(t.quantity)||0;
-        var a=Math.abs(parseFloat(t.amount)||0);
-        var comm=Math.abs(parseFloat(t.commission)||0);
-        var act=(t.action||'').toLowerCase();
-        
-        if(act==='buy'){
-            costBasis[key].qty+=q;
-            costBasis[key].totalCost+=a+comm;
-        } else if(act==='sell' && costBasis[key].qty>0){
-            var avgCost=costBasis[key].totalCost/costBasis[key].qty;
-            var costOfSold=avgCost*q;
-            realized[key].proceeds+=a-comm;
-            realized[key].cost+=costOfSold;
-            realized[key].gain+=a-comm-costOfSold;
-            costBasis[key].qty-=q;
-            costBasis[key].totalCost-=costOfSold;
-        }
-    });
-    
-    var glArr=Object.values(realized).filter(function(r){return Math.abs(r.gain)>0.001;});
-    
-    // Separate stocks and funds
-    var stockGains=glArr.filter(function(r){return r.type==='Stocks';});
-    var fundGains=glArr.filter(function(r){return r.type==='Funds';});
-    
-    var totalStockGain=stockGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
-    var totalFundGain=fundGains.reduce(function(s,r){return s+(r.currency==='USD'?r.gain*1.36:r.gain);},0);
-    var totalGain=totalStockGain+totalFundGain;
-    
-    $('gl-stats').innerHTML='<div class="stat-card"><div class="val '+(totalGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalGain)+'</div><div class="lbl">Total Realized Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalStockGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalStockGain)+'</div><div class="lbl">Stock Gain/Loss (est CAD)</div></div><div class="stat-card"><div class="val '+(totalFundGain>=0?'pos-gain':'pos-loss')+'">$'+fmt(totalFundGain)+'</div><div class="lbl">Funds Gain/Loss (est CAD)</div></div>';
-    
-    var html='';
-    if(stockGains.length>0){
-        html+='<h4 style="margin-top:15px;color:#e94560;">Stocks Realized Gain/Loss</h4>';
-        html+='<table><thead><tr><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
-        stockGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
-            html+='<tr><td>'+esc(r.symbol)+'</td><td>'+fmt(r.proceeds)+'</td><td>'+fmt(r.cost)+'</td><td class="'+(r.gain>=0?'pos-gain':'pos-loss')+'">'+fmt(r.gain)+'</td><td>'+esc(r.currency)+'</td></tr>';
-        });
-        html+='</tbody></table>';
-    }
-    
-    if(fundGains.length>0){
-        html+='<h4 style="margin-top:20px;color:#e94560;">Funds Realized Gain/Loss</h4>';
-        html+='<table><thead><tr><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
-        fundGains.sort(function(a,b){return b.gain-a.gain;}).forEach(function(r){
-            html+='<tr><td>'+esc(r.symbol)+'</td><td>'+fmt(r.proceeds)+'</td><td>'+fmt(r.cost)+'</td><td class="'+(r.gain>=0?'pos-gain':'pos-loss')+'">'+fmt(r.gain)+'</td><td>'+esc(r.currency)+'</td></tr>';
-        });
-        html+='</tbody></table>';
-    }
-    
-    $('gl-table-wrap').innerHTML=html;
-}
 
     function saveTrade(){
         var t={id:'T'+Date.now(),date:$('at-date').value,account:$('at-account').value,action:$('at-action').value,symbol:$('at-symbol').value.toUpperCase(),description:$('at-desc').value,quantity:parseFloat($('at-qty').value)||0,price:parseFloat($('at-price').value)||0,amount:parseFloat($('at-amount').value)||0,commission:parseFloat($('at-comm').value)||0,currency:$('at-currency').value};
