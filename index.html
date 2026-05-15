@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.12">
+    <meta name="version" content="3.17.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -938,7 +938,7 @@ function applyFilters() {
 
     
     // Reset to page 1
-    currentTradePage = 1;
+    tradeCurrentPage = 1;
     renderTradesTable();
 }
     
@@ -2005,9 +2005,122 @@ function renderTransfers() {
      $('transfer-table-wrap').innerHTML=html;
      //document.getElementById('transfer-table-wrap').innerHTML = html;
 }
+
+function renderGainLoss() {
+    const fAcct = $('f-gl-account') ? $('f-gl-account').value.trim() : '';
+    const fYear = $('f-gl-year') ? $('f-gl-year').value.trim() : '';
+    const fStock = $('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : '';
+
+    const sortedTrades = [...allTrades].sort(function(a, b) {
+        return String(a.date || '').localeCompare(String(b.date || ''));
+    });
+
+    var realized = {};
+    var costBasis = {};
+
+    sortedTrades.forEach(function(t) {
+        var symbol = String(t.symbol || '').trim();
+        var currency = String(t.currency || '').trim();
+        var account = String(t.account || '').trim();
+        var key = symbol + '|' + currency + '|' + account;
+
+        if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
+        if (!realized[key]) {
+            realized[key] = {
+                symbol: symbol,
+                currency: currency,
+                account: account,
+                proceeds: 0,
+                cost: 0,
+                gain: 0,
+                type: getAssetType(t)
+            };
+        }
+
+        var q = Math.abs(parseFloat(t.quantity) || 0);
+        var a = Math.abs(parseFloat(t.amount) || 0);
+        var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
+        var act = String(t.action || '').toLowerCase();
+        var txYear = '';
+        try { txYear = new Date(t.date).getFullYear().toString(); } catch(e) {}
+
+        if (act === 'buy') {
+            costBasis[key].qty += q;
+            costBasis[key].totalCost += a + comm;
+            return;
+        }
+
+        if (act === 'sell' && costBasis[key].qty > 0) {
+            var avgCost = costBasis[key].totalCost / costBasis[key].qty;
+            var costOfSold = avgCost * q;
+            var proceeds = a - comm;
+            var gain = proceeds - costOfSold;
+
+            const matchAcct = !fAcct || account === fAcct;
+            const matchYear = !fYear || txYear === fYear;
+            const matchStock = !fStock || symbol.toUpperCase() === fStock;
+
+            if (matchAcct && matchYear && matchStock) {
+                realized[key].proceeds += proceeds;
+                realized[key].cost += costOfSold;
+                realized[key].gain += gain;
+            }
+
+            costBasis[key].qty -= q;
+            costBasis[key].totalCost -= costOfSold;
+        }
+    });
+
+    var glArr = Object.values(realized).filter(function(r) {
+        return Math.abs(r.gain) > 0.001;
+    });
+
+    var stockGains = glArr.filter(function(r) { return r.type === 'Stocks'; });
+    var fundGains = glArr.filter(function(r) { return r.type === 'Funds'; });
+
+    var totalStockGain = stockGains.reduce(function(s, r) {
+        return s + (r.currency === 'USD' ? r.gain * 1.36 : r.gain);
+    }, 0);
+
+    var totalFundGain = fundGains.reduce(function(s, r) {
+        return s + (r.currency === 'USD' ? r.gain * 1.36 : r.gain);
+    }, 0);
+
+    var totalGain = totalStockGain + totalFundGain;
+
+    $('gl-stats').innerHTML =
+        '<div class="stat-card"><div class="val ' + (totalGain >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGain) + '</div><div class="lbl">Total Realized Gain/Loss (est CAD)</div></div>' +
+        '<div class="stat-card"><div class="val ' + (totalStockGain >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalStockGain) + '</div><div class="lbl">Stock Gain/Loss (est CAD)</div></div>' +
+        '<div class="stat-card"><div class="val ' + (totalFundGain >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalFundGain) + '</div><div class="lbl">Funds Gain/Loss (est CAD)</div></div>';
+
+    var html = '';
+
+    if (stockGains.length > 0) {
+        html += '<h4 style="margin-top:15px;color:#e94560;">Stocks Realized Gain/Loss</h4>';
+        html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
+        stockGains.sort(function(a, b) { return b.gain - a.gain; }).forEach(function(r) {
+            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gain >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    if (fundGains.length > 0) {
+        html += '<h4 style="margin-top:20px;color:#e94560;">Funds Realized Gain/Loss</h4>';
+        html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
+        fundGains.sort(function(a, b) { return b.gain - a.gain; }).forEach(function(r) {
+            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gain >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+    }
+
+    if (!html) {
+        html = '<div class="loading">No realized gain/loss records match the selected filters.</div>';
+    }
+
+    $('gl-table-wrap').innerHTML = html;
+}
     
-    
-function renderGainLoss(){
+function renderGainLoss_bkup(){
          const fAcct = $('f-gl-account') ? $('f-gl-account').value.trim() : '';
          const fYear = $('f-gl-year') ? $('f-gl-year').value.trim() : '';
          const fStock = $('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : '';
