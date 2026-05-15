@@ -1223,7 +1223,7 @@ function renderDivStats() {
         '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
 }
 
-    function renderDivTable() {
+function renderDivTable() {
     const container = $('div-table-wrap');
     if (!container) return;
 
@@ -1255,7 +1255,7 @@ function renderDivStats() {
             '<td>' + esc(d.description) + '</td>' +
             '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
             '<td>' + esc(d.currency) + '</td>' +
-            '<td><button class="btn btn-danger" onclick="deleteDiv(' + JSON.stringify(rowId) + ')" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
+            '<td><button class="btn btn-danger" onclick=\'deleteDiv(' + JSON.stringify(rowId) + ')\' style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
             '</tr>';
     });
 
@@ -1267,6 +1267,7 @@ function renderDivStats() {
         renderDivTable();
     });
 }
+    
 function renderDivTable_bkp() {
     const container = $('div-table-wrap');
     if (!container) return;
