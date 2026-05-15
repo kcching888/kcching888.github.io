@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.17.15">
+    <meta name="version" content="3.18.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1143,19 +1143,7 @@ function updateTradeCurrencyDropdown() {
     }
     function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
 
-    function applyDivFilters(){
-        divCurrentPage=1;
-        var from=$('df-from').value||'';
-        var to=$('df-to').value||'';
-        currentFilteredDivs=allDivs.filter(function(d){
-            if(from&&String(d.date||'')<from)return false;
-            if(to&&String(d.date||'')>to)return false;
-            return true;
-        });
-        renderDivTable();
-    }
-
-
+  
 function renderDivTable_bkup() {
     const container = document.getElementById('div-table-wrap');
     if (!container) return;
