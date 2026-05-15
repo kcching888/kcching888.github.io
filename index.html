@@ -1247,17 +1247,18 @@ function renderDivTable() {
     let html = '<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
 
     rows.forEach(function(d) {
-        const rowId = String(d.id || '');
-        html += '<tr>' +
-            '<td>' + fmtDate(d.date) + '</td>' +
-            '<td>' + esc(d.account) + '</td>' +
-            '<td>' + esc(d.symbol) + '</td>' +
-            '<td>' + esc(d.description) + '</td>' +
-            '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
-            '<td>' + esc(d.currency) + '</td>' +
-            '<td><button class="btn btn-danger div-del-btn" data-id="' + esc(rowId) + '" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
-            '</tr>';
-    });
+      const rowId = String(d.id || '');
+      html += `
+        <tr>
+            <td>${fmtDate(d.date)}</td>
+            <td>${esc(d.account)}</td>
+            <td>${esc(d.symbol)}</td>
+            <td>${esc(d.description)}</td>
+            <td class="pos-gain">${fmt(d.amount)}</td>
+            <td>${esc(d.currency)}</td>
+            <td><button class="btn btn-danger div-del-btn" data-id="${esc(rowId)}" style="padding:3px 8px;font-size:0.75em">Del</button></td>
+        </tr>`;
+   });
 
     html += '</tbody></table>';
     container.innerHTML = html;
