@@ -1287,49 +1287,7 @@ function renderDivTable() {
     });
 }
     
-function renderDivTable_bkp() {
-    const container = $('div-table-wrap');
-    if (!container) return;
 
-    const data = currentFilteredDivs || [];
-    const perPageVal = ($('df-perpage') || {}).value || '25';
-    const total = data.length;
-    const perPage = perPageVal === 'all' ? total || 1 : (parseInt(perPageVal, 10) || 25);
-    const totalPages = Math.max(1, Math.ceil((total || 1) / perPage));
-
-    if (divCurrentPage > totalPages) divCurrentPage = totalPages;
-
-    const start = (divCurrentPage - 1) * perPage;
-    const rows = perPageVal === 'all' ? data : data.slice(start, start + perPage);
-
-    if (!rows.length) {
-        container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
-        $('div-pagination').innerHTML = '';
-        return;
-    }
-
-    let html = '<table><thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Description</th><th>Amount</th><th>Currency</th><th></th></tr></thead><tbody>';
-
-    rows.forEach(function(d) {
-        html += '<tr>' +
-            '<td>' + fmtDate(d.date) + '</td>' +
-            '<td>' + esc(d.account) + '</td>' +
-            '<td>' + esc(d.symbol) + '</td>' +
-            '<td>' + esc(d.description) + '</td>' +
-            '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
-            '<td>' + esc(d.currency) + '</td>' +
-            '<td><button class="btn btn-danger" onclick="deleteDiv(\\'' + esc(d.id) + '\\')" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
-            '</tr>';
-    });
-
-    html += '</tbody></table>';
-    container.innerHTML = html;
-
-    renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
-        divCurrentPage = p;
-        renderDivTable();
-    });
-}
     
     function renderDivStats_bkup(){
         var totalCAD=0, totalUSD=0;
