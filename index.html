@@ -1255,13 +1255,19 @@ function renderDivTable() {
             '<td>' + esc(d.description) + '</td>' +
             '<td class="pos-gain">' + fmt(d.amount) + '</td>' +
             '<td>' + esc(d.currency) + '</td>' +
-            '<td><button class="btn btn-danger" onclick=\'deleteDiv(' + JSON.stringify(rowId) + ')\' style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
+            '<td><button class="btn btn-danger div-del-btn" data-id="' + esc(rowId) + '" style="padding:3px 8px;font-size:0.75em">Del</button></td>' +
             '</tr>';
     });
 
     html += '</tbody></table>';
     container.innerHTML = html;
-
+   
+    container.querySelectorAll('.div-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deleteDiv(this.getAttribute('data-id') || '');
+        });
+    });
+    
     renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
         divCurrentPage = p;
         renderDivTable();
