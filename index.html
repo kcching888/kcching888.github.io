@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.18.1">
+    <meta name="version" content="3.18.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -261,6 +261,12 @@
     </div>
 
     <div id="page-dividends" style="display:none">
+        <div class="filter-group">
+            <label><input type="checkbox" id="div-summary-stock" onchange="applyDivFilters()"> Stock Summary</label>
+        </div>
+        <div class="filter-group">
+            <label><input type="checkbox" id="div-summary-year" onchange="applyDivFilters()"> Year Summary</label>
+        </div>
         <div id="div-filters" class="filter-bar">
              <select id="f-div-year"><option value="">All Years</option></select>
              <select id="f-div-stock"><option value="">All Stocks</option></select>
@@ -843,6 +849,16 @@ function applyDivFilters() {
     const from = $('df-from') ? $('df-from').value : '';
     const to = $('df-to') ? $('df-to').value : '';
 
+ 
+    if ($('div-summary-stock') && $('div-summary-year')) {
+        $('div-summary-stock').addEventListener('change', function() {
+            if (this.checked) $('div-summary-year').checked = false;
+        });
+        $('div-summary-year').addEventListener('change', function() {
+            if (this.checked) $('div-summary-stock').checked = false;
+        });
+    }
+    
     currentFilteredDivs = allDivs.filter(function(d) {
         const acct = String(d.account || '').trim();
         const symbol = String(d.symbol || '').trim().toUpperCase();
@@ -864,52 +880,7 @@ function applyDivFilters() {
     renderDivTable();
 }
 
-function applyDivFilters_bkp() {
-    divCurrentPage = 1;
 
-    const fAcct = $('f-div-account') ? $('f-div-account').value.trim() : '';
-    const fStock = $('f-div-stock') ? $('f-div-stock').value.trim().toUpperCase() : '';
-    const fYear = $('f-div-year') ? $('f-div-year').value.trim() : '';
-    const from = $('df-from') ? $('df-from').value : '';
-    const to = $('df-to') ? $('df-to').value : '';
-
-    currentFilteredDivs = allDivs.filter(function(d) {
-        const acct = String(d.account || '').trim();
-        const symbol = String(d.symbol || '').trim().toUpperCase();
-        const dateStr = String(d.date || '');
-        const year = !dateStr ? '' : new Date(dateStr).getFullYear().toString();
-
-        if (fAcct && acct !== fAcct) return false;
-        if (fStock && symbol !== fStock) return false;
-        if (fYear && year !== fYear) return false;
-        if (from && dateStr < from) return false;
-        if (to && dateStr > to) return false;
-
-        return true;
-    });
-
-    renderDivStats();
-    renderDivTable();
-}
-    
-// Triggered when Dividend filters change
-function applyDivFilters_bkup() {
-    const yearVal = $('f-div-year').value;
-    const stockVal = $('f-div-stock').value;
-
- 
-    currentFilteredDivs = allDivs.filter(d => {
-        const matchYear = !yearVal || new Date(d.date).getFullYear().toString() === yearVal;
-        const matchStock = !stockVal || d.symbol === stockVal;
-        return matchYear && matchStock;
-    });
-
-   // Set the flag to true if any filter is selected
-    isFilterActive = (yearVal !== "" || stockVal !== "");
-        
-    divCurrentPage = 1; // Reset to page 1
-    renderDivTable(); // This is the function you provided
-}
 
 // Triggered when Gain/Loss filters change
 function applyGLFilters() {
@@ -1144,40 +1115,7 @@ function updateTradeCurrencyDropdown() {
     function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
 
   
-function renderDivTable_bkup() {
-    const container = document.getElementById('div-table-wrap');
-    if (!container) return;
 
-    // 1. Clear UI
-    container.innerHTML = '';
-
-    // 2. Get Filters
-    const fAcct = ($('f-div-account') ? $('f-div-account').value.trim() : "");
-    const fStock = ($('f-div-stock') ? $('f-div-stock').value.trim().toUpperCase() : "");
-    const fYear = ($('f-div-year') ? $('f-div-year').value.trim() : "");
-
-    // 3. Filter Data
-    let filteredDivs = allDivs.filter(d => {
-        const mAcct = !fAcct || String(d.account).trim() === fAcct;
-        const mStock = !fStock || String(d.symbol).trim().toUpperCase() === fStock;
-        const mYear = !fYear || new Date(d.date).getFullYear().toString() === fYear;
-        return mAcct && mStock && mYear;
-    });
-
-    if (filteredDivs.length === 0) {
-        container.innerHTML = 'No dividends found for these filters.';
-        return;
-    }
-
-    // 4. Render Table
-    let html = '<table class="portfolio-table"><thead><tr><th>Date</th><th>Symbol</th><th>Amount</th><th>Account</th></tr></thead><tbody>';
-    filteredDivs.forEach(d => {
-        html += `<tr><td>${d.date}</td><td>${d.symbol}</td><td>$${fmt(d.amount)}</td><td>${d.account}</td></tr>`;
-    });
-    html += '</tbody></table>';
-    
-    container.innerHTML = html;
-}
     
 function renderDivStats() {
     const data = currentFilteredDivs || [];
@@ -1213,6 +1151,171 @@ function renderDivStats() {
 }
 
 function renderDivTable() {
+    const container = $('div-table-wrap');
+    if (!container) return;
+
+    const data = currentFilteredDivs || [];
+    const isStockSummary = $('div-summary-stock') && $('div-summary-stock').checked;
+    const isYearSummary = $('div-summary-year') && $('div-summary-year').checked;
+
+    if (!data.length) {
+        container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
+        const pag = $('div-pagination');
+        if (pag) pag.innerHTML = '';
+        return;
+    }
+
+    if (isStockSummary && isYearSummary) {
+        container.innerHTML = '<div class="loading">Please select either Stock Summary or Year Summary, not both.</div>';
+        const pag = $('div-pagination');
+        if (pag) pag.innerHTML = '';
+        return;
+    }
+
+    if (isStockSummary) {
+        const grouped = {};
+
+        data.forEach(function(d) {
+            const year = new Date(d.date).getFullYear();
+            const symbol = String(d.symbol || '').trim().toUpperCase();
+            const ccy = String(d.currency || '').trim().toUpperCase();
+            const key = year + '|' + symbol + '|' + ccy;
+
+            if (!grouped[key]) {
+                grouped[key] = {
+                    year: year,
+                    symbol: symbol,
+                    currency: ccy,
+                    total: 0,
+                    count: 0
+                };
+            }
+
+            grouped[key].total += parseFloat(d.amount) || 0;
+            grouped[key].count += 1;
+        });
+
+        const rows = Object.values(grouped).sort(function(a, b) {
+            if (a.year !== b.year) return b.year - a.year;
+            return a.symbol.localeCompare(b.symbol);
+        });
+
+        let html = '<table><thead><tr><th>Year</th><th>Symbol</th><th>Total Dividends</th><th>Currency</th><th>Records</th></tr></thead><tbody>';
+        rows.forEach(function(r) {
+            html += '<tr>' +
+                '<td>' + r.year + '</td>' +
+                '<td>' + esc(r.symbol) + '</td>' +
+                '<td class="pos-gain">' + fmt(r.total) + '</td>' +
+                '<td>' + esc(r.currency) + '</td>' +
+                '<td>' + r.count + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+
+        container.innerHTML = html;
+        $('div-pagination').innerHTML = '';
+        return;
+    }
+
+    if (isYearSummary) {
+        const grouped = {};
+
+        data.forEach(function(d) {
+            const year = new Date(d.date).getFullYear();
+            const symbol = String(d.symbol || '').trim().toUpperCase();
+            const ccy = String(d.currency || '').trim().toUpperCase();
+            const key = symbol + '|' + year + '|' + ccy;
+
+            if (!grouped[key]) {
+                grouped[key] = {
+                    symbol: symbol,
+                    year: year,
+                    currency: ccy,
+                    total: 0,
+                    count: 0
+                };
+            }
+
+            grouped[key].total += parseFloat(d.amount) || 0;
+            grouped[key].count += 1;
+        });
+
+        const rows = Object.values(grouped).sort(function(a, b) {
+            if (a.symbol !== b.symbol) return a.symbol.localeCompare(b.symbol);
+            return b.year - a.year;
+        });
+
+        let html = '<table><thead><tr><th>Symbol</th><th>Year</th><th>Total Dividends</th><th>Currency</th><th>Records</th></tr></thead><tbody>';
+        rows.forEach(function(r) {
+            html += '<tr>' +
+                '<td>' + esc(r.symbol) + '</td>' +
+                '<td>' + r.year + '</td>' +
+                '<td class="pos-gain">' + fmt(r.total) + '</td>' +
+                '<td>' + esc(r.currency) + '</td>' +
+                '<td>' + r.count + '</td>' +
+                '</tr>';
+        });
+        html += '</tbody></table>';
+
+        container.innerHTML = html;
+        $('div-pagination').innerHTML = '';
+        return;
+    }
+
+    const perPageVal = ($('df-perpage') || {}).value || '25';
+    const total = data.length;
+    const perPage = perPageVal === 'all' ? Math.max(total, 1) : (parseInt(perPageVal, 10) || 25);
+    const totalPages = Math.max(1, Math.ceil(Math.max(total, 1) / perPage));
+
+    if (divCurrentPage > totalPages) divCurrentPage = totalPages;
+
+    const start = (divCurrentPage - 1) * perPage;
+    const rows = perPageVal === 'all' ? data : data.slice(start, start + perPage);
+
+    const bodyRows = rows.map(function(d) {
+        const rowId = esc(String(d.id || ''));
+        return `
+            <tr>
+                <td>${fmtDate(d.date)}</td>
+                <td>${esc(d.account)}</td>
+                <td>${esc(d.symbol)}</td>
+                <td>${esc(d.description)}</td>
+                <td class="pos-gain">${fmt(d.amount)}</td>
+                <td>${esc(d.currency)}</td>
+                <td><button class="btn btn-danger div-del-btn" data-id="${rowId}" style="padding:3px 8px;font-size:0.75em">Del</button></td>
+            </tr>`;
+    }).join('');
+
+    container.innerHTML = `
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Symbol</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>${bodyRows}</tbody>
+        </table>`;
+
+    container.querySelectorAll('.div-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            deleteDiv(this.getAttribute('data-id') || '');
+        });
+    });
+
+    renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
+        divCurrentPage = p;
+        renderDivTable();
+    });
+}
+
+    
+function renderDivTable_bkup() {
     const container = $('div-table-wrap');
     if (!container) return;
 
