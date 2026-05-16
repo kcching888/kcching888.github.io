@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.18.3">
+    <meta name="version" content="3.18.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -260,17 +260,22 @@
         </div>
     </div>
 
-    <div id="page-dividends" style="display:none">
-        <div class="filter-group">
-            <label><input type="checkbox" id="div-summary-stock" onchange="applyDivFilters()"> Stock Summary</label>
-        </div>
-        <div class="filter-group">
-            <label><input type="checkbox" id="div-summary-year" onchange="applyDivFilters()"> Year Summary</label>
-        </div>
-        <div id="div-filters" class="filter-bar">
-             <select id="f-div-year"><option value="">All Years</option></select>
-             <select id="f-div-stock"><option value="">All Stocks</option></select>
-        </div>
+  <div id="page-dividends" style="display:none">
+    <div id="div-filters" class="filter-bar">
+         <select id="f-div-year"><option value="">All Years</option></select>
+         <select id="f-div-stock"><option value="">All Stocks</option></select>
+
+         <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#e0e0e0;font-size:0.85em;">
+             <input type="checkbox" id="div-summary-stock" onchange="applyDivFilters()">
+             Stock Summary
+         </label>
+
+         <label style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#e0e0e0;font-size:0.85em;">
+             <input type="checkbox" id="div-summary-year" onchange="applyDivFilters()">
+             Year Summary
+         </label>
+    </div> 
+      
         <div id="div-stats" class="stat-grid"></div>
         <div class="card">
             <div class="filters">
@@ -1116,7 +1121,6 @@ function updateTradeCurrencyDropdown() {
 
   
 
-    
 function renderDivStats() {
     const data = currentFilteredDivs || [];
     let totalCAD = 0;
@@ -1128,28 +1132,20 @@ function renderDivStats() {
         else totalCAD += amt;
     });
 
+    const usdToCadRate = 1.36;
+    const grandTotalCAD = totalCAD + (totalUSD * usdToCadRate);
+
     $('div-stats').innerHTML =
-        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">Total Dividends (CAD)</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">Total Dividends (USD)</div></div>' +
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(grandTotalCAD) + '</div>' +
+            '<div class="lbl">Filtered Total (CAD est)<br>CAD: $' + fmt(totalCAD) + ' | USD: $' + fmt(totalUSD) + '</div>' +
+        '</div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">CAD Dividends</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">USD Dividends</div></div>' +
         '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
 }
 
-  function renderDivStats_bkp() {
-    const data = currentFilteredDivs || [];
-    var totalCAD = 0, totalUSD = 0;
-
-    data.forEach(function(d) {
-        var amt = parseFloat(d.amount) || 0;
-        if ((d.currency || '').toUpperCase() === 'USD') totalUSD += amt;
-        else totalCAD += amt;
-    });
-
-    $('div-stats').innerHTML =
-        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">Total Dividends (CAD)</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">Total Dividends (USD)</div></div>' +
-        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
-}
-
+  
 function renderDivTable() {
     const container = $('div-table-wrap');
     if (!container) return;
