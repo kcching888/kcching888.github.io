@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.18.5">
+    <meta name="version" content="3.18.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -633,6 +633,7 @@ function syncData() {
         
         saveLocal();
         updateFilterOptions();
+        updateFilterDropdowns();
         attachFilterListeners();
         applyFilters();
         updateAccountFilter();
@@ -2513,7 +2514,7 @@ function renderGainLoss() {
         divs.forEach(function(d){ if(!allDivs.some(function(x){return x.date===d.date&&x.symbol===d.symbol&&x.amount===d.amount;})){allDivs.push(d);addedD++;} });
         saveLocal();
         $('up-preview').textContent='Added '+addedT+' trades, '+addedD+' dividends';
-        closeModal('modal-upload'); applyFilters(); updateAccountFilter();
+        closeModal('modal-upload'); updateFilterDropdowns(); updateAccountFilter(); applyFilters();
     }
 
     // Put this in your index.html script section
