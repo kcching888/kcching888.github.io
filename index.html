@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.3">
+    <meta name="version" content="3.19.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1174,10 +1174,10 @@ function updateTradeCurrencyDropdown() {
             'CAD: $' + fmt(cadNet) + ' | USD: $' + fmt(usdNet) +
             '</div>' +
         '</div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(cadDiv) + '</div><div class="lbl">CAD Dividends</div>' +
-        '<div class="val">$' + fmt(cadTax) + '</div><div class="lbl">CAD Tax</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(usdDiv) + '</div><div class="lbl">USD Dividends</div>' +
-        '<div class="val">$' + fmt(usdTax) + '</div><div class="lbl">USD Tax</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(cadDiv) + ' | $' + fmt(cadTax) + '</div><div class="lbl">CAD Dividends | Tax</div>' +
+       // '<div class="val">$' + fmt(cadTax) + '</div><div class="lbl">CAD Tax</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(usdDiv) + ' | $' + fmt(usdTax) + '</div><div class="lbl">USD Dividends | Tax</div>' +
+  //      '<div class="val">$' + fmt(usdTax) + '</div><div class="lbl">USD Tax</div></div>' +
         '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
 }
 
