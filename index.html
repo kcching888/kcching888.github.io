@@ -1884,9 +1884,43 @@ function renderPortfolio() {
                 <td>CAD</td>
             </tr></tbody></table>`;
         } else {
-            html += `<table class="portfolio-table"><thead><tr><th>Balance</th><th class="text-right">Amount</th><th>CCY</th></tr></thead><tbody>`;
+            html += `<table class="portfolio-table">
+                <thead>
+                    <tr>
+                        <th>Balance</th>
+                        <th class="text-right">Amount</th>
+                        <th>CCY</th>
+                        <th class="text-right">CAD Eqv</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+            let totalCadEqv = 0;
+
             grouped[key].forEach(p => {
-                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td><td>${esc(p.currency)}</td></tr>`;
+                var rate = parseFloat(p.exchRate) || 1;
+                var cadEqv = (parseFloat(p.acbTotalCost) || 0) * rate;
+                totalCadEqv += cadEqv;
+
+                html += `<tr>
+                    <td>${esc(p.symbol)}</td>
+                    <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
+                    <td>${esc(p.currency)}</td>
+                    <td class="text-right">$${fmt(cadEqv)}</td>
+                </tr>`;
+            });
+
+            html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
+                <td>TOTAL (CAD)</td>
+                <td></td>
+                <td></td>
+                <td class="text-right">$${fmt(totalCadEqv)}</td>
+            </tr>`;
+
+            html += `</tbody></table>`;
+        }
+
+                
             });
             html += `</tbody></table>`;
         }
