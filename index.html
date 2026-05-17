@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.0">
+    <meta name="version" content="3.19.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -660,7 +660,7 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
-        //renderDivStats();
+
         applyDivFilters();
         renderTransfersTable();
 
@@ -1142,9 +1142,35 @@ function updateTradeCurrencyDropdown() {
     }
     function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
 
-  
+ function renderDivStats() {
+    const data = currentFilteredDivs || [];
 
-function renderDivStats() {
+    let cadDiv = 0, cadTax = 0;
+    let usdDiv = 0, usdTax = 0;
+
+    data.forEach(function(d) {
+        const ccy = String(d.currency || '').toUpperCase();
+        const action = String(d.action || '').trim();
+        const amt = Math.abs(parseFloat(d.amount) || 0);
+
+        if (ccy === 'USD') {
+            if (action === 'Withholding Tax') usdTax += amt;
+            else if (action === 'Dividends') usdDiv += amt;
+        } else {
+            if (action === 'Withholding Tax') cadTax += amt;
+            else if (action === 'Dividends') cadDiv += amt;
+        }
+    });
+
+    $('div-stats').innerHTML =
+        '<div class="stat-card"><div class="val">$' + fmt(cadDiv) + '</div><div class="lbl">CAD Dividends</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(cadTax) + '</div><div class="lbl">CAD Tax</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(usdDiv) + '</div><div class="lbl">USD Dividends</div></div>' +
+        '<div class="stat-card"><div class="val">$' + fmt(usdTax) + '</div><div class="lbl">USD Tax</div></div>' +
+        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
+} 
+
+function renderDivStats_bkup() {
     const data = currentFilteredDivs || [];
     let totalCAD = 0;
     let totalUSD = 0;
