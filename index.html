@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.9">
+    <meta name="version" content="3.19.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2117,6 +2117,60 @@ function renderTransfersTable() {
 }
 
 function renderTransferSummary(data) {
+    const summaryWrap = $('transfer-summary-wrap');
+    if (!summaryWrap) return;
+
+    const accTotals = {};
+    var fmtMoney = function(num) {
+        var val = parseFloat(num) || 0;
+        return '$' + val.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    };
+
+    data.forEach(t => {
+        const acc = t.account || 'Unknown';
+        const cadAmt = parseFloat(t.cadAmount || 0);
+
+        if (!accTotals[acc]) {
+            accTotals[acc] = { deposit: 0, withdrawal: 0, net: 0 };
+        }
+
+        if (cadAmt > 0) {
+            accTotals[acc].deposit += cadAmt;
+        } else {
+            accTotals[acc].withdrawal += Math.abs(cadAmt);
+        }
+
+        accTotals[acc].net = accTotals[acc].deposit - accTotals[acc].withdrawal;
+    });
+
+    let html = '<h3>Account Summary (CAD)</h3>' +
+               '<table class="portfolio-table" style="width: 100%;"><thead><tr>' +
+               '<th>Account</th>' +
+               '<th class="text-right">Total Deposit</th>' +
+               '<th class="text-right">Total Withdrawal</th>' +
+               '<th class="text-right">Net Total</th>' +
+               '</tr></thead><tbody>';
+
+    for (const acc in accTotals) {
+        const netClass = accTotals[acc].net >= 0 ? 'text-success' : 'text-danger';
+
+        html += `<tr>
+            <td>${esc(acc)}</td>
+            <td class="text-right text-success">${fmtMoney(accTotals[acc].deposit)}</td>
+            <td class="text-right text-danger">${fmtMoney(accTotals[acc].withdrawal)}</td>
+            <td class="text-right ${netClass}">${fmtMoney(accTotals[acc].net)}</td>
+        </tr>`;
+    }
+
+    html += '</tbody></table>';
+    summaryWrap.innerHTML = html;
+}
+
+
+function renderTransferSummary_bkup(data) {
     const summaryWrap = $('transfer-summary-wrap');
     if (!summaryWrap) return;
 
