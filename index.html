@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.18.8">
+    <meta name="version" content="3.19.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -608,6 +608,10 @@
     function saveSettings(){
         GAS_URL = $('set-url').value.trim();
         localStorage.setItem('ibkr_gas_url', GAS_URL);
+
+        SHEET_URL = $('set-sheet-url') ? $('set-sheet-url').value.trim() : '';
+        localStorage.setItem('ibkr_sheet_url', SHEET_URL);
+        
         var checkbox = $('set-autosync');
         var AUTO_SYNC = checkbox ? checkbox.checked : false;
         var apiKey = $('set-apikey').value.trim();
