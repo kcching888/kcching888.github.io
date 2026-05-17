@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.6">
+    <meta name="version" content="3.19.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -307,6 +307,8 @@
 
     <div id="page-transfers" style="display:none;">
         <div class="filter-bar">
+             <select id="ft-account" onchange="renderTransfersTable()">
+        <option value="">All Accounts</option>
         <select id="ft-currency" onchange="renderTransfersTable()">
             <option value="">All CCY</option>
         </select>
@@ -2066,29 +2068,27 @@ function renderPortfolio_bkup() {
 }
     
 
-
-
 function renderTransfersTable() {
+    const fAcct = ($('ft-account') || {}).value || '';
     const fCurr = ($('ft-currency') || {}).value || '';
     const fYear = ($('ft-year') || {}).value || '';
-    
-    // 1. DYNAMICALLY POPULATE FILTERS (First time or on data change)
+
     updateTransferFilterOptions();
 
-        var fmtMoney = function(num) {
-            var val = parseFloat(num) || 0;
-            return '$' + val.toLocaleString(undefined, {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            });
-        };
+    var fmtMoney = function(num) {
+        var val = parseFloat(num) || 0;
+        return '$' + val.toLocaleString(undefined, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    };
 
-    // 2. FILTER DATA
     const filteredTransfers = allTransfers.filter(t => {
         const tYear = new Date(t.date).getFullYear().toString();
+        const matchesAcct = !fAcct || String(t.account || '') === fAcct;
         const matchesCurr = !fCurr || t.currency === fCurr;
         const matchesYear = !fYear || tYear === fYear;
-        return matchesCurr && matchesYear;
+        return matchesAcct && matchesCurr && matchesYear;
     });
 
     // 3. CALCULATE ACCOUNT SUMMARIES (CAD)
@@ -2158,6 +2158,52 @@ function renderTransferSummary(data) {
 }
 
 function updateTransferFilterOptions() {
+    const acctSelect = $('ft-account');
+    const currSelect = $('ft-currency');
+    const yearSelect = $('ft-year');
+
+    if (!acctSelect || !currSelect || !yearSelect) return;
+
+    const currentAcct = acctSelect.value;
+    const currentCurr = currSelect.value;
+    const currentYear = yearSelect.value;
+
+    const accounts = [...new Set(allTransfers.map(t => t.account))].filter(Boolean).sort();
+    const currencies = [...new Set(allTransfers.map(t => t.currency))].filter(Boolean).sort();
+    const years = [...new Set(allTransfers.map(t => new Date(t.date).getFullYear()))]
+        .filter(Boolean)
+        .sort((a, b) => b - a);
+
+    acctSelect.innerHTML = '<option value="">All Accounts</option>';
+    currSelect.innerHTML = '<option value="">All CCY</option>';
+    yearSelect.innerHTML = '<option value="">All Years</option>';
+
+    accounts.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = a;
+        acctSelect.appendChild(opt);
+    });
+
+    currencies.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = c;
+        currSelect.appendChild(opt);
+    });
+
+    years.forEach(y => {
+        const opt = document.createElement('option');
+        opt.value = opt.textContent = y;
+        yearSelect.appendChild(opt);
+    });
+
+    acctSelect.value = currentAcct;
+    currSelect.value = currentCurr;
+    yearSelect.value = currentYear;
+}
+
+
+
+function updateTransferFilterOptions_bkup() {
     const currSelect = $('ft-currency');
     const yearSelect = $('ft-year');
     if (!currSelect || !yearSelect || currSelect.options.length > 1) return;
