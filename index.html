@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.18.6">
+    <meta name="version" content="3.18.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -488,6 +488,7 @@
 
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
+    var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
     var currentFilteredTrades = [];
@@ -581,12 +582,24 @@
 
     function openSettings(){
         $('set-url').value = GAS_URL;
+        if ($('set-sheet-url')) $('set-sheet-url').value = SHEET_URL;
         $('set-apikey').value = localStorage.getItem('ibkr_price_api_key') || '';
         openModal('modal-settings');
         var checkbox = $('set-autosync');
         if(checkbox) checkbox.checked = localStorage.getItem('ibkr_autosync') === 'true';
     }
 
+   function openSheetShortcut(e){
+        if (e) e.preventDefault();
+
+        if (!SHEET_URL) {
+            alert('No Google Sheet URL configured in Settings.');
+            return;
+        }
+
+        window.open(SHEET_URL, '_blank');
+    }
+    
     function saveSettings(){
         GAS_URL = $('set-url').value.trim();
         localStorage.setItem('ibkr_gas_url', GAS_URL);
