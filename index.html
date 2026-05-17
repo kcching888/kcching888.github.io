@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.1">
+    <meta name="version" content="3.19.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1162,13 +1162,24 @@ function updateTradeCurrencyDropdown() {
         }
     });
 
+    const cadNet = cadDiv - cadTax;
+    const usdNet = usdDiv - usdTax;
+    const usdToCadRate = 1.36;
+    const grandTotalCad = cadNet + (usdNet * usdToCadRate);
+
     $('div-stats').innerHTML =
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(grandTotalCad) + '</div>' +
+            '<div class="lbl">Grand Total (CAD est)<br>' +
+            'CAD: $' + fmt(cadNet) + ' | USD: $' + fmt(usdNet) +
+            '</div>' +
+        '</div>' +
         '<div class="stat-card"><div class="val">$' + fmt(cadDiv) + '</div><div class="lbl">CAD Dividends</div></div>' +
         '<div class="stat-card"><div class="val">$' + fmt(cadTax) + '</div><div class="lbl">CAD Tax</div></div>' +
         '<div class="stat-card"><div class="val">$' + fmt(usdDiv) + '</div><div class="lbl">USD Dividends</div></div>' +
         '<div class="stat-card"><div class="val">$' + fmt(usdTax) + '</div><div class="lbl">USD Tax</div></div>' +
         '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
-} 
+}
 
 function renderDivStats_bkup() {
     const data = currentFilteredDivs || [];
