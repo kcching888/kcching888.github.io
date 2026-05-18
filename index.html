@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.1.1">
+    <meta name="version" content="4.1.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -106,34 +106,58 @@
             box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
         }
         /* Layout Container */
-.portfolio-section {
-    width: 100%;
-}
+    .portfolio-section {
+        width: 100%;
+    }
 
 /* Base table style for both */
-.portfolio-table {
-    width: 100%;
-    table-layout: fixed;
-    border-collapse: collapse;
-    margin-top: 10px;
-}
+    .portfolio-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        margin-top: 10px;
+    }
 
 /* Specific constraint for Funds */
-.funds-container {
-    width: 50%; /* Only takes up half the screen */
-    margin-top: 30px;
-}
+    .funds-container {
+        width: 50%; /* Only takes up half the screen */
+        margin-top: 30px;
+    }
 
 
-.text-right { text-align: right !important; }
-.text-success { color: #28a745; font-weight: bold; }
-.text-danger { color: #dc3545; font-weight: bold; }
+    .text-right { text-align: right !important; }
+    .text-success { color: #28a745; font-weight: bold; }
+    .text-danger { color: #dc3545; font-weight: bold; }
 
 /* Alignment helper */
-.text-right {
-    text-align: right !important;
-    font-family: 'Courier New', monospace; /* Optional: makes numbers line up better */
-}
+    .text-right {
+        text-align: right !important;
+        font-family: 'Courier New', monospace; /* Optional: makes numbers line up better */
+    }
+    .perf-table-scroll {
+        max-height: 420px;
+        overflow-y: auto;
+        overflow-x: auto;
+        border: 1px solid #2a2f45;
+        border-radius: 8px;
+        margin-top: 12px;
+    }
+
+    .perf-table-scroll table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .perf-table-scroll thead th {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        background: #14182b;
+    }
+
+    .perf-table-scroll tbody tr:nth-child(even) {
+        background: rgba(255,255,255,0.02);
+    }
     </style>
 </head>
 <body>
@@ -540,6 +564,7 @@
 
     var perfAccount = 'ALL';
     var perfBenchmark = 'NONE';
+    var perfTableHeight = 420;
 
     //const APP_VERSION = "3.84";
 
@@ -1711,7 +1736,9 @@ function renderPerfStats() {
     const container = $('perf-stats');
     if (!container) return;
 
-    const rows = getRangeFilteredRows(getPortfolioHistoryRows('ALL'));
+    const fullRows = getPortfolioHistoryRows('ALL');
+    const rows = getRangeFilteredRows(fullRows);
+
     if (!rows.length) {
         container.innerHTML = '<div class="loading">No performance history available.</div>';
         return;
@@ -1719,50 +1746,55 @@ function renderPerfStats() {
 
     const first = rows[0];
     const last = rows[rows.length - 1];
+    const endDate = last.date;
 
     const latestValue = parseFloat(last.totalValue || 0) || 0;
-    const netContributions = rows.reduce(function(sum, r) {
+
+    // Cumulative contributions from inception up to selected end date
+    const cumulativeRowsToEnd = fullRows.filter(function(r) {
+        return String(r.date) <= String(endDate);
+    });
+
+    const netContributions = cumulativeRowsToEnd.reduce(function(sum, r) {
         return sum + (parseFloat(r.netCashFlow || 0) || 0);
     }, 0);
 
-    const totalDividends = rows.reduce(function(sum, r) {
+    // Income can also be cumulative to end date
+    const totalDividends = cumulativeRowsToEnd.reduce(function(sum, r) {
         return sum + (parseFloat(r.dividends || 0) || 0);
     }, 0);
 
-    const totalTax = rows.reduce(function(sum, r) {
+    const totalTax = cumulativeRowsToEnd.reduce(function(sum, r) {
         return sum + (parseFloat(r.tax || 0) || 0);
     }, 0);
 
-    const totalFees = rows.reduce(function(sum, r) {
+    const totalFees = cumulativeRowsToEnd.reduce(function(sum, r) {
         return sum + (parseFloat(r.fees || 0) || 0);
     }, 0);
 
     const totalGain = latestValue - netContributions;
 
-    const baseCapital = Math.abs(netContributions) > 0.0001
-        ? netContributions
-        : (parseFloat(first.totalValue || 0) || 0);
-
-    const simpleReturn = baseCapital !== 0 ? (totalGain / baseCapital) : 0;
+    const simpleReturn = Math.abs(netContributions) > 0.0001
+        ? (totalGain / netContributions)
+        : 0;
 
     const startDate = first.date;
-    const endDate = last.date;
-    const cagr = annualizeReturn(simpleReturn, startDate, endDate);
+    const cagr = annualizeReturn(simpleReturn, fullRows[0].date, endDate);
 
     const twr = computeTWR(rows);
     const twrAnnualized = annualizeReturn(twr, startDate, endDate);
 
     const benchmarkLabelMap = {
-    NONE: 'No Benchmark',
-    SPY: 'SPY',
-    QQQ: 'QQQ',
-    XEQT: 'XEQT',
-    XAW: 'XAW',
-    CUSTOM: 'Custom (Later)'
-};
+        NONE: 'No Benchmark',
+        SPY: 'SPY',
+        QQQ: 'QQQ',
+        XEQT: 'XEQT',
+        XAW: 'XAW',
+        CUSTOM: 'Custom (Later)'
+    };
 
-const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark;
-    
+    const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark;
+
     container.innerHTML =
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(latestValue) + '</div>' +
@@ -1802,12 +1834,12 @@ const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark;
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(totalDividends - totalTax - totalFees) + '</div>' +
             '<div class="lbl">Net Income After Tax/Fees</div>' +
-        '</div>';
+        '</div>' +
 
         '<div class="stat-card">' +
             '<div class="val">' + esc(benchmarkLabel) + '</div>' +
             '<div class="lbl">Selected Benchmark</div>' +
-        '</div>'
+        '</div>';
 }
 
 function computeEquityDrawdownSeries(historyRows) {
@@ -1921,6 +1953,7 @@ function renderEquityDrawdown() {
         '</div>';
 
     if (equityTableVisible) {
+        html += '<div class="perf-table-scroll" style="max-height:' + perfTableHeight + 'px;">';
         html += '<table class="portfolio-table"><thead><tr>' +
             '<th>Date</th>' +
             '<th class="text-right">Equity</th>' +
@@ -1942,6 +1975,7 @@ function renderEquityDrawdown() {
         });
 
         html += '</tbody></table>';
+        html += '</div>';
     }
 
     wrap.innerHTML = html;
