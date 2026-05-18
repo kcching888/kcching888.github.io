@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.13">
+    <meta name="version" content="4.0.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -164,6 +164,7 @@
 <div class="content">
     
     <div id="page-portfolio">
+        <div id="perf-stats" class="stat-grid"></div>
         <div id="port-stats" class="stat-grid"></div>
         <div class="card">
             <div id="port-table-wrap"></div>
@@ -534,6 +535,7 @@
     function saveLocal(){
         localStorage.setItem('ibkr_trades', JSON.stringify(allTrades));
         localStorage.setItem('ibkr_divs', JSON.stringify(allDivs));
+        localStorage.setItem('ibkr_history', JSON.stringify(allHistory));
     }
 
     function getAssetType(t) {
@@ -566,7 +568,7 @@
     });
     console.log("tab: ", tab);
 
-    if (tab === 'portfolio') renderPortfolio();
+    if (tab === 'portfolio') {renderPortfolio(); renderPerfStats();}
     if (tab === 'gainloss') renderGainLoss();
     if (tab === 'dividends') applyDivFilters();
     if (tab === 'transfers') renderTransfersTable();
@@ -642,6 +644,7 @@ function syncData() {
         allTrades = cloudData.trades || [];
         allDivs = cloudData.dividends || [];
         allTransfers = cloudData.transfers || [];
+        allHistory = cloudData.history || []; // [{ date, account, totalValue, netCashFlow, dividends, tax, fees, ... }]
         
         saveLocal();
         updateFilterOptions();
@@ -650,6 +653,7 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
+        renderPerfStats();
 
         applyDivFilters();
         renderTransfersTable();
@@ -1503,49 +1507,6 @@ async function updateAllPrices() {
 }
     
 
-// !!!!Fetch stock prices from API - twelvedata = OBSOLETE!!!!!
-function fetchStockPrices12(symbols, callback) {
-    if (!symbols || symbols.length === 0) {
-        if (callback) callback({});
-        return;
-    }
-    
-    var symbolStr = symbols.join(',');
-    var apiKey = localStorage.getItem('ibkr_price_api_key') || '';
-    
-    if (!apiKey) {
-        console.warn('No API key configured.');
-        if (callback) callback({});
-        return;
-    }
-    
-    var url = 'https://api.twelvedata.com/price?symbol=' + symbolStr + '&apikey=' + apiKey;
-    
-    fetch(url)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            var prices = {};
-            if (data.price) {
-                prices[symbols[0]] = parseFloat(data.price);
-            } else if (typeof data === 'object') {
-                Object.keys(data).forEach(function(sym) {
-                    if (data[sym] && data[sym].price) {
-                        prices[sym] = parseFloat(data[sym].price);
-                    }
-                });
-            }
-            Object.assign(priceCache, prices);
-            lastPriceUpdate = new Date();
-            localStorage.setItem('ibkr_price_cache', JSON.stringify(priceCache));
-            localStorage.setItem('ibkr_price_timestamp', lastPriceUpdate.toISOString());
-            if (callback) callback(prices);
-        })
-        .catch(function(err) {
-            console.error('Price fetch error:', err);
-            if (callback) callback({});
-        });
-}
-
 // A wrapper to prevent spamming the API (1-minute cooldown)
 let lastPriceFetch = 0;
 
@@ -1562,6 +1523,123 @@ async function handlePriceRefresh() {
     alert("Prices updated successfully.");
 }
 
+function renderPerfStats() {
+    const container = $('perf-stats');
+    if (!container) return;
+
+    const history = Array.isArray(allHistory) ? allHistory.slice() : [];
+    if (!history.length) {
+        container.innerHTML = '<div class="loading">No performance history available.</div>';
+        return;
+    }
+
+    // 1. Aggregate by date across all accounts
+    const byDate = {};
+    history.forEach(function(r) {
+        const dt = String(r.date || '').slice(0, 10);
+        if (!dt) return;
+
+        if (!byDate[dt]) {
+            byDate[dt] = {
+                date: dt,
+                totalValue: 0,
+                netCashFlow: 0,
+                dividends: 0,
+                tax: 0,
+                fees: 0
+            };
+        }
+
+        byDate[dt].totalValue += parseFloat(r.totalValue || 0) || 0;
+        byDate[dt].netCashFlow += parseFloat(r.netCashFlow || 0) || 0;
+        byDate[dt].dividends += parseFloat(r.dividends || 0) || 0;
+        byDate[dt].tax += parseFloat(r.tax || 0) || 0;
+        byDate[dt].fees += parseFloat(r.fees || 0) || 0;
+    });
+
+    const rows = Object.values(byDate).sort(function(a, b) {
+        return String(a.date).localeCompare(String(b.date));
+    });
+
+    if (!rows.length) {
+        container.innerHTML = '<div class="loading">No performance history available.</div>';
+        return;
+    }
+
+    // 2. Core values
+    const first = rows[0];
+    const last = rows[rows.length - 1];
+
+    const latestValue = parseFloat(last.totalValue || 0) || 0;
+    const netContributions = rows.reduce(function(sum, r) {
+        return sum + (parseFloat(r.netCashFlow || 0) || 0);
+    }, 0);
+
+    const totalDividends = rows.reduce(function(sum, r) {
+        return sum + (parseFloat(r.dividends || 0) || 0);
+    }, 0);
+
+    const totalTax = rows.reduce(function(sum, r) {
+        return sum + (parseFloat(r.tax || 0) || 0);
+    }, 0);
+
+    const totalFees = rows.reduce(function(sum, r) {
+        return sum + (parseFloat(r.fees || 0) || 0);
+    }, 0);
+
+    // Gain = ending value - net contributions
+    const totalGain = latestValue - netContributions;
+
+    // 3. Simple return
+    // Base capital approximated as net contributions, fallback to first total value if needed
+    const baseCapital = Math.abs(netContributions) > 0.0001
+        ? netContributions
+        : (parseFloat(first.totalValue || 0) || 0);
+
+    const simpleReturn = baseCapital !== 0 ? (totalGain / baseCapital) : 0;
+
+    // 4. CAGR
+    const startDate = new Date(first.date);
+    const endDate = new Date(last.date);
+    const years = Math.max((endDate - startDate) / (1000 * 60 * 60 * 24 * 365.25), 0);
+
+    let cagr = 0;
+    if (years > 0 && baseCapital > 0 && latestValue > 0) {
+        cagr = Math.pow(latestValue / baseCapital, 1 / years) - 1;
+    }
+
+    // 5. Render
+    container.innerHTML =
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(latestValue) + '</div>' +
+            '<div class="lbl">Market Value</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(netContributions) + '</div>' +
+            '<div class="lbl">Net Contributions</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val ' + (totalGain >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGain) + '</div>' +
+            '<div class="lbl">Total Gain / Loss</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val ' + (simpleReturn >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(simpleReturn * 100) + '%</div>' +
+            '<div class="lbl">Simple Return</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val ' + (cagr >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(cagr * 100) + '%</div>' +
+            '<div class="lbl">CAGR</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(totalDividends - totalTax - totalFees) + '</div>' +
+            '<div class="lbl">Net Income After Tax/Fees</div>' +
+        '</div>';
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
