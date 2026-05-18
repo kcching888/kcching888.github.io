@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.0.0">
+    <meta name="version" content="4.0.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -500,6 +500,7 @@
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
+    var allHistory = JSON.parse(localStorage.getItem('ibkr_history') || '[]');
     var currentFilteredTrades = [];
     var currentFilteredDivs = [];
     let isFilterActive = false; // This helps the UI know when to override the full list
