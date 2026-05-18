@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.1.3">
+    <meta name="version" content="4.2.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3129,6 +3129,345 @@ window.addEventListener('load', function() {
     updateAllPrices();
 });
 
+const TxType = Object.freeze({
+  BUY: 'BUY',
+  SELL: 'SELL',
+  DIVIDEND: 'DIVIDEND',
+  DEPOSIT: 'DEPOSIT',
+  WITHDRAWAL: 'WITHDRAWAL',
+  TRANSFER_IN: 'TRANSFER_IN',
+  TRANSFER_OUT: 'TRANSFER_OUT',
+  FEE: 'FEE',
+  INTEREST: 'INTEREST',
+  TAX: 'TAX'
+});
+
+function num(v, d = 0) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : d;
+}
+
+function round2(v) {
+  return Math.round((num(v) + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeDate(v) {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v).slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
+function classifyTradeAction(action) {
+  const a = String(action || '').trim().toLowerCase();
+  if (a.includes('buy')) return TxType.BUY;
+  if (a.includes('sell')) return TxType.SELL;
+  return null;
+}
+
+function classifyTransferAction(action, amount) {
+  const a = String(action || '').trim().toLowerCase();
+  const amt = num(amount, 0);
+
+  if (a.includes('deposit')) return TxType.DEPOSIT;
+  if (a.includes('withdraw')) return TxType.WITHDRAWAL;
+  if (a.includes('transfer')) return amt >= 0 ? TxType.TRANSFER_IN : TxType.TRANSFER_OUT;
+
+  return amt >= 0 ? TxType.TRANSFER_IN : TxType.TRANSFER_OUT;
+}
+
+function makeEmptyLedger(baseCurrency = 'CAD') {
+  return {
+    baseCurrency,
+    positions: {},
+    totals: {
+      realizedGain: 0,
+      unrealizedGain: 0,
+      dividends: 0,
+      fees: 0,
+      deposits: 0,
+      withdrawals: 0,
+      transfersIn: 0,
+      transfersOut: 0,
+      externalFlows: 0,
+      netContributions: 0,
+      totalReturn: 0,
+      priceReturn: 0,
+      incomeReturn: 0
+    },
+    realizedEvents: []
+  };
+}
+
+function ensureLedgerPosition(ledger, trade) {
+  const key = [
+    String(trade.symbol || '').trim().toUpperCase(),
+    String(trade.currency || '').trim().toUpperCase(),
+    String(trade.account || '').trim()
+  ].join('|');
+
+  if (!ledger.positions[key]) {
+    ledger.positions[key] = {
+      key,
+      symbol: String(trade.symbol || '').trim().toUpperCase(),
+      currency: String(trade.currency || '').trim().toUpperCase(),
+      account: String(trade.account || '').trim(),
+      exchRate: num(trade.exchRate, 1),
+      qty: 0,
+      fifoLots: [],
+      realizedGain: 0,
+      dividends: 0,
+      fees: 0,
+      marketPrice: 0,
+      marketValue: 0,
+      fifoBasis: 0,
+      unrealizedGain: 0
+    };
+  }
+  return ledger.positions[key];
+}
+
+function normalizeTradeRecord(t) {
+  const type = classifyTradeAction(t.action);
+  const quantity = Math.abs(num(t.quantity, 0));
+  const price = num(t.price, 0);
+  const commission = Math.abs(num(t.commission || t.comm, 0));
+  const amount = Math.abs(num(t.amount, round2(quantity * price)));
+
+  return {
+    id: String(t.id || [t.date, t.account, t.symbol, t.action, t.quantity, t.price].join('|')),
+    date: normalizeDate(t.date),
+    account: String(t.account || '').trim(),
+    symbol: String(t.symbol || '').trim().toUpperCase(),
+    currency: String(t.currency || '').trim().toUpperCase(),
+    exchRate: num(t.exchRate, 1),
+    action: String(t.action || '').trim(),
+    type,
+    quantity,
+    price,
+    amount,
+    commission
+  };
+}
+
+function normalizeDividendRecord(d) {
+  const gross = num(d.amount, 0);
+  const cadAmount = num(d.cadAmount, gross * num(d.exchRate, 1));
+
+  return {
+    id: String(d.id || [d.date, d.account, d.symbol, 'DIVIDEND', d.amount].join('|')),
+    date: normalizeDate(d.date),
+    account: String(d.account || '').trim(),
+    symbol: String(d.symbol || '').trim().toUpperCase(),
+    currency: String(d.currency || '').trim().toUpperCase(),
+    exchRate: num(d.exchRate, 1),
+    amount: gross,
+    cadAmount
+  };
+}
+
+function normalizeTransferRecord(t) {
+  const amount = num(t.amount, 0);
+  const cadAmount = num(t.cadAmount, amount * num(t.exchRate, 1));
+
+  return {
+    id: String(t.id || [t.date, t.account, t.action, t.amount].join('|')),
+    date: normalizeDate(t.date),
+    account: String(t.account || '').trim(),
+    currency: String(t.currency || '').trim().toUpperCase(),
+    exchRate: num(t.exchRate, 1),
+    action: String(t.action || '').trim(),
+    type: classifyTransferAction(t.action, amount),
+    amount,
+    cadAmount
+  };
+}
+
+function sortByDateThenId(arr) {
+  return [...arr].sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    return String(a.id).localeCompare(String(b.id));
+  });
+}
+
+function buyIntoLedger(ledger, tx) {
+  const pos = ensureLedgerPosition(ledger, tx);
+  const lotCost = round2(tx.amount + tx.commission);
+  const unitCost = tx.quantity ? round2(lotCost / tx.quantity) : 0;
+
+  pos.fifoLots.push({
+    lotId: tx.id,
+    date: tx.date,
+    quantity: tx.quantity,
+    remainingQty: tx.quantity,
+    unitCost,
+    totalCost: lotCost
+  });
+
+  pos.qty = round2(pos.qty + tx.quantity);
+  pos.fees = round2(pos.fees + tx.commission);
+  pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
+}
+
+function sellFromLedgerFIFO(ledger, tx) {
+  const pos = ensureLedgerPosition(ledger, tx);
+  let remaining = tx.quantity;
+  let relievedCost = 0;
+  const matches = [];
+
+  for (const lot of pos.fifoLots) {
+    if (remaining <= 0) break;
+    if (lot.remainingQty <= 0) continue;
+
+    const used = Math.min(lot.remainingQty, remaining);
+    const costPart = round2(used * lot.unitCost);
+
+    matches.push({
+      lotId: lot.lotId,
+      openDate: lot.date,
+      sellDate: tx.date,
+      quantity: used,
+      unitCost: lot.unitCost,
+      costAmount: costPart
+    });
+
+    lot.remainingQty = round2(lot.remainingQty - used);
+    relievedCost = round2(relievedCost + costPart);
+    remaining = round2(remaining - used);
+  }
+
+  if (remaining > 0) {
+    throw new Error('Not enough quantity to sell for ' + tx.symbol + ' in ' + tx.account);
+  }
+
+  const proceeds = round2(tx.amount - tx.commission);
+  const realizedGain = round2(proceeds - relievedCost);
+
+  pos.qty = round2(pos.qty - tx.quantity);
+  pos.realizedGain = round2(pos.realizedGain + realizedGain);
+  pos.fees = round2(pos.fees + tx.commission);
+  pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
+
+  ledger.totals.realizedGain = round2(ledger.totals.realizedGain + realizedGain);
+  ledger.realizedEvents.push({
+    symbol: pos.symbol,
+    account: pos.account,
+    currency: pos.currency,
+    date: tx.date,
+    quantity: tx.quantity,
+    proceeds,
+    cost: relievedCost,
+    gain: realizedGain,
+    exchRate: pos.exchRate,
+    gainCAD: round2(realizedGain * num(pos.exchRate, 1)),
+    matches
+  });
+}
+
+function applyTradeToLedger(ledger, trade) {
+  if (trade.type === TxType.BUY) return buyIntoLedger(ledger, trade);
+  if (trade.type === TxType.SELL) return sellFromLedgerFIFO(ledger, trade);
+}
+
+function applyDividendToLedger(ledger, div) {
+  const key = [div.symbol, div.currency, div.account].join('|');
+  if (ledger.positions[key]) {
+    ledger.positions[key].dividends = round2((ledger.positions[key].dividends || 0) + div.amount);
+  }
+  ledger.totals.dividends = round2(ledger.totals.dividends + div.amount);
+}
+
+function applyTransferToLedger(ledger, tx) {
+  if (tx.type === TxType.DEPOSIT) {
+    ledger.totals.deposits = round2(ledger.totals.deposits + tx.cadAmount);
+    ledger.totals.externalFlows = round2(ledger.totals.externalFlows + tx.cadAmount);
+  } else if (tx.type === TxType.WITHDRAWAL) {
+    ledger.totals.withdrawals = round2(ledger.totals.withdrawals + Math.abs(tx.cadAmount));
+    ledger.totals.externalFlows = round2(ledger.totals.externalFlows - Math.abs(tx.cadAmount));
+  } else if (tx.type === TxType.TRANSFER_IN) {
+    ledger.totals.transfersIn = round2(ledger.totals.transfersIn + tx.cadAmount);
+  } else if (tx.type === TxType.TRANSFER_OUT) {
+    ledger.totals.transfersOut = round2(ledger.totals.transfersOut + Math.abs(tx.cadAmount));
+  }
+
+  ledger.totals.netContributions = round2(ledger.totals.deposits - ledger.totals.withdrawals);
+}
+
+function updateLedgerMarketValues(ledger, livePrices) {
+  Object.keys(ledger.positions).forEach(key => {
+    const pos = ledger.positions[key];
+    const px = num((livePrices[pos.symbol] || {}).price, 0);
+    const fifoBasis = round2(pos.fifoLots.reduce((s, l) => s + (num(l.remainingQty, 0) * num(l.unitCost, 0)), 0));
+    const mv = round2(pos.qty * px);
+    const ug = round2(mv - fifoBasis);
+
+    pos.marketPrice = px;
+    pos.marketValue = mv;
+    pos.fifoBasis = fifoBasis;
+    pos.unrealizedGain = ug;
+
+    ledger.totals.unrealizedGain = round2(ledger.totals.unrealizedGain + ug * num(pos.exchRate, 1));
+  });
+
+  ledger.totals.priceReturn = round2(ledger.totals.realizedGain + ledger.totals.unrealizedGain);
+  ledger.totals.incomeReturn = round2(ledger.totals.dividends);
+  ledger.totals.totalReturn = round2(
+    ledger.totals.priceReturn +
+    ledger.totals.incomeReturn -
+    ledger.totals.fees
+  );
+}
+
+function buildLedgerFromCurrentAppData(opts = {}) {
+  const ledger = makeEmptyLedger(opts.baseCurrency || 'CAD');
+  const livePrices = opts.livePrices || window.currentPrices || {};
+
+  const trades = sortByDateThenId((window.allTrades || []).map(normalizeTradeRecord).filter(t => t.type));
+  const divs = sortByDateThenId((window.allDivs || []).map(normalizeDividendRecord));
+  const transfers = sortByDateThenId((window.allTransfers || []).map(normalizeTransferRecord));
+
+  trades.forEach(t => applyTradeToLedger(ledger, t));
+  divs.forEach(d => applyDividendToLedger(ledger, d));
+  transfers.forEach(t => applyTransferToLedger(ledger, t));
+
+  updateLedgerMarketValues(ledger, livePrices);
+
+  return ledger;
+}
+
+function getRealizedGainRowsFromLedger(ledger, filters = {}) {
+  const acct = String(filters.account || '').trim();
+  const year = String(filters.year || '').trim();
+  const stock = String(filters.stock || '').trim().toUpperCase();
+
+  return ledger.realizedEvents.filter(r => {
+    const txYear = r.date ? String(r.date).slice(0, 4) : '';
+    return (!acct || r.account === acct) &&
+           (!year || txYear === year) &&
+           (!stock || r.symbol === stock);
+  });
+}
+
+function getPositionRowsFromLedger(ledger, filters = {}) {
+  const acct = String(filters.account || '').trim();
+  const stock = String(filters.stock || '').trim().toUpperCase();
+
+  return Object.values(ledger.positions).filter(p => {
+    return (!acct || p.account === acct) &&
+           (!stock || p.symbol === stock) &&
+           Math.abs(num(p.qty, 0)) > 0.0001;
+  });
+}
+
+const ledger = buildLedgerFromCurrentAppData({
+  baseCurrency: 'CAD',
+  livePrices: window.currentPrices || {}
+});
+
+console.log('ledger totals', ledger.totals);
+console.log('positions', getPositionRowsFromLedger(ledger));
+console.log('realized rows', getRealizedGainRowsFromLedger(ledger));
+    
 syncVersion();
 </script>
 </body>
