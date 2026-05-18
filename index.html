@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.12">
+    <meta name="version" content="3.19.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -572,20 +572,7 @@
     if (tab === 'transfers') renderTransfersTable();
 }
     
-    function showTab_bkp(tab){
-        ['transactions','portfolio','gainloss','dividends','transfers'].forEach(function(t){
-            $('page-'+t).style.display = t===tab?'':'none';
-            $('tab-'+t).classList.toggle('active',t===tab);
-        });
-        console.log("tab: ", tab);
-        
-        if(tab==='portfolio') renderPortfolio();
-        if(tab==='gainloss') renderGainLoss();
-        if(tab==='dividends') { applyDivFilters();}
-        if(tab === 'transfers') renderTransfersTable();
-    }
-
-    function openModal(id){$(id).classList.add('show');}
+     function openModal(id){$(id).classList.add('show');}
     function closeModal(id){$(id).classList.remove('show');}
 
     function openSettings(){
@@ -1575,165 +1562,6 @@ async function handlePriceRefresh() {
     alert("Prices updated successfully.");
 }
 
-function renderPortfolio_new() {
-    const container = document.getElementById('port-table-wrap');
-    if (!container) return;
-    
-    // 1. Initial UI Clear
-    container.innerHTML = '<div class="loading">Updating view...</div>';
-    
-    var positions = {};
-    var livePrices = window.currentPrices || {};
-
-    // 2. DUAL-TRACKING ENGINE (FIFO & ACB)
-    var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    sortedTrades.forEach(function(t) {
-        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) {
-            positions[key] = { 
-                symbol: t.symbol, currency: t.currency, account: t.account, type: getAssetType(t),
-                fifoLots: [], acbTotalCost: 0, qty: 0, exchRate: t.exchRate || 1
-            };
-        }
-        var q = Math.abs(parseFloat(t.quantity)) || 0, p = parseFloat(t.price) || 0;
-        var comm = Math.abs(parseFloat(t.commission || 0)), act = (t.action || '').toLowerCase();
-
-        if (act.includes('buy')) {
-            var cost = (q * p) + comm;
-            positions[key].fifoLots.push({ q: q, c: cost });
-            positions[key].acbTotalCost += cost;
-            positions[key].qty += q;
-        } else if (act.includes('sell')) {
-            if (positions[key].qty > 0) {
-                var rem = q;
-                while (rem > 0 && positions[key].fifoLots.length > 0) {
-                    var oldest = positions[key].fifoLots[0];
-                    if (oldest.q <= rem) { rem -= oldest.q; positions[key].fifoLots.shift(); }
-                    else { oldest.c -= (oldest.c * (rem / oldest.q)); oldest.q -= rem; rem = 0; }
-                }
-                var currentAvg = positions[key].acbTotalCost / positions[key].qty;
-                positions[key].acbTotalCost -= (currentAvg * q);
-                positions[key].qty -= q;
-            }
-        }
-        if (Math.abs(positions[key].qty) < 0.0001) {
-            positions[key].qty = 0; positions[key].fifoLots = []; positions[key].acbTotalCost = 0;
-        }
-        positions[key].exchRate = t.exchRate || positions[key].exchRate;
-    });
-
-    // 3. CASH BALANCE
-    allTransfers.forEach(function(t) {
-        var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
-        positions[key].acbTotalCost += parseFloat(t.amount) || 0;
-    });
-
-    // 4. APPLY FILTERS (Reinforced)
-    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
-    
-    const fAcct  = ($('f-gl-account') ? $('f-gl-account').value.trim() : "");
-    const fStock = ($('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : "");
-    const fYear  = ($('f-gl-year') ? $('f-gl-year').value.trim() : "");
-    
-    posArr = posArr.filter(p => {
-        const matchAcct = !fAcct || String(p.account).trim() === fAcct;
-        const matchStock = !fStock || String(p.symbol).trim().toUpperCase() === fStock;
-        
-        let matchYear = true;
-        if (fYear) {
-            // Check for trade activity on or before the selected year
-            matchYear = allTrades.some(t => 
-                t.symbol === p.symbol && 
-                t.account === p.account && 
-                new Date(t.date).getFullYear() <= parseInt(fYear)
-            );
-        }
-        return matchAcct && matchStock && matchYear;
-    });
-
-    // 5. GROUPING
-    var grouped = {};
-    posArr.forEach(p => {
-        var k = p.type + '-' + p.account;
-        if (!grouped[k]) grouped[k] = [];
-        grouped[k].push(p);
-    });
-
-    // 6. DYNAMIC RENDERING (No hardcoded sortOrder)
-    let html = '';
-    const activeKeys = Object.keys(grouped).sort();
-
-    if (activeKeys.length === 0) {
-        container.innerHTML = '<div class="no-data">No positions match the selected filters.</div>';
-        return;
-    }
-
-    activeKeys.forEach(function(key) {
-        var type = key.split('-')[0], acct = key.split('-')[1];
-        html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
-
-        if (type === 'Stocks') {
-            html += `<table class="portfolio-table"><thead><tr>
-                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">MV</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
-                <th class="text-right" style="color:#aaa">Basis</th>
-                <th class="text-right" style="color:#aaa">G/L</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#4caf50">Avg (ACB)</th>
-                <th class="text-right" style="color:#4caf50">Total ACB</th>
-                <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
-            </tr></thead><tbody>`;
-
-            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
-
-            grouped[key].forEach(p => {
-                var curP = (livePrices[p.symbol] || {}).price || 0, rate = p.exchRate || 1;
-                var fifoBasis = p.fifoLots.reduce((s, l) => s + l.c, 0);
-                var fifoAvg = p.qty > 0 ? fifoBasis / p.qty : 0;
-                var acbAvg = p.qty > 0 ? p.acbTotalCost / p.qty : 0;
-                var mv = curP * p.qty, glF = mv - fifoBasis, glA = mv - p.acbTotalCost;
-
-                tMV += (mv * rate); tBasis += (fifoBasis * rate); tGLF += (glF * rate); tACB += (p.acbTotalCost * rate); tGLA += (glA * rate);
-
-                html += `<tr>
-                    <td>${esc(p.symbol)}</td>
-                    <td class="text-right">${fmt(p.qty, 2)}</td>
-                    <td class="text-right">$${fmt(curP)}</td>
-                    <td class="text-right">$${fmt(mv)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
-                    <td class="text-right" style="color:#aaa">$${fmt(fifoBasis)}</td>
-                    <td class="text-right ${glF>=0?'pos-gain':'pos-loss'}" style="opacity:0.8">$${fmt(glF)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; font-weight:bold; color:#4caf50">$${fmt(acbAvg, 3)}</td>
-                    <td class="text-right" style="color:#4caf50">$${fmt(p.acbTotalCost)}</td>
-                    <td class="text-right ${glA>=0?'pos-gain':'pos-loss'}" style="font-weight:bold">$${fmt(glA)}</td>
-                    <td>${esc(p.currency)}</td>
-                </tr>`;
-            });
-
-            html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-                <td>TOTAL (CAD)</td><td colspan="2"></td>
-                <td class="text-right">$${fmt(tMV)}</td>
-                <td style="border-left:2px solid #444"></td>
-                <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
-                <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
-                <td style="border-left:2px solid #444"></td>
-                <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
-                <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
-                <td>CAD</td>
-            </tr></tbody></table>`;
-        } else {
-            // Rendering for Funds/Cash
-            html += `<table class="portfolio-table"><thead><tr><th>Balance</th><th class="text-right">Amount</th><th>CCY</th></tr></thead><tbody>`;
-            grouped[key].forEach(p => {
-                html += `<tr><td>${esc(p.symbol)}</td><td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td><td>${esc(p.currency)}</td></tr>`;
-            });
-            html += `</tbody></table>`;
-        }
-    });
-
-    container.innerHTML = html;
-}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
@@ -1781,11 +1609,24 @@ function renderPortfolio() {
     });
 
     // 2. CASH BALANCE
-    allTransfers.forEach(function(t) {
+   allTransfers.forEach(function(t) {
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
-        positions[key].acbTotalCost += parseFloat(t.amount) || 0;
 
+        if (!positions[key]) {
+            positions[key] = {
+                symbol: 'CASH (Balance)',
+                currency: t.currency,
+                acbTotalCost: 0,
+                cadBalance: 0,
+                account: t.account,
+                exchRate: t.exchRate || 1,
+                type: 'Funds'
+            };
+        }
+
+        positions[key].acbTotalCost += parseFloat(t.amount) || 0;
+        positions[key].cadBalance += parseFloat(t.cadAmount || 0) || 0;
+ 
         console.log("positions[", key, "]: ", positions[key]); 
     });
 
@@ -1903,8 +1744,14 @@ function renderPortfolio() {
             let totalCadEqv = 0;
 
             grouped[key].forEach(p => {
-                var rate = parseFloat(p.exchRate) || 1;
-                var cadEqv = (parseFloat(p.acbTotalCost) || 0) * rate;
+                //var rate = parseFloat(p.exchRate) || 1;
+                // var cadEqv = (parseFloat(p.acbTotalCost) || 0) * rate;
+
+                var amount = parseFloat(p.acbTotalCost) || 0;
+                var cadEqv = (p.cadBalance !== undefined && p.cadBalance !== null)
+                    ? (parseFloat(p.cadBalance) || 0)
+                    : amount * (parseFloat(p.exchRate) || 1);
+                
                 totalCadEqv += cadEqv;
 
                 console.log("grouped[", key, "]: ", grouped[key], " rate: ", rate, " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
@@ -1931,147 +1778,7 @@ function renderPortfolio() {
     document.getElementById('port-table-wrap').innerHTML = html;
 }
 
-function renderPortfolio_bkup() {
-    // 1. INITIALIZE DATA STRUCTURES
-    var positions = {};
-    var totals = { Stocks: { cost: 0, mv: 0, pl: 0, todayGL: 0 }, Funds: { in: 0, out: 0, net: 0 } };
-    
-    // Safety check: Ensure livePrices is defined early to prevent ReferenceErrors
-    var livePrices = window.currentPrices || {};
 
-    // 2. CHRONOLOGICAL DUAL-TRACKING (FIFO & ACB)
-    var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    sortedTrades.forEach(function(t) {
-        var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
-        
-        if (!positions[key]) {
-            positions[key] = { 
-                symbol: t.symbol, currency: t.currency, account: t.account, type: getAssetType(t),
-                fifoLots: [],       // FIFO Queue
-                acbTotalCost: 0,    // Weighted Average Pool
-                qty: 0, 
-                exchRate: t.exchRate || 1
-            };
-        }
-        
-        var q = Math.abs(parseFloat(t.quantity)) || 0;
-        var p = parseFloat(t.price) || 0;
-        var comm = Math.abs(parseFloat(t.commission || 0)); 
-        var act = (t.action || '').toLowerCase();
-
-        if (act.includes('buy')) {
-            var tradeCost = (q * p) + comm;
-            // Add to FIFO Queue
-            positions[key].fifoLots.push({ q: q, c: tradeCost });
-            // Add to ACB Pool
-            positions[key].acbTotalCost += tradeCost;
-            positions[key].qty += q;
-        } 
-        else if (act.includes('sell')) {
-            if (positions[key].qty > 0) {
-                // Drain FIFO Lots (Oldest first)
-                var remToSell = q;
-                while (remToSell > 0 && positions[key].fifoLots.length > 0) {
-                    var oldest = positions[key].fifoLots[0];
-                    if (oldest.q <= remToSell) {
-                        remToSell -= oldest.q;
-                        positions[key].fifoLots.shift();
-                    } else {
-                        var factor = remToSell / oldest.q;
-                        oldest.c -= (oldest.c * factor);
-                        oldest.q -= remToSell;
-                        remToSell = 0;
-                    }
-                }
-                // Reduce ACB Pool by current weighted average
-                var currentAvg = positions[key].acbTotalCost / positions[key].qty;
-                positions[key].acbTotalCost -= (currentAvg * q);
-                positions[key].qty -= q;
-            }
-        }
-
-        // Round-trip reset
-        if (Math.abs(positions[key].qty) < 0.0001) {
-            positions[key].qty = 0;
-            positions[key].fifoLots = [];
-            positions[key].acbTotalCost = 0;
-        }
-    });
-
-    // 3. PROCESS TRANSFERS (CASH)
-    allTransfers.forEach(function(t) {
-        var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
-        if (!positions[key]) {
-            positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
-        }
-        var a = parseFloat(t.amount) || 0;
-        positions[key].acbTotalCost += a;
-    });
-
-    // 4. GROUP DATA FOR UI
-    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
-    var grouped = {};
-    posArr.forEach(p => {
-        var groupKey = p.type + '-' + p.account;
-        if (!grouped[groupKey]) grouped[groupKey] = [];
-        grouped[groupKey].push(p);
-    });
-
-    // 5. RENDER TABLES
-    let html = '';
-    var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
-    
-    sortOrder.forEach(function(key) {
-        if (!grouped[key]) return;
-        var type = key.split('-')[0], acct = key.split('-')[1];
-        html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
-
-        if (type === 'Stocks') {
-            html += `<table class="portfolio-table"><thead><tr>
-                <th>Symbol</th><th class="text-right">Last</th><th class="text-right">Qty</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
-                <th class="text-right" style="color:#aaa">Basis (FIFO)</th>
-                <th class="text-right" style="border-left:2px solid #444; color:#4caf50">Avg (ACB)</th>
-                <th class="text-right" style="color:#4caf50">Total ACB</th>
-                <th class="text-right">G/L (ACB)</th><th>CCY</th>
-            </tr></thead><tbody>`;
-
-            grouped[key].forEach(p => {
-                var live = livePrices[p.symbol] || { price: 0 };
-                var curP = live.price || 0;
-                
-                var fifoTotal = p.fifoLots ? p.fifoLots.reduce((sum, lot) => sum + lot.c, 0) : 0;
-                var fifoAvg = p.qty > 0 ? fifoTotal / p.qty : 0;
-                var acbAvg = p.qty > 0 ? p.acbTotalCost / p.qty : 0;
-                var mv = curP * p.qty, gl = mv - p.acbTotalCost;
-
-                html += `<tr>
-                    <td>${esc(p.symbol)}</td>
-                    <td class="text-right">$${fmt(curP)}</td>
-                    <td class="text-right">${fmt(p.qty, 2)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
-                    <td class="text-right" style="color:#aaa">$${fmt(fifoTotal)}</td>
-                    <td class="text-right" style="border-left:2px solid #444; font-weight:bold; color:#4caf50">$${fmt(acbAvg, 3)}</td>
-                    <td class="text-right" style="color:#4caf50">$${fmt(p.acbTotalCost)}</td>
-                    <td class="text-right ${gl>=0?'pos-gain':'pos-loss'}">$${fmt(gl)}</td>
-                    <td>${esc(p.currency)}</td>
-                </tr>`;
-            });
-            html += `</tbody></table>`;
-        } else {
-            // Standard Funds rendering
-            html += `<table class="portfolio-table"><thead><tr><th>CCY</th><th class="text-right">Balance</th><th>Rate</th></tr></thead><tbody>`;
-            grouped[key].forEach(p => {
-                html += `<tr><td>${esc(p.currency)}</td><td class="text-right">$${fmt(p.acbTotalCost)}</td><td>${fmt(p.exchRate, 4)}</td></tr>`;
-            });
-            html += `</tbody></table>`;
-        }
-    });
-
-    document.getElementById('port-table-wrap').innerHTML = html;
-}
-    
 
 function renderTransfersTable() {
     const fAcct = ($('ft-account') || {}).value || '';
