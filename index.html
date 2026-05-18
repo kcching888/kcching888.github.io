@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.3">
+    <meta name="version" content="4.2.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1743,113 +1743,90 @@ function renderPerformanceControls() {
 }
     
 function renderPerfStats() {
-    const container = $('perf-stats');
-    if (!container) return;
+  const ledger = buildLedgerFromCurrentAppData({
+    baseCurrency: 'CAD',
+    livePrices: window.currentPrices || {}
+  });
 
-    const fullRows = getPortfolioHistoryRows('ALL');
-    const rows = getRangeFilteredRows(fullRows);
+  const totals = ledger.totals || {};
 
-    if (!rows.length) {
-        container.innerHTML = '<div class="loading">No performance history available.</div>';
-        return;
+  const realized = num(totals.realizedGain, 0);
+  const unrealized = num(totals.unrealizedGain, 0);
+  const dividends = num(totals.dividends, 0);
+  const fees = num(totals.fees, 0);
+  const netContributions = num(totals.netContributions, 0);
+  const totalReturn = num(totals.totalReturn, 0);
+  const priceReturn = num(totals.priceReturn, 0);
+  const incomeReturn = num(totals.incomeReturn, 0);
+
+  const benchmarkLabelMap = {
+    NONE: 'No Benchmark',
+    SPY: 'SPY',
+    QQQ: 'QQQ',
+    VFV: 'VFV',
+    XIU: 'XIU'
+  };
+  const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark || 'No Benchmark';
+
+  const cards = [
+    {
+      label: 'Total Return',
+      value: '$' + fmt(totalReturn),
+      cls: totalReturn >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Price Return',
+      value: '$' + fmt(priceReturn),
+      cls: priceReturn >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Income Return',
+      value: '$' + fmt(incomeReturn),
+      cls: incomeReturn >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Realized Gain/Loss',
+      value: '$' + fmt(realized),
+      cls: realized >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Unrealized Gain/Loss',
+      value: '$' + fmt(unrealized),
+      cls: unrealized >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Dividends',
+      value: '$' + fmt(dividends),
+      cls: dividends >= 0 ? 'pos-gain' : ''
+    },
+    {
+      label: 'Fees',
+      value: '$' + fmt(fees),
+      cls: fees > 0 ? 'pos-loss' : ''
+    },
+    {
+      label: 'Net Contributions',
+      value: '$' + fmt(netContributions),
+      cls: ''
+    },
+    {
+      label: 'Selected Benchmark',
+      value: esc(benchmarkLabel),
+      cls: ''
+    },
+    {
+      label: 'TWR',
+      value: 'Pending cash-flow model',
+      cls: ''
     }
+  ];
 
-    const first = rows[0];
-    const last = rows[rows.length - 1];
-    const endDate = last.date;
-
-    const latestValue = parseFloat(last.totalValue || 0) || 0;
-
-    // Cumulative contributions from inception up to selected end date
-    const cumulativeRowsToEnd = fullRows.filter(function(r) {
-        return String(r.date) <= String(endDate);
-    });
-
-    const netContributions = cumulativeRowsToEnd.reduce(function(sum, r) {
-        return sum + (parseFloat(r.netCashFlow || 0) || 0);
-    }, 0);
-
-    // Income can also be cumulative to end date
-    const totalDividends = cumulativeRowsToEnd.reduce(function(sum, r) {
-        return sum + (parseFloat(r.dividends || 0) || 0);
-    }, 0);
-
-    const totalTax = cumulativeRowsToEnd.reduce(function(sum, r) {
-        return sum + (parseFloat(r.tax || 0) || 0);
-    }, 0);
-
-    const totalFees = cumulativeRowsToEnd.reduce(function(sum, r) {
-        return sum + (parseFloat(r.fees || 0) || 0);
-    }, 0);
-
-    const totalGain = latestValue - netContributions;
-
-    const simpleReturn = Math.abs(netContributions) > 0.0001
-        ? (totalGain / netContributions)
-        : 0;
-
-    const startDate = first.date;
-    const cagr = annualizeReturn(simpleReturn, fullRows[0].date, endDate);
-
-    const twr = computeTWR(rows);
-    const twrAnnualized = annualizeReturn(twr, startDate, endDate);
-
-    const benchmarkLabelMap = {
-        NONE: 'No Benchmark',
-        SPY: 'SPY',
-        QQQ: 'QQQ',
-        XEQT: 'XEQT',
-        XAW: 'XAW',
-        CUSTOM: 'Custom (Later)'
-    };
-
-    const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark;
-
-    container.innerHTML =
-        '<div class="stat-card">' +
-            '<div class="val">$' + fmt(latestValue) + '</div>' +
-            '<div class="lbl">Market Value</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val">$' + fmt(netContributions) + '</div>' +
-            '<div class="lbl">Net Contributions</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val ' + (totalGain >= 0 ? 'pos-gain' : 'pos-loss') + '">$' + fmt(totalGain) + '</div>' +
-            '<div class="lbl">Total Gain / Loss</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val ' + (simpleReturn >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(simpleReturn * 100) + '%</div>' +
-            '<div class="lbl">Simple Return</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val ' + (cagr >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(cagr * 100) + '%</div>' +
-            '<div class="lbl">CAGR</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val ' + (twr >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(twr * 100) + '%</div>' +
-            '<div class="lbl">Portfolio TWR</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val ' + (twrAnnualized >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(twrAnnualized * 100) + '%</div>' +
-            '<div class="lbl">Annualized TWR</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val">$' + fmt(totalDividends - totalTax - totalFees) + '</div>' +
-            '<div class="lbl">Net Income After Tax/Fees</div>' +
-        '</div>' +
-
-        '<div class="stat-card">' +
-            '<div class="val">' + esc(benchmarkLabel) + '</div>' +
-            '<div class="lbl">Selected Benchmark (placeholder)</div>' +
-        '</div>';
+  $('perf-stats').innerHTML = cards.map(c =>
+    '<div class="stat-card">' +
+      '<div class="val ' + (c.cls || '') + '">' + c.value + '</div>' +
+      '<div class="lbl">' + c.label + '</div>' +
+    '</div>'
+  ).join('');
 }
 
 function computeEquityDrawdownSeries(historyRows) {
@@ -2244,7 +2221,7 @@ function renderPortfolio() {
         positions[key].acbTotalCost += parseFloat(t.amount) || 0;
         positions[key].cadBalance += parseFloat(t.cadAmount || 0) || 0;
  
-        console.log("positions[", key, "]: ", positions[key]); 
+      //  console.log("positions[", key, "]: ", positions[key]); 
     });
 
     // 3. APPLY FILTERS (Account, Stock, Year)
@@ -2277,7 +2254,7 @@ function renderPortfolio() {
     });
 
     console.log("Filtered Positions Remaining:", posArr.length);
-    console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
+   // console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
     
     // 4. GROUPING
     var grouped = {};
