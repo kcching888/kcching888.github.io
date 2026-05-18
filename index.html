@@ -719,6 +719,16 @@ function syncData() {
         applyDivFilters();
         renderTransfersTable();
 
+        const ledger = buildLedgerFromCurrentAppData({
+          baseCurrency: 'CAD',
+          livePrices: window.currentPrices || {}
+        });
+
+        console.log('ledger totals', ledger.totals);
+        console.log('positions', getPositionRowsFromLedger(ledger));
+        console.log('realized rows', getRealizedGainRowsFromLedger(ledger));
+    
+
         // 2. Immediate confirmation UI update
         const ts = new Date().toLocaleString();
         localStorage.setItem('ibkr_sync_time', ts);
@@ -3459,15 +3469,7 @@ function getPositionRowsFromLedger(ledger, filters = {}) {
   });
 }
 
-const ledger = buildLedgerFromCurrentAppData({
-  baseCurrency: 'CAD',
-  livePrices: window.currentPrices || {}
-});
 
-console.log('ledger totals', ledger.totals);
-console.log('positions', getPositionRowsFromLedger(ledger));
-console.log('realized rows', getRealizedGainRowsFromLedger(ledger));
-    
 syncVersion();
 </script>
 </body>
