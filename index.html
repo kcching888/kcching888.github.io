@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.11">
+    <meta name="version" content="3.19.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1785,6 +1785,8 @@ function renderPortfolio() {
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) positions[key] = { symbol: 'CASH (Balance)', currency: t.currency, acbTotalCost: 0, account: t.account, exchRate: t.exchRate || 1, type: 'Funds' };
         positions[key].acbTotalCost += parseFloat(t.amount) || 0;
+
+        console.log("positions[", key, "]: ", positions[key]); 
     });
 
     // 3. APPLY FILTERS (Account, Stock, Year)
