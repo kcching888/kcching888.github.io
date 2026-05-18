@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.0.1">
+    <meta name="version" content="4.0.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -165,6 +165,7 @@
     
     <div id="page-portfolio">
         <div id="perf-stats" class="stat-grid"></div>
+        <div id="equity-drawdown-wrap" class="funds-container" style="margin-top:16px;"></div>
         <div id="port-stats" class="stat-grid"></div>
         <div class="card">
             <div id="port-table-wrap"></div>
@@ -569,7 +570,7 @@
     });
     console.log("tab: ", tab);
 
-    if (tab === 'portfolio') {renderPortfolio(); renderPerfStats();}
+    if (tab === 'portfolio') {renderPortfolio(); renderPerfStats(); renderEquityDrawdown();}
     if (tab === 'gainloss') renderGainLoss();
     if (tab === 'dividends') applyDivFilters();
     if (tab === 'transfers') renderTransfersTable();
@@ -655,6 +656,7 @@ function syncData() {
         updateAccountFilter();
         renderPortfolio();
         renderPerfStats();
+        renderEquityDrawdown();
 
         applyDivFilters();
         renderTransfersTable();
@@ -1524,19 +1526,14 @@ async function handlePriceRefresh() {
     alert("Prices updated successfully.");
 }
 
-function renderPerfStats() {
-    const container = $('perf-stats');
-    if (!container) return;
-
+function getPortfolioHistoryRows(accountFilter) {
     const history = Array.isArray(allHistory) ? allHistory.slice() : [];
-    if (!history.length) {
-        container.innerHTML = '<div class="loading">No performance history available.</div>';
-        return;
-    }
-
-    // 1. Aggregate by date across all accounts
     const byDate = {};
+
     history.forEach(function(r) {
+        const acc = String(r.account || '');
+        if (accountFilter && accountFilter !== 'ALL' && acc !== accountFilter) return;
+
         const dt = String(r.date || '').slice(0, 10);
         if (!dt) return;
 
@@ -1558,16 +1555,60 @@ function renderPerfStats() {
         byDate[dt].fees += parseFloat(r.fees || 0) || 0;
     });
 
-    const rows = Object.values(byDate).sort(function(a, b) {
+    return Object.values(byDate).sort(function(a, b) {
         return String(a.date).localeCompare(String(b.date));
     });
+}
 
+function computeTWR(historyRows) {
+    if (!historyRows || historyRows.length < 2) return 0;
+
+    let factor = 1;
+
+    for (let i = 1; i < historyRows.length; i++) {
+        const prev = historyRows[i - 1];
+        const curr = historyRows[i];
+
+        const mvb = parseFloat(prev.totalValue || 0) || 0;
+        const mve = parseFloat(curr.totalValue || 0) || 0;
+        const cf = parseFloat(curr.netCashFlow || 0) || 0;
+
+        if (mvb <= 0) continue;
+
+        const cfin = cf > 0 ? cf : 0;
+        const cfout = cf < 0 ? Math.abs(cf) : 0;
+
+        const dailyReturn = ((mve + cfout) / (mvb + cfin)) - 1;
+        factor *= (1 + dailyReturn);
+    }
+
+    return factor - 1;
+}
+
+function annualizeReturn(totalReturn, startDate, endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const years = (end - start) / (1000 * 60 * 60 * 24 * 365.25);
+
+    if (years <= 0) return 0;
+    if (1 + totalReturn <= 0) return 0;
+
+    return Math.pow(1 + totalReturn, 1 / years) - 1;
+}
+
+
+
+    
+function renderPerfStats() {
+    const container = $('perf-stats');
+    if (!container) return;
+
+    const rows = getPortfolioHistoryRows('ALL');
     if (!rows.length) {
         container.innerHTML = '<div class="loading">No performance history available.</div>';
         return;
     }
 
-    // 2. Core values
     const first = rows[0];
     const last = rows[rows.length - 1];
 
@@ -1588,28 +1629,21 @@ function renderPerfStats() {
         return sum + (parseFloat(r.fees || 0) || 0);
     }, 0);
 
-    // Gain = ending value - net contributions
     const totalGain = latestValue - netContributions;
 
-    // 3. Simple return
-    // Base capital approximated as net contributions, fallback to first total value if needed
     const baseCapital = Math.abs(netContributions) > 0.0001
         ? netContributions
         : (parseFloat(first.totalValue || 0) || 0);
 
     const simpleReturn = baseCapital !== 0 ? (totalGain / baseCapital) : 0;
 
-    // 4. CAGR
-    const startDate = new Date(first.date);
-    const endDate = new Date(last.date);
-    const years = Math.max((endDate - startDate) / (1000 * 60 * 60 * 24 * 365.25), 0);
+    const startDate = first.date;
+    const endDate = last.date;
+    const cagr = annualizeReturn(simpleReturn, startDate, endDate);
 
-    let cagr = 0;
-    if (years > 0 && baseCapital > 0 && latestValue > 0) {
-        cagr = Math.pow(latestValue / baseCapital, 1 / years) - 1;
-    }
+    const twr = computeTWR(rows);
+    const twrAnnualized = annualizeReturn(twr, startDate, endDate);
 
-    // 5. Render
     container.innerHTML =
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(latestValue) + '</div>' +
@@ -1637,9 +1671,113 @@ function renderPerfStats() {
         '</div>' +
 
         '<div class="stat-card">' +
+            '<div class="val ' + (twr >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(twr * 100) + '%</div>' +
+            '<div class="lbl">Portfolio TWR</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
+            '<div class="val ' + (twrAnnualized >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(twrAnnualized * 100) + '%</div>' +
+            '<div class="lbl">Annualized TWR</div>' +
+        '</div>' +
+
+        '<div class="stat-card">' +
             '<div class="val">$' + fmt(totalDividends - totalTax - totalFees) + '</div>' +
             '<div class="lbl">Net Income After Tax/Fees</div>' +
         '</div>';
+}
+
+function computeEquityDrawdownSeries(historyRows) {
+    if (!historyRows || !historyRows.length) return [];
+
+    let peak = -Infinity;
+    let prevValue = null;
+
+    return historyRows.map(function(r) {
+        const value = parseFloat(r.totalValue || 0) || 0;
+        peak = Math.max(peak, value);
+
+        const drawdown = peak > 0 ? ((value - peak) / peak) : 0;
+        const dayReturn = (prevValue && prevValue !== 0) ? ((value / prevValue) - 1) : 0;
+
+        prevValue = value;
+
+        return {
+            date: r.date,
+            value: value,
+            peak: peak,
+            drawdown: drawdown,
+            dayReturn: dayReturn,
+            netCashFlow: parseFloat(r.netCashFlow || 0) || 0
+        };
+    });
+}
+
+function renderEquityDrawdown() {
+    const wrap = $('equity-drawdown-wrap');
+    if (!wrap) return;
+
+    const rows = getPortfolioHistoryRows('ALL');
+    if (!rows.length) {
+        wrap.innerHTML = '<div class="loading">No equity history available.</div>';
+        return;
+    }
+
+    const series = computeEquityDrawdownSeries(rows);
+    const latest = series[series.length - 1];
+
+    let maxDD = 0;
+    let maxDDDate = '';
+    series.forEach(function(r) {
+        if (r.drawdown < maxDD) {
+            maxDD = r.drawdown;
+            maxDDDate = r.date;
+        }
+    });
+
+    const recent = series.slice(-20);
+
+    let html = '<h3>Equity & Drawdown</h3>';
+    html += '<div class="stat-grid" style="margin-bottom:12px;">' +
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(latest.value) + '</div>' +
+            '<div class="lbl">Latest Equity</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+            '<div class="val">$' + fmt(latest.peak) + '</div>' +
+            '<div class="lbl">Peak Equity</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+            '<div class="val ' + (maxDD < 0 ? 'pos-loss' : '') + '">' + fmt(maxDD * 100) + '%</div>' +
+            '<div class="lbl">Max Drawdown</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+            '<div class="val">' + esc(maxDDDate || '-') + '</div>' +
+            '<div class="lbl">Max DD Date</div>' +
+        '</div>' +
+    '</div>';
+
+    html += '<table class="portfolio-table"><thead><tr>' +
+        '<th>Date</th>' +
+        '<th class="text-right">Equity</th>' +
+        '<th class="text-right">Peak</th>' +
+        '<th class="text-right">Daily Return</th>' +
+        '<th class="text-right">Drawdown</th>' +
+        '<th class="text-right">Net Flow</th>' +
+        '</tr></thead><tbody>';
+
+    recent.forEach(function(r) {
+        html += '<tr>' +
+            '<td>' + esc(r.date) + '</td>' +
+            '<td class="text-right">$' + fmt(r.value) + '</td>' +
+            '<td class="text-right">$' + fmt(r.peak) + '</td>' +
+            '<td class="text-right ' + (r.dayReturn >= 0 ? 'text-success' : 'text-danger') + '">' + fmt(r.dayReturn * 100) + '%</td>' +
+            '<td class="text-right ' + (r.drawdown >= 0 ? '' : 'text-danger') + '">' + fmt(r.drawdown * 100) + '%</td>' +
+            '<td class="text-right">$' + fmt(r.netCashFlow) + '</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
 }
     
 function renderPortfolio() {
