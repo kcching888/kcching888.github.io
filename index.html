@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.0.3">
+    <meta name="version" content="4.0.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1734,7 +1734,7 @@ function renderEquityDrawdown() {
         }
     });
 
-    const recent = series.slice(-20);
+    const recent = series.slice(-60); // use last 60 days for chart/table
 
     let html = '<h3>Equity & Drawdown</h3>';
     html += '<div class="stat-grid" style="margin-bottom:12px;">' +
@@ -1755,6 +1755,10 @@ function renderEquityDrawdown() {
             '<div class="lbl">Max DD Date</div>' +
         '</div>' +
     '</div>';
+
+    html += '<div id="equity-chart-wrap" style="margin-bottom:12px;">' +
+            '<svg id="equity-chart" width="100%" height="200"></svg>' +
+            '</div>';
 
     html += '<table class="portfolio-table"><thead><tr>' +
         '<th>Date</th>' +
@@ -1778,7 +1782,83 @@ function renderEquityDrawdown() {
 
     html += '</tbody></table>';
     wrap.innerHTML = html;
+
+    drawEquitySvgChart(recent);
 }
+
+function drawEquitySvgChart(series) {
+    const svg = $('equity-chart');
+    if (!svg || !series || !series.length) return;
+
+    const width = svg.clientWidth || 600;
+    const height = svg.clientHeight || 200;
+
+    const minVal = Math.min.apply(null, series.map(r => r.value));
+    const maxVal = Math.max.apply(null, series.map(r => r.value));
+
+    let maxDD = 0;
+    series.forEach(r => {
+        if (r.drawdown < maxDD) maxDD = r.drawdown;
+    });
+
+    const valRange = (maxVal - minVal) || 1;
+    const ddRange = Math.abs(maxDD) || 1;
+
+    const padTop = 10;
+    const padBottom = 10;
+    const padLeft = 0;
+    const padRight = 0;
+
+    const usableHeightEquity = (height / 2) - padTop - padBottom;
+    const usableHeightDD = (height / 2) - padTop - padBottom;
+
+    const n = series.length;
+    if (n < 2) return;
+
+    const stepX = (width - padLeft - padRight) / (n - 1);
+
+    function normEquity(v) {
+        const yNorm = (v - minVal) / valRange;
+        return padTop + (1 - yNorm) * usableHeightEquity;
+    }
+
+    function normDD(dd) {
+        const frac = Math.abs(dd) / ddRange;
+        const base = height / 2;
+        return base + frac * usableHeightDD;
+    }
+
+    let equityPoints = '';
+    let ddPoints = '';
+
+    series.forEach(function(r, idx) {
+        const x = padLeft + idx * stepX;
+        const yEquity = normEquity(r.value);
+        const yDD = normDD(r.drawdown);
+
+        equityPoints += x + ',' + yEquity + ' ';
+        ddPoints += x + ',' + yDD + ' ';
+    });
+
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+
+    const eqLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    eqLine.setAttribute('points', equityPoints.trim());
+    eqLine.setAttribute('fill', 'none');
+    eqLine.setAttribute('stroke', '#1f77b4');
+    eqLine.setAttribute('stroke-width', '2');
+
+    const ddLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    ddLine.setAttribute('points', ddPoints.trim());
+    ddLine.setAttribute('fill', 'none');
+    ddLine.setAttribute('stroke', '#d62728');
+    ddLine.setAttribute('stroke-width', '2');
+
+    svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+    svg.appendChild(eqLine);
+    svg.appendChild(ddLine);
+}
+    
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
