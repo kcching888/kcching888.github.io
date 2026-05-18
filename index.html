@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.0.5">
+    <meta name="version" content="4.1.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -154,6 +154,7 @@
 
 <div class="nav-tabs">
     <div class="nav-tab active" onclick="showTab('portfolio')" id="tab-portfolio">Portfolio</div>
+    <div class="nav-tab" onclick="showTab('performance')" id="tab-performance">Performance</div>
     <div class="nav-tab" onclick="showTab('transactions')" id="tab-transactions">Transactions</div>
     <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
@@ -164,14 +165,32 @@
 <div class="content">
     
     <div id="page-portfolio">
-        <div id="perf-stats" class="stat-grid"></div>
-        <div id="equity-drawdown-wrap" class="funds-container" style="margin-top:16px;"></div>
         <div id="port-stats" class="stat-grid"></div>
         <div class="card">
             <div id="port-table-wrap"></div>
          </div>
     </div>
 
+    <div id="page-performance" style="display:none;">
+        <div class="card">
+            <div id="perf-stats" class="stat-grid"></div>
+            <div id="performance-controls" style="margin-top:16px;"></div>
+            <div id="equity-drawdown-wrap" class="funds-container" style="margin-top:16px;"></div>
+            <div id="equity-tooltip" style="
+                position:absolute;
+                display:none;
+                pointer-events:none;
+                background:#111;
+                color:#fff;
+                padding:8px 10px;
+                border:1px solid #444;
+                border-radius:6px;
+                font-size:12px;
+                z-index:20;
+            "></div>
+        </div>
+    </div>
+    
     <div id="page-transactions" style="display:none">
         <div class="card">
             <div class="filters">
@@ -516,6 +535,9 @@
     var equityTableVisible = true;
     var equityTableRows = 60;
 
+    var perfRange = '1Y';
+    var perfTableVisible = true;
+
     //const APP_VERSION = "3.84";
 
     function syncVersion() {
@@ -567,13 +589,14 @@
     }
 
     function showTab(tab){
-    ['transactions','portfolio','gainloss','dividends','transfers'].forEach(function(t){
+    ['transactions','portfolio','performance','gainloss','dividends','transfers'].forEach(function(t){
         $('page-'+t).style.display = t===tab ? '' : 'none';
         $('tab-'+t).classList.toggle('active', t === tab);
     });
     console.log("tab: ", tab);
 
-    if (tab === 'portfolio') {renderPortfolio(); renderPerfStats(); renderEquityDrawdown();}
+    if (tab === 'portfolio') renderPortfolio();
+    if (tab === 'performance') {renderPerfStats(); renderEquityDrawdown();}
     if (tab === 'gainloss') renderGainLoss();
     if (tab === 'dividends') applyDivFilters();
     if (tab === 'transfers') renderTransfersTable();
@@ -1614,7 +1637,7 @@ function renderPerfStats() {
     const container = $('perf-stats');
     if (!container) return;
 
-    const rows = getPortfolioHistoryRows('ALL');
+    const rows = getRangeFilteredRows(getPortfolioHistoryRows('ALL'));
     if (!rows.length) {
         container.innerHTML = '<div class="loading">No performance history available.</div>';
         return;
@@ -1727,7 +1750,7 @@ function renderEquityDrawdown() {
     const wrap = $('equity-drawdown-wrap');
     if (!wrap) return;
 
-    const rows = getPortfolioHistoryRows('ALL');
+    const rows = getRangeFilteredRows(getPortfolioHistoryRows('ALL'));
     if (!rows.length) {
         wrap.innerHTML = '<div class="loading">No equity history available.</div>';
         return;
@@ -1752,6 +1775,17 @@ function renderEquityDrawdown() {
 
     let html = '<h3>Equity & Drawdown</h3>';
 
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'1M\')">1M</button>' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'3M\')">3M</button>' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'6M\')">6M</button>' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'YTD\')">YTD</button>' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'1Y\')">1Y</button>' +
+            '<button class="btn-secondary" onclick="setPerfRange(\'ALL\')">All</button>' +
+        '</div>' +
+    '</div>';
+    
     html += '<div class="stat-grid" style="margin-bottom:12px;">' +
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(latest.value) + '</div>' +
@@ -1828,13 +1862,28 @@ function drawEquitySvgChart(series) {
     const svg = $('equity-chart');
     if (!svg || !series || series.length < 2) return;
 
+    let tooltip = $('equity-tooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'equity-tooltip';
+        tooltip.style.position = 'absolute';
+        tooltip.style.display = 'none';
+        tooltip.style.pointerEvents = 'none';
+        tooltip.style.background = '#111';
+        tooltip.style.color = '#fff';
+        tooltip.style.padding = '8px 10px';
+        tooltip.style.border = '1px solid #444';
+        tooltip.style.borderRadius = '6px';
+        tooltip.style.fontSize = '12px';
+        tooltip.style.zIndex = '20';
+        document.body.appendChild(tooltip);
+    }
+
     const width = svg.clientWidth || 900;
     const height = svg.clientHeight || 260;
-
     const margin = { top: 16, right: 70, bottom: 36, left: 90 };
     const innerW = width - margin.left - margin.right;
     const innerH = height - margin.top - margin.bottom;
-
     const topH = Math.floor(innerH * 0.58);
     const bottomH = innerH - topH - 16;
     const ddTop = margin.top + topH + 16;
@@ -1872,103 +1921,59 @@ function drawEquitySvgChart(series) {
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
 
-    // Background guides
     const divider = makeSvgEl('line', {
-        x1: margin.left,
-        y1: ddTop - 8,
-        x2: margin.left + innerW,
-        y2: ddTop - 8,
-        stroke: '#666',
-        'stroke-width': 1,
-        'stroke-dasharray': '4 4'
+        x1: margin.left, y1: ddTop - 8, x2: margin.left + innerW, y2: ddTop - 8,
+        stroke: '#666', 'stroke-width': 1, 'stroke-dasharray': '4 4'
     });
     svg.appendChild(divider);
 
-    // Equity axis labels
     [maxVal, (maxVal + minVal) / 2, minVal].forEach(function(v) {
         const y = yEquity(v);
-
         svg.appendChild(makeSvgEl('line', {
-            x1: margin.left,
-            y1: y,
-            x2: margin.left + innerW,
-            y2: y,
-            stroke: '#2a2a2a',
-            'stroke-width': 1
+            x1: margin.left, y1: y, x2: margin.left + innerW, y2: y,
+            stroke: '#2a2a2a', 'stroke-width': 1
         }));
-
         const txt = makeSvgEl('text', {
-            x: margin.left - 8,
-            y: y + 4,
-            'text-anchor': 'end',
-            'font-size': '11',
-            fill: '#aaa'
+            x: margin.left - 8, y: y + 4, 'text-anchor': 'end', 'font-size': '11', fill: '#aaa'
         });
         txt.textContent = '$' + fmt(v, 0);
         svg.appendChild(txt);
     });
 
-    // Drawdown axis labels
     [0, minDD / 2, minDD].forEach(function(v) {
         const y = yDD(v);
-
         svg.appendChild(makeSvgEl('line', {
-            x1: margin.left,
-            y1: y,
-            x2: margin.left + innerW,
-            y2: y,
-            stroke: '#2a2a2a',
-            'stroke-width': 1
+            x1: margin.left, y1: y, x2: margin.left + innerW, y2: y,
+            stroke: '#2a2a2a', 'stroke-width': 1
         }));
-
         const txt = makeSvgEl('text', {
-            x: margin.left + innerW + 8,
-            y: y + 4,
-            'text-anchor': 'start',
-            'font-size': '11',
-            fill: '#aaa'
+            x: margin.left + innerW + 8, y: y + 4, 'text-anchor': 'start', 'font-size': '11', fill: '#aaa'
         });
         txt.textContent = fmt(v * 100) + '%';
         svg.appendChild(txt);
     });
 
-    // X axis labels
-    const xLabelIdx = [0, Math.floor((series.length - 1) / 2), series.length - 1];
-    xLabelIdx.forEach(function(i) {
+    [0, Math.floor((series.length - 1) / 2), series.length - 1].forEach(function(i) {
         const x = xPos(i);
         const txt = makeSvgEl('text', {
-            x: x,
-            y: height - 8,
-            'text-anchor': 'middle',
-            'font-size': '11',
-            fill: '#aaa'
+            x: x, y: height - 8, 'text-anchor': 'middle', 'font-size': '11', fill: '#aaa'
         });
         txt.textContent = series[i].date;
         svg.appendChild(txt);
     });
 
-    // Axis titles
     const eqTitle = makeSvgEl('text', {
-        x: margin.left,
-        y: 12,
-        'text-anchor': 'start',
-        'font-size': '11',
-        fill: '#1f77b4'
+        x: margin.left, y: 12, 'text-anchor': 'start', 'font-size': '11', fill: '#1f77b4'
     });
     eqTitle.textContent = 'Equity (CAD)';
     svg.appendChild(eqTitle);
 
     const ddTitle = makeSvgEl('text', {
-        x: margin.left,
-        y: ddTop - 12,
-        'text-anchor': 'start',
-        'font-size': '11',
-        fill: '#d62728'
+        x: margin.left, y: ddTop - 12, 'text-anchor': 'start', 'font-size': '11', fill: '#d62728'
     });
     ddTitle.textContent = 'Drawdown (%)';
     svg.appendChild(ddTitle);
 
-    // Build polylines
     let eqPoints = '';
     let ddPoints = '';
 
@@ -1978,20 +1983,66 @@ function drawEquitySvgChart(series) {
     });
 
     svg.appendChild(makeSvgEl('polyline', {
-        points: eqPoints.trim(),
-        fill: 'none',
-        stroke: '#1f77b4',
-        'stroke-width': 2
+        points: eqPoints.trim(), fill: 'none', stroke: '#1f77b4', 'stroke-width': 2
     }));
 
     svg.appendChild(makeSvgEl('polyline', {
-        points: ddPoints.trim(),
-        fill: 'none',
-        stroke: '#d62728',
-        'stroke-width': 2
+        points: ddPoints.trim(), fill: 'none', stroke: '#d62728', 'stroke-width': 2
     }));
+
+    series.forEach(function(r, i) {
+        const x = xPos(i);
+        const eqY = yEquity(r.value);
+
+        const hit = makeSvgEl('circle', {
+            cx: x, cy: eqY, r: 6, fill: 'transparent', cursor: 'pointer'
+        });
+
+        hit.addEventListener('mousemove', function(evt) {
+            tooltip.style.display = 'block';
+            tooltip.innerHTML =
+                '<div><strong>' + esc(r.date) + '</strong></div>' +
+                '<div>Equity: $' + fmt(r.value) + '</div>' +
+                '<div>Drawdown: ' + fmt(r.drawdown * 100) + '%</div>' +
+                '<div>Daily Return: ' + fmt(r.dayReturn * 100) + '%</div>' +
+                '<div>Net Flow: $' + fmt(r.netCashFlow) + '</div>';
+
+            tooltip.style.left = (evt.pageX + 12) + 'px';
+            tooltip.style.top = (evt.pageY + 12) + 'px';
+        });
+
+        hit.addEventListener('mouseleave', function() {
+            tooltip.style.display = 'none';
+        });
+
+        svg.appendChild(hit);
+    });
 }
-    
+
+function setPerfRange(val) {
+    perfRange = val || '1Y';
+    renderPerfStats();
+    renderEquityDrawdown();
+}
+
+function getRangeFilteredRows(rows) {
+    if (!rows || !rows.length) return [];
+
+    if (perfRange === 'ALL') return rows.slice();
+
+    const end = new Date(rows[rows.length - 1].date);
+    const start = new Date(end);
+
+    if (perfRange === '1M') start.setMonth(start.getMonth() - 1);
+    else if (perfRange === '3M') start.setMonth(start.getMonth() - 3);
+    else if (perfRange === '6M') start.setMonth(start.getMonth() - 6);
+    else if (perfRange === '1Y') start.setFullYear(start.getFullYear() - 1);
+    else if (perfRange === 'YTD') start.setMonth(0, 1);
+
+    return rows.filter(function(r) {
+        return new Date(r.date) >= start;
+    });
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
