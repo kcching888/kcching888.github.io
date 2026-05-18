@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.1">
+    <meta name="version" content="4.2.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3347,6 +3347,13 @@ function sellFromLedgerFIFO(ledger, tx) {
   }
 
     if (remaining > 0) {
+      console.log('SELL FAIL', tx);
+      console.table((pos.fifoLots || []).map(l => ({
+            lotId: l.lotId,
+            date: l.date,
+            remainingQty: l.remainingQty,
+            unitCost: l.unitCost
+      })));
       ledger.warnings = ledger.warnings || [];
       ledger.warnings.push({
         type: 'INSUFFICIENT_LOTS',
