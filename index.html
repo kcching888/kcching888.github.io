@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.1.0">
+    <meta name="version" content="4.1.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -538,6 +538,9 @@
     var perfRange = '1Y';
     var perfTableVisible = true;
 
+    var perfAccount = 'ALL';
+    var perfBenchmark = 'NONE';
+
     //const APP_VERSION = "3.84";
 
     function syncVersion() {
@@ -596,7 +599,7 @@
     console.log("tab: ", tab);
 
     if (tab === 'portfolio') renderPortfolio();
-    if (tab === 'performance') {renderPerfStats(); renderEquityDrawdown();}
+    if (tab === 'performance') {renderPerformanceControls(); renderPerfStats(); renderEquityDrawdown();}
     if (tab === 'gainloss') renderGainLoss();
     if (tab === 'dividends') applyDivFilters();
     if (tab === 'transfers') renderTransfersTable();
@@ -681,8 +684,12 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
-        renderPerfStats();
-        renderEquityDrawdown();
+
+        if ($('tab-performance') && $('tab-performance').classList.contains('active')) {
+            renderPerformanceControls();
+            renderPerfStats();
+            renderEquityDrawdown();
+        }
 
         applyDivFilters();
         renderTransfersTable();
@@ -1554,11 +1561,12 @@ async function handlePriceRefresh() {
 
 function getPortfolioHistoryRows(accountFilter) {
     const history = Array.isArray(allHistory) ? allHistory.slice() : [];
+    const targetAccount = accountFilter || perfAccount || 'ALL';
     const byDate = {};
 
     history.forEach(function(r) {
         const acc = String(r.account || '');
-        if (accountFilter && accountFilter !== 'ALL' && acc !== accountFilter) return;
+        if (targetAccount && targetAccount !== 'ALL' && acc !== targetAccount) return;
 
         const dt = String(r.date || '').slice(0, 10);
         if (!dt) return;
@@ -1632,6 +1640,72 @@ function setEquityTableRows(val) {
     renderEquityDrawdown();
 }
 
+function setPerfAccount(val) {
+    perfAccount = val || 'ALL';
+    renderPerfStats();
+    renderEquityDrawdown();
+}
+
+function setPerfBenchmark(val) {
+    perfBenchmark = val || 'NONE';
+    renderPerfStats();
+    renderEquityDrawdown();
+}
+
+function getPerformanceAccounts() {
+    var set = new Set();
+    (allHistory || []).forEach(function(r) {
+        var acc = String(r.account || '').trim();
+        if (acc) set.add(acc);
+    });
+    return Array.from(set).sort();
+}
+
+function renderPerformanceControls() {
+    const el = $('performance-controls');
+    if (!el) return;
+
+    const accounts = getPerformanceAccounts();
+
+    let accountOptions = '<option value="ALL"' + (perfAccount === 'ALL' ? ' selected' : '') + '>All Accounts</option>';
+    accounts.forEach(function(acc) {
+        accountOptions += '<option value="' + esc(acc) + '"' + (perfAccount === acc ? ' selected' : '') + '>' + esc(acc) + '</option>';
+    });
+
+    let benchmarkOptions = [
+        { value: 'NONE', label: 'No Benchmark' },
+        { value: 'SPY', label: 'SPY (S&P 500 ETF)' },
+        { value: 'QQQ', label: 'QQQ (NASDAQ 100 ETF)' },
+        { value: 'XEQT', label: 'XEQT' },
+        { value: 'XAW', label: 'XAW' },
+        { value: 'CUSTOM', label: 'Custom (Later)' }
+    ].map(function(b) {
+        return '<option value="' + b.value + '"' + (perfBenchmark === b.value ? ' selected' : '') + '>' + esc(b.label) + '</option>';
+    }).join('');
+
+    el.innerHTML =
+        '<div class="filters">' +
+            '<div class="filter-group">' +
+                '<label>Account</label>' +
+                '<select onchange="setPerfAccount(this.value)">' + accountOptions + '</select>' +
+            '</div>' +
+            '<div class="filter-group">' +
+                '<label>Benchmark</label>' +
+                '<select onchange="setPerfBenchmark(this.value)">' + benchmarkOptions + '</select>' +
+            '</div>' +
+            '<div class="filter-group">' +
+                '<label>Date Range</label>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'1M\')">1M</button>' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'3M\')">3M</button>' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'6M\')">6M</button>' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'YTD\')">YTD</button>' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'1Y\')">1Y</button>' +
+                    '<button class="btn-secondary" onclick="setPerfRange(\'ALL\')">All</button>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+}
     
 function renderPerfStats() {
     const container = $('perf-stats');
@@ -1678,6 +1752,17 @@ function renderPerfStats() {
     const twr = computeTWR(rows);
     const twrAnnualized = annualizeReturn(twr, startDate, endDate);
 
+    const benchmarkLabelMap = {
+    NONE: 'No Benchmark',
+    SPY: 'SPY',
+    QQQ: 'QQQ',
+    XEQT: 'XEQT',
+    XAW: 'XAW',
+    CUSTOM: 'Custom (Later)'
+};
+
+const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark;
+    
     container.innerHTML =
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(latestValue) + '</div>' +
@@ -1718,6 +1803,11 @@ function renderPerfStats() {
             '<div class="val">$' + fmt(totalDividends - totalTax - totalFees) + '</div>' +
             '<div class="lbl">Net Income After Tax/Fees</div>' +
         '</div>';
+
+        '<div class="stat-card">' +
+            '<div class="val">' + esc(benchmarkLabel) + '</div>' +
+            '<div class="lbl">Selected Benchmark</div>' +
+        '</div>'
 }
 
 function computeEquityDrawdownSeries(historyRows) {
