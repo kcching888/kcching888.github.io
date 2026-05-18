@@ -1038,7 +1038,7 @@ function applyFilters() {
     currentFilteredTrades = allTrades.filter(t => {
     // 1. Helper to safely compare strings (handles nulls and extra spaces)
         const safeMatch = (dataVal, filterVal) => {
-            console.log("dataVal, filterVal: ", dataVal, filterVal);
+        //    console.log("dataVal, filterVal: ", dataVal, filterVal);
             if (!filterVal) return true; // Filter is empty, so it's a match
             return String(dataVal || "").trim() === String(filterVal).trim();
         };
@@ -2371,7 +2371,7 @@ function renderPortfolio() {
                 
                 totalCadEqv += cadEqv;
 
-                console.log("grouped[", key, "]: ", grouped[key], " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
+              //  console.log("grouped[", key, "]: ", grouped[key], " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
                 
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
