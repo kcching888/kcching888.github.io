@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="3.19.10">
+    <meta name="version" content="3.19.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1905,6 +1905,8 @@ function renderPortfolio() {
                 var cadEqv = (parseFloat(p.acbTotalCost) || 0) * rate;
                 totalCadEqv += cadEqv;
 
+                console.log("grouped[", key, "]: ", grouped[key], " rate: ", rate, " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
+                
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
