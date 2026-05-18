@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.2">
+    <meta name="version" content="4.2.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3319,15 +3319,21 @@ function buyIntoLedger(ledger, tx) {
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
 
+const QTY_EPS = 0.000001;
+
+function round6(v) {
+  return Math.round((num(v) + Number.EPSILON) * 1e6) / 1e6;
+}
+
 function sellFromLedgerFIFO(ledger, tx) {
   const pos = ensureLedgerPosition(ledger, tx);
-  let remaining = tx.quantity;
+  let remaining = round6(tx.quantity);
   let relievedCost = 0;
   const matches = [];
 
   for (const lot of pos.fifoLots) {
-    if (remaining <= 0) break;
-    if (lot.remainingQty <= 0) continue;
+    if (remaining <= QTY_EPS) break;
+    if (lot.remainingQty <= QTY_EPS) continue;
 
     const used = Math.min(lot.remainingQty, remaining);
     const costPart = round2(used * lot.unitCost);
@@ -3336,48 +3342,36 @@ function sellFromLedgerFIFO(ledger, tx) {
       lotId: lot.lotId,
       openDate: lot.date,
       sellDate: tx.date,
-      quantity: used,
+      quantity: round6(used),
       unitCost: lot.unitCost,
       costAmount: costPart
     });
 
-    lot.remainingQty = round2(lot.remainingQty - used);
+    lot.remainingQty = round6(lot.remainingQty - used);
+    if (Math.abs(lot.remainingQty) <= QTY_EPS) lot.remainingQty = 0;
+
     relievedCost = round2(relievedCost + costPart);
-    remaining = round2(remaining - used);
+    remaining = round6(remaining - used);
+    if (Math.abs(remaining) <= QTY_EPS) remaining = 0;
   }
 
-    if (remaining > 0) {
-      console.log('SELL FAIL', tx);
-      console.table((pos.fifoLots || []).map(l => ({
-            lotId: l.lotId,
-            date: l.date,
-            remainingQty: l.remainingQty,
-            unitCost: l.unitCost
-      })));
-      ledger.warnings = ledger.warnings || [];
-      ledger.warnings.push({
-        type: 'INSUFFICIENT_LOTS',
-        symbol: tx.symbol,
-        account: tx.account,
-        currency: tx.currency,
-        sellDate: tx.date,
-        sellQty: tx.quantity,
-        matchedQty: round2(tx.quantity - remaining),
-        unmatchedQty: remaining,
-        message: 'Not enough quantity to sell for ' + tx.symbol + ' in ' + tx.account
-      });
-
-      // Conservative fallback:
-      // only process the matched part, ignore the unmatched remainder
-      tx = { ...tx, quantity: round2(tx.quantity - remaining) };
-
-      if (tx.quantity <= 0) return;
-    }
+  if (remaining > QTY_EPS) {
+    console.log('SELL FAIL', tx);
+    console.table((pos.fifoLots || []).map(l => ({
+      lotId: l.lotId,
+      date: l.date,
+      remainingQty: l.remainingQty,
+      unitCost: l.unitCost
+    })));
+    return;
+  }
 
   const proceeds = round2(tx.amount - tx.commission);
   const realizedGain = round2(proceeds - relievedCost);
 
-  pos.qty = round2(pos.qty - tx.quantity);
+  pos.qty = round6(pos.qty - tx.quantity);
+  if (Math.abs(pos.qty) <= QTY_EPS) pos.qty = 0;
+
   pos.realizedGain = round2(pos.realizedGain + realizedGain);
   pos.fees = round2(pos.fees + tx.commission);
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
