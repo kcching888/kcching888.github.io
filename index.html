@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.0">
+    <meta name="version" content="4.2.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3346,9 +3346,26 @@ function sellFromLedgerFIFO(ledger, tx) {
     remaining = round2(remaining - used);
   }
 
-  if (remaining > 0) {
-    throw new Error('Not enough quantity to sell for ' + tx.symbol + ' in ' + tx.account);
-  }
+    if (remaining > 0) {
+      ledger.warnings = ledger.warnings || [];
+      ledger.warnings.push({
+        type: 'INSUFFICIENT_LOTS',
+        symbol: tx.symbol,
+        account: tx.account,
+        currency: tx.currency,
+        sellDate: tx.date,
+        sellQty: tx.quantity,
+        matchedQty: round2(tx.quantity - remaining),
+        unmatchedQty: remaining,
+        message: 'Not enough quantity to sell for ' + tx.symbol + ' in ' + tx.account
+      });
+
+      // Conservative fallback:
+      // only process the matched part, ignore the unmatched remainder
+      tx = { ...tx, quantity: round2(tx.quantity - remaining) };
+
+      if (tx.quantity <= 0) return;
+    }
 
   const proceeds = round2(tx.amount - tx.commission);
   const realizedGain = round2(proceeds - relievedCost);
