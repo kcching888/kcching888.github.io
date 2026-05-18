@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.4">
+    <meta name="version" content="4.2.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1741,6 +1741,94 @@ function renderPerformanceControls() {
             '</div>' +
         '</div>';
 }
+
+function groupExternalFlowsByDate(transfers, accountFilter = 'ALL') {
+  const map = {};
+
+  (transfers || []).forEach(t => {
+    const acct = String(t.account || '').trim();
+    const action = String(t.action || '').toLowerCase();
+    const date = String(t.date || '').slice(0, 10);
+
+    if (accountFilter !== 'ALL' && acct !== accountFilter) return;
+
+    const cad = num(t.cadAmount, num(t.amount, 0) * num(t.exchRate, 1));
+
+    let flow = 0;
+    if (action.includes('deposit')) flow = Math.abs(cad);
+    else if (action.includes('withdraw')) flow = -Math.abs(cad);
+    else return; // exclude internal transfers from portfolio-level TWR
+
+    map[date] = round2((map[date] || 0) + flow);
+  });
+
+  return map;
+}
+
+function getFilteredHistoryRows(accountFilter = 'ALL') {
+  const rows = (allHistory || []).filter(r => {
+    const acct = String(r.account || '').trim();
+    return accountFilter === 'ALL' || acct === accountFilter;
+  });
+
+  const byDate = {};
+  rows.forEach(r => {
+    const d = String(r.date || '').slice(0, 10);
+    const mv = num(r.totalValue ?? r.marketValue ?? r.value ?? r.mv, 0);
+    byDate[d] = round2((byDate[d] || 0) + mv);
+  });
+
+  return Object.keys(byDate)
+    .sort()
+    .map(d => ({ date: d, value: byDate[d] }));
+}
+
+function computeDailyTWR(historyRows, flowMap) {
+  if (!historyRows || historyRows.length < 2) {
+    return {
+      twr: 0,
+      linkedReturnFactor: 1,
+      days: [],
+      startValue: 0,
+      endValue: 0
+    };
+  }
+
+  const days = [];
+  let linked = 1;
+
+  for (let i = 1; i < historyRows.length; i++) {
+    const prev = historyRows[i - 1];
+    const curr = historyRows[i];
+
+    const bm = num(prev.value, 0);
+    const em = num(curr.value, 0);
+    const cf = num(flowMap[curr.date], 0);
+
+    if (bm === 0) continue;
+
+    // Assume external flow happens at start of current day for practical daily approximation
+    const dayReturn = (em - cf - bm) / bm;
+
+    linked *= (1 + dayReturn);
+
+    days.push({
+      date: curr.date,
+      beginValue: round2(bm),
+      endValue: round2(em),
+      externalFlow: round2(cf),
+      dailyReturn: dayReturn
+    });
+  }
+
+  return {
+    twr: linked - 1,
+    linkedReturnFactor: linked,
+    days,
+    startValue: num(historyRows[0].value, 0),
+    endValue: num(historyRows[historyRows.length - 1].value, 0)
+  };
+}
     
 function renderPerfStats() {
   const ledger = buildLedgerFromCurrentAppData({
@@ -1749,6 +1837,9 @@ function renderPerfStats() {
   });
 
   const totals = ledger.totals || {};
+  const historyRows = getFilteredHistoryRows(perfAccount || 'ALL');
+  const flowMap = groupExternalFlowsByDate(allTransfers || [], perfAccount || 'ALL');
+  const twrResult = computeDailyTWR(historyRows, flowMap);
 
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
@@ -1758,6 +1849,7 @@ function renderPerfStats() {
   const totalReturn = num(totals.totalReturn, 0);
   const priceReturn = num(totals.priceReturn, 0);
   const incomeReturn = num(totals.incomeReturn, 0);
+  const twrPct = twrResult.twr * 100;
 
   const benchmarkLabelMap = {
     NONE: 'No Benchmark',
@@ -1769,56 +1861,16 @@ function renderPerfStats() {
   const benchmarkLabel = benchmarkLabelMap[perfBenchmark] || perfBenchmark || 'No Benchmark';
 
   const cards = [
-    {
-      label: 'Total Return',
-      value: '$' + fmt(totalReturn),
-      cls: totalReturn >= 0 ? 'pos-gain' : 'pos-loss'
-    },
-    {
-      label: 'Price Return',
-      value: '$' + fmt(priceReturn),
-      cls: priceReturn >= 0 ? 'pos-gain' : 'pos-loss'
-    },
-    {
-      label: 'Income Return',
-      value: '$' + fmt(incomeReturn),
-      cls: incomeReturn >= 0 ? 'pos-gain' : 'pos-loss'
-    },
-    {
-      label: 'Realized Gain/Loss',
-      value: '$' + fmt(realized),
-      cls: realized >= 0 ? 'pos-gain' : 'pos-loss'
-    },
-    {
-      label: 'Unrealized Gain/Loss',
-      value: '$' + fmt(unrealized),
-      cls: unrealized >= 0 ? 'pos-gain' : 'pos-loss'
-    },
-    {
-      label: 'Dividends',
-      value: '$' + fmt(dividends),
-      cls: dividends >= 0 ? 'pos-gain' : ''
-    },
-    {
-      label: 'Fees',
-      value: '$' + fmt(fees),
-      cls: fees > 0 ? 'pos-loss' : ''
-    },
-    {
-      label: 'Net Contributions',
-      value: '$' + fmt(netContributions),
-      cls: ''
-    },
-    {
-      label: 'Selected Benchmark',
-      value: esc(benchmarkLabel),
-      cls: ''
-    },
-    {
-      label: 'TWR',
-      value: 'Pending cash-flow model',
-      cls: ''
-    }
+    { label: 'Total Return', value: '$' + fmt(totalReturn), cls: totalReturn >= 0 ? 'pos-gain' : 'pos-loss' },
+    { label: 'Price Return', value: '$' + fmt(priceReturn), cls: priceReturn >= 0 ? 'pos-gain' : 'pos-loss' },
+    { label: 'Income Return', value: '$' + fmt(incomeReturn), cls: incomeReturn >= 0 ? 'pos-gain' : 'pos-loss' },
+    { label: 'Realized Gain/Loss', value: '$' + fmt(realized), cls: realized >= 0 ? 'pos-gain' : 'pos-loss' },
+    { label: 'Unrealized Gain/Loss', value: '$' + fmt(unrealized), cls: unrealized >= 0 ? 'pos-gain' : 'pos-loss' },
+    { label: 'Dividends', value: '$' + fmt(dividends), cls: dividends >= 0 ? 'pos-gain' : '' },
+    { label: 'Fees', value: '$' + fmt(fees), cls: fees > 0 ? 'pos-loss' : '' },
+    { label: 'Net Contributions', value: '$' + fmt(netContributions), cls: '' },
+    { label: 'Selected Benchmark', value: esc(benchmarkLabel), cls: '' },
+    { label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' }
   ];
 
   $('perf-stats').innerHTML = cards.map(c =>
@@ -1828,7 +1880,6 @@ function renderPerfStats() {
     '</div>'
   ).join('');
 }
-
 function computeEquityDrawdownSeries(historyRows) {
     if (!historyRows || !historyRows.length) return [];
 
