@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.0.4">
+    <meta name="version" content="4.0.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -512,6 +512,9 @@
     var priceCache = {};
     var lastPriceUpdate = null;
     var currentUploadTab = 'ibkr';
+
+    var equityTableVisible = true;
+    var equityTableRows = 60;
 
     //const APP_VERSION = "3.84";
 
@@ -1596,7 +1599,15 @@ function annualizeReturn(totalReturn, startDate, endDate) {
     return Math.pow(1 + totalReturn, 1 / years) - 1;
 }
 
+function toggleEquityTable() {
+    equityTableVisible = !equityTableVisible;
+    renderEquityDrawdown();
+}
 
+function setEquityTableRows(val) {
+    equityTableRows = val === 'ALL' ? 'ALL' : parseInt(val, 10) || 60;
+    renderEquityDrawdown();
+}
 
     
 function renderPerfStats() {
@@ -1734,9 +1745,13 @@ function renderEquityDrawdown() {
         }
     });
 
-    const recent = series.slice(-60); // use last 60 days for chart/table
+    let recent = series;
+    if (equityTableRows !== 'ALL') {
+        recent = series.slice(-equityTableRows);
+    }
 
     let html = '<h3>Equity & Drawdown</h3>';
+
     html += '<div class="stat-grid" style="margin-bottom:12px;">' +
         '<div class="stat-card">' +
             '<div class="val">$' + fmt(latest.value) + '</div>' +
@@ -1756,107 +1771,225 @@ function renderEquityDrawdown() {
         '</div>' +
     '</div>';
 
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">' +
+        '<div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">' +
+            '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+                '<span style="display:inline-block;width:14px;height:3px;background:#1f77b4;"></span> Equity (CAD)' +
+            '</span>' +
+            '<span style="display:inline-flex;align-items:center;gap:6px;">' +
+                '<span style="display:inline-block;width:14px;height:3px;background:#d62728;"></span> Drawdown (%)' +
+            '</span>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
+            '<button class="btn-secondary" onclick="toggleEquityTable()">' + (equityTableVisible ? 'Hide' : 'Show') + ' Daily Table</button>' +
+            '<label for="equity-row-count">Rows:</label>' +
+            '<select id="equity-row-count" onchange="setEquityTableRows(this.value)">' +
+                '<option value="20"' + (equityTableRows === 20 ? ' selected' : '') + '>20</option>' +
+                '<option value="60"' + (equityTableRows === 60 ? ' selected' : '') + '>60</option>' +
+                '<option value="120"' + (equityTableRows === 120 ? ' selected' : '') + '>120</option>' +
+                '<option value="ALL"' + (equityTableRows === 'ALL' ? ' selected' : '') + '>All</option>' +
+            '</select>' +
+        '</div>' +
+    '</div>';
+
     html += '<div id="equity-chart-wrap" style="margin-bottom:12px;">' +
-            '<svg id="equity-chart" width="100%" height="200"></svg>' +
-            '</div>';
+        '<svg id="equity-chart" width="100%" height="260" role="img" aria-label="Equity and drawdown chart"></svg>' +
+        '</div>';
 
-    html += '<table class="portfolio-table"><thead><tr>' +
-        '<th>Date</th>' +
-        '<th class="text-right">Equity</th>' +
-        '<th class="text-right">Peak</th>' +
-        '<th class="text-right">Daily Return</th>' +
-        '<th class="text-right">Drawdown</th>' +
-        '<th class="text-right">Net Flow</th>' +
-        '</tr></thead><tbody>';
+    if (equityTableVisible) {
+        html += '<table class="portfolio-table"><thead><tr>' +
+            '<th>Date</th>' +
+            '<th class="text-right">Equity</th>' +
+            '<th class="text-right">Peak</th>' +
+            '<th class="text-right">Daily Return</th>' +
+            '<th class="text-right">Drawdown</th>' +
+            '<th class="text-right">Net Flow</th>' +
+            '</tr></thead><tbody>';
 
-    recent.forEach(function(r) {
-        html += '<tr>' +
-            '<td>' + esc(r.date) + '</td>' +
-            '<td class="text-right">$' + fmt(r.value) + '</td>' +
-            '<td class="text-right">$' + fmt(r.peak) + '</td>' +
-            '<td class="text-right ' + (r.dayReturn >= 0 ? 'text-success' : 'text-danger') + '">' + fmt(r.dayReturn * 100) + '%</td>' +
-            '<td class="text-right ' + (r.drawdown >= 0 ? '' : 'text-danger') + '">' + fmt(r.drawdown * 100) + '%</td>' +
-            '<td class="text-right">$' + fmt(r.netCashFlow) + '</td>' +
-            '</tr>';
-    });
+        recent.forEach(function(r) {
+            html += '<tr>' +
+                '<td>' + esc(r.date) + '</td>' +
+                '<td class="text-right">$' + fmt(r.value) + '</td>' +
+                '<td class="text-right">$' + fmt(r.peak) + '</td>' +
+                '<td class="text-right ' + (r.dayReturn >= 0 ? 'text-success' : 'text-danger') + '">' + fmt(r.dayReturn * 100) + '%</td>' +
+                '<td class="text-right ' + (r.drawdown >= 0 ? '' : 'text-danger') + '">' + fmt(r.drawdown * 100) + '%</td>' +
+                '<td class="text-right">$' + fmt(r.netCashFlow) + '</td>' +
+                '</tr>';
+        });
 
-    html += '</tbody></table>';
+        html += '</tbody></table>';
+    }
+
     wrap.innerHTML = html;
-
-    drawEquitySvgChart(recent);
+    drawEquitySvgChart(series);
 }
 
 function drawEquitySvgChart(series) {
     const svg = $('equity-chart');
-    if (!svg || !series || !series.length) return;
+    if (!svg || !series || series.length < 2) return;
 
-    const width = svg.clientWidth || 600;
-    const height = svg.clientHeight || 200;
+    const width = svg.clientWidth || 900;
+    const height = svg.clientHeight || 260;
+
+    const margin = { top: 16, right: 70, bottom: 36, left: 90 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const topH = Math.floor(innerH * 0.58);
+    const bottomH = innerH - topH - 16;
+    const ddTop = margin.top + topH + 16;
 
     const minVal = Math.min.apply(null, series.map(r => r.value));
     const maxVal = Math.max.apply(null, series.map(r => r.value));
-
-    let maxDD = 0;
-    series.forEach(r => {
-        if (r.drawdown < maxDD) maxDD = r.drawdown;
-    });
-
     const valRange = (maxVal - minVal) || 1;
-    const ddRange = Math.abs(maxDD) || 1;
 
-    const padTop = 10;
-    const padBottom = 10;
-    const padLeft = 0;
-    const padRight = 0;
-
-    const usableHeightEquity = (height / 2) - padTop - padBottom;
-    const usableHeightDD = (height / 2) - padTop - padBottom;
-
-    const n = series.length;
-    if (n < 2) return;
-
-    const stepX = (width - padLeft - padRight) / (n - 1);
-
-    function normEquity(v) {
-        const yNorm = (v - minVal) / valRange;
-        return padTop + (1 - yNorm) * usableHeightEquity;
-    }
-
-    function normDD(dd) {
-        const frac = Math.abs(dd) / ddRange;
-        const base = height / 2;
-        return base + frac * usableHeightDD;
-    }
-
-    let equityPoints = '';
-    let ddPoints = '';
-
-    series.forEach(function(r, idx) {
-        const x = padLeft + idx * stepX;
-        const yEquity = normEquity(r.value);
-        const yDD = normDD(r.drawdown);
-
-        equityPoints += x + ',' + yEquity + ' ';
-        ddPoints += x + ',' + yDD + ' ';
+    let minDD = 0;
+    series.forEach(r => {
+        if (r.drawdown < minDD) minDD = r.drawdown;
     });
+    const ddRange = Math.abs(minDD) || 1;
+
+    function xPos(i) {
+        return margin.left + (i / (series.length - 1)) * innerW;
+    }
+
+    function yEquity(v) {
+        const t = (v - minVal) / valRange;
+        return margin.top + topH - (t * topH);
+    }
+
+    function yDD(dd) {
+        const t = Math.abs(dd) / ddRange;
+        return ddTop + (t * bottomH);
+    }
+
+    function makeSvgEl(name, attrs) {
+        const el = document.createElementNS('http://www.w3.org/2000/svg', name);
+        Object.keys(attrs).forEach(k => el.setAttribute(k, attrs[k]));
+        return el;
+    }
 
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-
-    const eqLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    eqLine.setAttribute('points', equityPoints.trim());
-    eqLine.setAttribute('fill', 'none');
-    eqLine.setAttribute('stroke', '#1f77b4');
-    eqLine.setAttribute('stroke-width', '2');
-
-    const ddLine = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
-    ddLine.setAttribute('points', ddPoints.trim());
-    ddLine.setAttribute('fill', 'none');
-    ddLine.setAttribute('stroke', '#d62728');
-    ddLine.setAttribute('stroke-width', '2');
-
     svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
-    svg.appendChild(eqLine);
-    svg.appendChild(ddLine);
+
+    // Background guides
+    const divider = makeSvgEl('line', {
+        x1: margin.left,
+        y1: ddTop - 8,
+        x2: margin.left + innerW,
+        y2: ddTop - 8,
+        stroke: '#666',
+        'stroke-width': 1,
+        'stroke-dasharray': '4 4'
+    });
+    svg.appendChild(divider);
+
+    // Equity axis labels
+    [maxVal, (maxVal + minVal) / 2, minVal].forEach(function(v) {
+        const y = yEquity(v);
+
+        svg.appendChild(makeSvgEl('line', {
+            x1: margin.left,
+            y1: y,
+            x2: margin.left + innerW,
+            y2: y,
+            stroke: '#2a2a2a',
+            'stroke-width': 1
+        }));
+
+        const txt = makeSvgEl('text', {
+            x: margin.left - 8,
+            y: y + 4,
+            'text-anchor': 'end',
+            'font-size': '11',
+            fill: '#aaa'
+        });
+        txt.textContent = '$' + fmt(v, 0);
+        svg.appendChild(txt);
+    });
+
+    // Drawdown axis labels
+    [0, minDD / 2, minDD].forEach(function(v) {
+        const y = yDD(v);
+
+        svg.appendChild(makeSvgEl('line', {
+            x1: margin.left,
+            y1: y,
+            x2: margin.left + innerW,
+            y2: y,
+            stroke: '#2a2a2a',
+            'stroke-width': 1
+        }));
+
+        const txt = makeSvgEl('text', {
+            x: margin.left + innerW + 8,
+            y: y + 4,
+            'text-anchor': 'start',
+            'font-size': '11',
+            fill: '#aaa'
+        });
+        txt.textContent = fmt(v * 100) + '%';
+        svg.appendChild(txt);
+    });
+
+    // X axis labels
+    const xLabelIdx = [0, Math.floor((series.length - 1) / 2), series.length - 1];
+    xLabelIdx.forEach(function(i) {
+        const x = xPos(i);
+        const txt = makeSvgEl('text', {
+            x: x,
+            y: height - 8,
+            'text-anchor': 'middle',
+            'font-size': '11',
+            fill: '#aaa'
+        });
+        txt.textContent = series[i].date;
+        svg.appendChild(txt);
+    });
+
+    // Axis titles
+    const eqTitle = makeSvgEl('text', {
+        x: margin.left,
+        y: 12,
+        'text-anchor': 'start',
+        'font-size': '11',
+        fill: '#1f77b4'
+    });
+    eqTitle.textContent = 'Equity (CAD)';
+    svg.appendChild(eqTitle);
+
+    const ddTitle = makeSvgEl('text', {
+        x: margin.left,
+        y: ddTop - 12,
+        'text-anchor': 'start',
+        'font-size': '11',
+        fill: '#d62728'
+    });
+    ddTitle.textContent = 'Drawdown (%)';
+    svg.appendChild(ddTitle);
+
+    // Build polylines
+    let eqPoints = '';
+    let ddPoints = '';
+
+    series.forEach(function(r, i) {
+        eqPoints += xPos(i) + ',' + yEquity(r.value) + ' ';
+        ddPoints += xPos(i) + ',' + yDD(r.drawdown) + ' ';
+    });
+
+    svg.appendChild(makeSvgEl('polyline', {
+        points: eqPoints.trim(),
+        fill: 'none',
+        stroke: '#1f77b4',
+        'stroke-width': 2
+    }));
+
+    svg.appendChild(makeSvgEl('polyline', {
+        points: ddPoints.trim(),
+        fill: 'none',
+        stroke: '#d62728',
+        'stroke-width': 2
+    }));
 }
     
     
