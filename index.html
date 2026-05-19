@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.14">
+    <meta name="version" content="4.2.15">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1929,7 +1929,7 @@ async function loadBenchmarkHistory(ticker) {
   if (!ticker || ticker === 'NONE') return [];
   if (window.benchmarkHistory[ticker]?.length) return window.benchmarkHistory[ticker];
 
-  const url = APP_SCRIPT_URL + '?action=benchmark&ticker=' + encodeURIComponent(ticker);
+  const url = GAS_URL + '?action=benchmark&ticker=' + encodeURIComponent(ticker);
   const res = await fetch(url);
   const rows = await res.json();
 
