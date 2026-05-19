@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.10">
+    <meta name="version" content="4.2.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1872,6 +1872,57 @@ function filterFlowMapByPerfRange(flowMap, perfRange, endDateStr) {
   });
   return out;
 }
+
+function getBenchmarkReturn(benchmarkTicker, startDate, endDate) {
+  if (!benchmarkTicker || benchmarkTicker === 'NONE') {
+    return {
+      ticker: 'NONE',
+      startPrice: 0,
+      endPrice: 0,
+      returnPct: 0,
+      returnFactor: 1
+    };
+  }
+
+  const hist = (window.benchmarkHistory?.[benchmarkTicker] || [])
+    .filter(r => String(r.date).slice(0, 10) >= startDate && String(r.date).slice(0, 10) <= endDate)
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+  if (!hist.length) {
+    return {
+      ticker: benchmarkTicker,
+      startPrice: 0,
+      endPrice: 0,
+      returnPct: 0,
+      returnFactor: 1
+    };
+  }
+
+  const startPrice = num(hist[0].close ?? hist[0].price, 0);
+  const endPrice = num(hist[hist.length - 1].close ?? hist[hist.length - 1].price, 0);
+
+  if (!startPrice) {
+    return {
+      ticker: benchmarkTicker,
+      startPrice,
+      endPrice,
+      returnPct: 0,
+      returnFactor: 1
+    };
+  }
+
+  const returnFactor = endPrice / startPrice;
+  const returnPct = (returnFactor - 1) * 100;
+
+  return {
+    ticker: benchmarkTicker,
+    startPrice,
+    endPrice,
+    returnPct,
+    returnFactor
+  };
+}
+    
     
 function renderPerfStats() {
   const ledger = buildLedgerFromCurrentAppData({
@@ -1890,6 +1941,28 @@ function renderPerfStats() {
   const flowMap = filterFlowMapByPerfRange(rawFlowMap, perfRange, endDateStr);
   const twrResult = computeDailyTWR(historyRows, flowMap);
 
+  const startDate = historyRows[0]?.date || '';
+  const endDate = historyRows[historyRows.length - 1]?.date || '';
+ 
+  const benchmarkResult = getBenchmarkReturn(
+      perfBenchmark || 'NONE',
+      startDate,
+      endDate
+   );
+
+  console.log('Benchmark debug', {
+      perfBenchmark,
+      startDate,
+      endDate,
+      benchmarkResult,
+      twrPct,
+      activePct
+    });
+    
+  const twrPct = num(twrResult.twr, 0) * 100;
+  const benchmarkPct = num(benchmarkResult.returnPct, 0);
+  const activePct = twrPct - benchmarkPct;
+    
  console.log('TWR range debug', {
   perfRange,
   perfAccount,
@@ -1973,7 +2046,35 @@ console.log('Flow sum check', {
     { label: 'Fees', value: '$' + fmt(fees), cls: fees > 0 ? 'pos-loss' : '' },
     { label: 'Net Contributions', value: '$' + fmt(netContributions), cls: '' },
     { label: 'Selected Benchmark', value: esc(benchmarkLabel), cls: '' },
-    { label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' }
+    //{ label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' }
+    {
+      label: 'Portfolio TWR',
+      value: fmt(twrPct, 2) + '%',
+      cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss'
+    },
+    {
+      label: 'Benchmark Return',
+      value: perfBenchmark === 'NONE'
+        ? 'N/A'
+        : fmt(benchmarkPct, 2) + '%',
+      cls: perfBenchmark === 'NONE'
+        ? ''
+        : (benchmarkPct >= 0 ? 'pos-gain' : 'pos-loss')
+    },
+    {
+      label: 'Active Return',
+      value: perfBenchmark === 'NONE'
+        ? 'N/A'
+        : fmt(activePct, 2) + '%',
+      cls: perfBenchmark === 'NONE'
+        ? ''
+        : (activePct >= 0 ? 'pos-gain' : 'pos-loss')
+    },
+    {
+      label: 'Selected Benchmark',
+      value: esc(benchmarkLabel),
+      cls: ''
+    }
   ];
 
   $('perf-stats').innerHTML = cards.map(c =>
