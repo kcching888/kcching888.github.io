@@ -1950,6 +1950,11 @@ function renderPerfStats() {
       endDate
    );
 
+  const twrPct = num(twrResult.twr, 0) * 100;
+  const benchmarkPct = num(benchmarkResult.returnPct, 0);
+  const activePct = twrPct - benchmarkPct;
+
+ 
   console.log('Benchmark debug', {
       perfBenchmark,
       startDate,
@@ -1958,10 +1963,6 @@ function renderPerfStats() {
       twrPct,
       activePct
     });
-    
-//  const twrPct = num(twrResult.twr, 0) * 100;
-  const benchmarkPct = num(benchmarkResult.returnPct, 0);
-  const activePct = twrPct - benchmarkPct;
     
  console.log('TWR range debug', {
   perfRange,
@@ -2025,7 +2026,7 @@ console.log('Flow sum check', {
   const totalReturn = num(totals.totalReturn, 0);
   const priceReturn = num(totals.priceReturn, 0);
   const incomeReturn = num(totals.incomeReturn, 0);
-  const twrPct = twrResult.twr * 100;
+ // const twrPct = twrResult.twr * 100;
 
   const benchmarkLabelMap = {
     NONE: 'No Benchmark',
