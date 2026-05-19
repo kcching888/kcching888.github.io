@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.15">
+    <meta name="version" content="4.2.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1927,13 +1927,31 @@ window.benchmarkHistory = window.benchmarkHistory || {};
 
 async function loadBenchmarkHistory(ticker) {
   if (!ticker || ticker === 'NONE') return [];
-  if (window.benchmarkHistory[ticker]?.length) return window.benchmarkHistory[ticker];
+  if (Array.isArray(window.benchmarkHistory[ticker]) && window.benchmarkHistory[ticker].length) {
+    return window.benchmarkHistory[ticker];
+  }
 
-  const url = GAS_URL + '?action=benchmark&ticker=' + encodeURIComponent(ticker);
+  const url = APP_SCRIPT_URL + '?action=benchmark&ticker=' + encodeURIComponent(ticker);
   const res = await fetch(url);
-  const rows = await res.json();
+  const json = await res.json();
 
-  window.benchmarkHistory[ticker] = rows || [];
+  console.log('benchmark raw response', json);
+
+  const rows = Array.isArray(json)
+    ? json
+    : Array.isArray(json?.rows)
+      ? json.rows
+      : Array.isArray(json?.data)
+        ? json.data
+        : [];
+
+  window.benchmarkHistory[ticker] = rows
+    .map(r => ({
+      date: String(r.date || r.Date || '').slice(0, 10),
+      close: num(r.close ?? r.adjClose ?? r.price ?? r.Close ?? r.AdjClose, 0)
+    }))
+    .filter(r => r.date && r.close > 0);
+
   return window.benchmarkHistory[ticker];
 }
     
