@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.8">
+    <meta name="version" content="4.2.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1752,12 +1752,16 @@ function groupExternalFlowsByDate(transfers, accountFilter = 'ALL') {
 
     if (accountFilter !== 'ALL' && acct !== accountFilter) return;
 
-    const cad = num(t.cadAmount, num(t.amount, 0) * num(t.exchRate, 1));
+    const cad = Math.abs(num(t.cadAmount, num(t.amount, 0) * num(t.exchRate, 1)));
 
     let flow = 0;
-    if (action.includes('deposit')) flow = Math.abs(cad);
-    else if (action.includes('withdraw')) flow = -Math.abs(cad);
-    else return; // exclude internal transfers from portfolio-level TWR
+
+    // Portfolio perspective:
+    // deposit/contribution into portfolio = positive external flow
+    // withdrawal out of portfolio = negative external flow
+    if (action.includes('deposit')) flow = cad;
+    else if (action.includes('withdraw')) flow = -cad;
+    else return; // exclude internal transfers
 
     map[date] = round2((map[date] || 0) + flow);
   });
@@ -1915,6 +1919,13 @@ console.table(
     amount
   }))
 );
+
+console.log('Flow sum check', {
+  totalFlow: Object.values(flowMap).reduce((s, v) => s + num(v, 0), 0),
+  positives: Object.values(flowMap).filter(v => v > 0).reduce((s, v) => s + v, 0),
+  negatives: Object.values(flowMap).filter(v => v < 0).reduce((s, v) => s + v, 0)
+});
+    
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
