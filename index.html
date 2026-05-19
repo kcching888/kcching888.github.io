@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.12">
+    <meta name="version" content="4.2.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1922,9 +1922,38 @@ function getBenchmarkReturn(benchmarkTicker, startDate, endDate) {
     returnFactor
   };
 }
+
+window.benchmarkHistory = window.benchmarkHistory || {};
+
+async function loadBenchmarkHistory(ticker) {
+  if (!ticker || ticker === 'NONE') return [];
+  if (window.benchmarkHistory[ticker]?.length) {
+    return window.benchmarkHistory[ticker];
+  }
+
+  const url =
+    'https://query1.finance.yahoo.com/v8/finance/chart/' +
+    encodeURIComponent(ticker) +
+    '?range=5y&interval=1d&includeAdjustedClose=true';
+
+  const res = await fetch(url);
+  const json = await res.json();
+
+  const result = json?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const adjclose = result?.indicators?.adjclose?.[0]?.adjclose || [];
+
+  const rows = timestamps.map((ts, i) => ({
+    date: new Date(ts * 1000).toISOString().slice(0, 10),
+    close: adjclose[i] ?? quote.close?.[i] ?? null
+  })).filter(r => r.close != null);
+
+  window.benchmarkHistory[ticker] = rows;
+  return rows;
+}
     
-    
-function renderPerfStats() {
+async function renderPerfStats() {
   const ledger = buildLedgerFromCurrentAppData({
     baseCurrency: 'CAD',
     livePrices: window.currentPrices || {}
@@ -1943,7 +1972,11 @@ function renderPerfStats() {
 
   const startDate = historyRows[0]?.date || '';
   const endDate = historyRows[historyRows.length - 1]?.date || '';
- 
+
+   if (perfBenchmark && perfBenchmark !== 'NONE') {
+    await loadBenchmarkHistory(perfBenchmark);
+  }
+    
   const benchmarkResult = getBenchmarkReturn(
       perfBenchmark || 'NONE',
       startDate,
