@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.5">
+    <meta name="version" content="4.2.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1829,6 +1829,41 @@ function computeDailyTWR(historyRows, flowMap) {
     endValue: num(historyRows[historyRows.length - 1].value, 0)
   };
 }
+
+function getRangeStartDate(range, endDate = new Date()) {
+  const d = new Date(endDate);
+  if (range === '1M') d.setMonth(d.getMonth() - 1);
+  else if (range === '3M') d.setMonth(d.getMonth() - 3);
+  else if (range === '6M') d.setMonth(d.getMonth() - 6);
+  else if (range === 'YTD') d.setMonth(0, 1);
+  else if (range === '1Y') d.setFullYear(d.getFullYear() - 1);
+  else if (range === '3Y') d.setFullYear(d.getFullYear() - 3);
+  else if (range === '5Y') d.setFullYear(d.getFullYear() - 5);
+  else if (range === 'ALL') return null;
+  return d;
+}
+
+function filterHistoryRowsByPerfRange(rows, perfRange) {
+  if (!rows || !rows.length || perfRange === 'ALL') return rows;
+  const endDate = new Date(rows[rows.length - 1].date);
+  const startDate = getRangeStartDate(perfRange, endDate);
+  if (!startDate) return rows;
+
+  return rows.filter(r => new Date(r.date) >= startDate);
+}
+
+function filterFlowMapByPerfRange(flowMap, perfRange, endDateStr) {
+  if (perfRange === 'ALL') return flowMap;
+  const endDate = new Date(endDateStr);
+  const startDate = getRangeStartDate(perfRange, endDate);
+  if (!startDate) return flowMap;
+
+  const out = {};
+  Object.keys(flowMap).forEach(d => {
+    if (new Date(d) >= startDate) out[d] = flowMap[d];
+  });
+  return out;
+}
     
 function renderPerfStats() {
   const ledger = buildLedgerFromCurrentAppData({
@@ -1837,10 +1872,30 @@ function renderPerfStats() {
   });
 
   const totals = ledger.totals || {};
-  const historyRows = getFilteredHistoryRows(perfAccount || 'ALL');
-  const flowMap = groupExternalFlowsByDate(allTransfers || [], perfAccount || 'ALL');
+  //const historyRows = getFilteredHistoryRows(perfAccount || 'ALL');
+  //const flowMap = groupExternalFlowsByDate(allTransfers || [], perfAccount || 'ALL');
+  //const twrResult = computeDailyTWR(historyRows, flowMap);
+  const rawHistoryRows = getFilteredHistoryRows(perfAccount || 'ALL');
+  const historyRows = filterHistoryRowsByPerfRange(rawHistoryRows, perfRange);
+  const endDateStr = historyRows.length ? historyRows[historyRows.length - 1].date : '';
+  const rawFlowMap = groupExternalFlowsByDate(allTransfers || [], perfAccount || 'ALL');
+  const flowMap = filterFlowMapByPerfRange(rawFlowMap, perfRange, endDateStr);
   const twrResult = computeDailyTWR(historyRows, flowMap);
 
+ console.log('TWR range debug', {
+  perfRange,
+  perfAccount,
+  rows: historyRows.length,
+  start: historyRows[0]?.date,
+  end: historyRows[historyRows.length - 1]?.date,
+  firstValue: historyRows[0]?.value,
+  lastValue: historyRows[historyRows.length - 1]?.value,
+  flowDates: Object.keys(flowMap).length,
+  flowMap,
+  twr: twrResult.twr,
+  twrPct: twrResult.twr * 100
+});
+    
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
