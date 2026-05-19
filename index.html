@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.9">
+    <meta name="version" content="4.2.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1802,28 +1802,32 @@ function computeDailyTWR(historyRows, flowMap) {
   let linked = 1;
 
   for (let i = 1; i < historyRows.length; i++) {
-    const prev = historyRows[i - 1];
-    const curr = historyRows[i];
+  const prev = historyRows[i - 1];
+  const curr = historyRows[i];
 
-    const bm = num(prev.value, 0);
-    const em = num(curr.value, 0);
-    const cf = num(flowMap[curr.date], 0);
+  const bm = num(prev.value, 0);
+  const em = num(curr.value, 0);
+  const cf = num(flowMap[curr.date], 0);
 
-    if (bm === 0) continue;
+  const cfin = cf > 0 ? cf : 0;
+  const cfout = cf < 0 ? Math.abs(cf) : 0;
 
-    // Assume external flow happens at start of current day for practical daily approximation
-    const dayReturn = (em - cf - bm) / bm;
+  if (bm + cfin === 0) continue;
 
-    linked *= (1 + dayReturn);
+  const dayReturn = ((em + cfout) / (bm + cfin)) - 1;
 
-    days.push({
-      date: curr.date,
-      beginValue: round2(bm),
-      endValue: round2(em),
-      externalFlow: round2(cf),
-      dailyReturn: dayReturn
-    });
-  }
+  linked *= (1 + dayReturn);
+
+  days.push({
+    date: curr.date,
+    beginValue: round2(bm),
+    endValue: round2(em),
+    externalFlow: round2(cf),
+    cashIn: round2(cfin),
+    cashOut: round2(cfout),
+    dailyReturn: dayReturn
+  });
+}
 
   return {
     twr: linked - 1,
@@ -1918,6 +1922,20 @@ console.table(
     date,
     amount
   }))
+);
+
+console.table(
+  twrResult.days
+    .filter(d => Math.abs(d.externalFlow) > 0)
+    .map(d => ({
+      date: d.date,
+      beginValue: d.beginValue,
+      endValue: d.endValue,
+      externalFlow: d.externalFlow,
+      cashIn: d.cashIn,
+      cashOut: d.cashOut,
+      dailyReturn: d.dailyReturn
+    }))
 );
 
 console.log('Flow sum check', {
