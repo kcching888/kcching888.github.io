@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.11">
+    <meta name="version" content="4.2.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1963,6 +1963,18 @@ function renderPerfStats() {
       twrPct,
       activePct
     });
+
+ console.log('Performance comparison', {
+  perfRange,
+  perfBenchmark,
+  portfolioTwrPct: twrPct,
+  benchmarkPct,
+  activePct,
+  startDate,
+  endDate,
+  benchmarkStart: benchmarkResult.startPrice,
+  benchmarkEnd: benchmarkResult.endPrice
+});
     
  console.log('TWR range debug', {
   perfRange,
