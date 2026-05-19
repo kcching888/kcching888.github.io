@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.6">
+    <meta name="version" content="4.2.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1895,7 +1895,19 @@ function renderPerfStats() {
   twr: twrResult.twr,
   twrPct: twrResult.twr * 100
 });
-    
+
+console.log('TWR cash flow audit', {
+  perfRange,
+  perfAccount,
+  start: historyRows[0]?.date,
+  end: historyRows[historyRows.length - 1]?.date,
+  startValue: historyRows[0]?.value,
+  endValue: historyRows[historyRows.length - 1]?.value,
+  netExternalFlow: Object.values(flowMap).reduce((s, v) => s + num(v, 0), 0),
+  flowEntries: Object.entries(flowMap).map(([date, amount]) => ({ date, amount })),
+  sampleDays: twrResult.days?.slice(0, 5),
+  lastDays: twrResult.days?.slice(-5)
+});
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
