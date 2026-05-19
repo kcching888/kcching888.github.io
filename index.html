@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.7">
+    <meta name="version" content="4.2.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1908,6 +1908,13 @@ console.log('TWR cash flow audit', {
   sampleDays: twrResult.days?.slice(0, 5),
   lastDays: twrResult.days?.slice(-5)
 });
+
+console.table(
+  Object.entries(flowMap).map(([date, amount]) => ({
+    date,
+    amount
+  }))
+);
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
