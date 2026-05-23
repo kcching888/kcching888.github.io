@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.17">
+    <meta name="version" content="4.2.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3121,8 +3121,11 @@ function renderGainLoss() {
         console.log("processUpload result: ", result);
         
         if (result.success) {
-            alert("Success! Processed " + result.count + " records.");
-            location.reload(); 
+            alert(
+                "Import complete. Added " + (result.addedCount || 0) +
+                " new records; skipped " + (result.duplicateCount || 0) +
+                " duplicates."
+            );
         } else {
             throw new Error(result.error || "Unknown error");
         }
