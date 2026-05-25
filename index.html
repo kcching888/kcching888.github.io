@@ -1068,7 +1068,7 @@ function applyFilters() {
     });
 
     //console.log("applyFilters() filters: ", filters);
-    console.log("applyFilters() currentFilteredTrades: ", currentFilteredTrades);
+   
 
     
     // Reset to page 1
@@ -1138,7 +1138,7 @@ function updateTradeCurrencyDropdown() {
         if(tradeCurrentPage>totalPages) tradeCurrentPage=totalPages;
 
         var start = (tradeCurrentPage-1)*perPage;
-        var rows = currentFilteredTrades.slice(start, perPage===currentFilteredTrades.length?undefined:start+perPage);
+        //var rows = currentFilteredTrades.slice(start, perPage===currentFilteredTrades.length?undefined:start+perPage);
         
         console.log("renderTradesTable() transactionFilteredTrades: ", transactionFilteredTrades);
         $('trades-info').textContent = 'Showing '+(total===0?0:start+1)+'-'+Math.min(start+rows.length,total)+' of '+total+' records ('+allTrades.length+' total loaded)';
@@ -3365,7 +3365,7 @@ function renderGainLoss() {
 
     function exportTrades(){
         var csv='Date,Account,Action,Symbol,Description,Quantity,Price,Amount,Commission,Currency';
-        currentFilteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
+        transactionFilteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
         dlCsv(csv,'trades.csv');
     }
     function exportDivs(){
