@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.20">
+    <meta name="version" content="4.2.21">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2611,6 +2611,7 @@ function renderPortfolio() {
                 <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
             </tr></thead><tbody>`;
 */
+            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
             var unusedCashCad = cashByAccount[acct] || 0;
             var totalWithCashCad = tMV + unusedCashCad;
 
@@ -2635,8 +2636,7 @@ function renderPortfolio() {
             <td class="text-right">$${fmt(totalWithCashCad)}</td>
             <td colspan="7"></td>
         </tr></tbody></table>`;
-
-            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
+           
 
             grouped[key].forEach(p => {
                 var curP = (livePrices[p.symbol] || {}).price || 0, rate = p.exchRate || 1;
