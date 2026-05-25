@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.21">
+    <meta name="version" content="4.2.22">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2601,7 +2601,7 @@ function renderPortfolio() {
         html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
 
         if (type === 'Stocks') {
-    /*        html += `<table class="portfolio-table"><thead><tr>
+            html += `<table class="portfolio-table"><thead><tr>
                 <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">MV</th>
                 <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
                 <th class="text-right" style="color:#aaa">Basis</th>
@@ -2610,32 +2610,9 @@ function renderPortfolio() {
                 <th class="text-right" style="color:#4caf50">Total ACB</th>
                 <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
             </tr></thead><tbody>`;
-*/
-            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
-            var unusedCashCad = cashByAccount[acct] || 0;
-            var totalWithCashCad = tMV + unusedCashCad;
 
-            html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-            <td>TOTAL (CAD)</td><td colspan="2"></td>
-            <td class="text-right">$${fmt(tMV)}</td>
-            <td style="border-left:2px solid #444"></td>
-            <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
-            <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
-            <td style="border-left:2px solid #444"></td>
-            <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
-            <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
-            <td>CAD</td>
-        </tr>
-        <tr class="total-row" style="background:#0f1720; font-weight:bold;">
-            <td colspan="3">Unused Cash (CAD)</td>
-            <td class="text-right">$${fmt(unusedCashCad)}</td>
-            <td colspan="7"></td>
-        </tr>
-        <tr class="total-row" style="background:#16202a; font-weight:bold; border-top:1px solid #333">
-            <td colspan="3">Account Total incl. Cash (CAD)</td>
-            <td class="text-right">$${fmt(totalWithCashCad)}</td>
-            <td colspan="7"></td>
-        </tr></tbody></table>`;
+            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
+           
            
 
             grouped[key].forEach(p => {
@@ -2662,17 +2639,31 @@ function renderPortfolio() {
                 </tr>`;
             });
 
+             var unusedCashCad = cashByAccount[acct] || 0;
+            var totalWithCashCad = tMV + unusedCashCad;
+
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-                <td>TOTAL (CAD)</td><td colspan="2"></td>
-                <td class="text-right">$${fmt(tMV)}</td>
-                <td style="border-left:2px solid #444"></td>
-                <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
-                <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
-                <td style="border-left:2px solid #444"></td>
-                <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
-                <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
-                <td>CAD</td>
-            </tr></tbody></table>`;
+            <td>TOTAL (CAD)</td><td colspan="2"></td>
+            <td class="text-right">$${fmt(tMV)}</td>
+            <td style="border-left:2px solid #444"></td>
+            <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
+            <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
+            <td style="border-left:2px solid #444"></td>
+            <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
+            <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
+            <td>CAD</td>
+        </tr>
+        <tr class="total-row" style="background:#0f1720; font-weight:bold;">
+            <td colspan="3">Unused Cash (CAD)</td>
+            <td class="text-right">$${fmt(unusedCashCad)}</td>
+            <td colspan="7"></td>
+        </tr>
+        <tr class="total-row" style="background:#16202a; font-weight:bold; border-top:1px solid #333">
+            <td colspan="3">Account Total incl. Cash (CAD)</td>
+            <td class="text-right">$${fmt(totalWithCashCad)}</td>
+            <td colspan="7"></td>
+        </tr></tbody></table>`;
+            
         } else {
             html += `<table class="portfolio-table">
                 <thead>
