@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.19">
+    <meta name="version" content="4.2.20">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2458,6 +2458,20 @@ function getRangeFilteredRows(rows) {
         return new Date(r.date) >= start;
     });
 }
+
+function getCashCadTotalByAccount(positions) {
+    var cashByAccount = {};
+    Object.keys(positions).forEach(function(key) {
+        var p = positions[key];
+        if (p.type !== 'Funds') return;
+        var acct = String(p.account || '').trim();
+        var cadEqv = (p.cadBalance !== undefined && p.cadBalance !== null)
+            ? (parseFloat(p.cadBalance) || 0)
+            : (parseFloat(p.acbTotalCost) || 0) * (parseFloat(p.exchRate) || 1);
+        cashByAccount[acct] = (cashByAccount[acct] || 0) + cadEqv;
+    });
+    return cashByAccount;
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
@@ -2527,39 +2541,48 @@ function renderPortfolio() {
     });
 
     // 3. APPLY FILTERS (Account, Stock, Year)
-    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
+//    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     
 // Use a helper to get the value safely
-    const getVal = (id) => {
-        const el = document.getElementById(id);
-        return el ? el.value : "";
-    };
+//    const getVal = (id) => {
+//        const el = document.getElementById(id);
+//        return el ? el.value : "";
+//    };
 
-    const fAcct  = ($('f-gl-account') ? $('f-gl-account').value.trim() : "");
-    const fStock = ($('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : "");
-    const fYear  = ($('f-gl-year') ? $('f-gl-year').value.trim() : "");
+ //   const fAcct  = ($('f-gl-account') ? $('f-gl-account').value.trim() : "");
+//    const fStock = ($('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : "");
+//    const fYear  = ($('f-gl-year') ? $('f-gl-year').value.trim() : "");
     
-    posArr = posArr.filter(p => {
-        const matchAcct = !fAcct || String(p.account).trim() === fAcct;
-        const matchStock = !fStock || String(p.symbol).trim().toUpperCase() === fStock;
+ //   posArr = posArr.filter(p => {
+ //       const matchAcct = !fAcct || String(p.account).trim() === fAcct;
+ //       const matchStock = !fStock || String(p.symbol).trim().toUpperCase() === fStock;
         
         // Year filter: Show position if it had ANY activity in that year
-        let matchYear = true;
-        if (fYear) {
-            matchYear = allTrades.some(t => 
-                t.symbol === p.symbol && 
-                t.account === p.account && 
-                new Date(t.date).getFullYear().toString() <= parseInt(fYear)
-            );
-        }
-        return matchAcct && matchStock && matchYear;
-    });
+     //   let matchYear = true;
+   //     if (fYear) {
+//            matchYear = allTrades.some(t => 
+//                t.symbol === p.symbol && 
+//                t.account === p.account && 
+//                new Date(t.date).getFullYear().toString() <= parseInt(fYear)
+ //           );
+  //      }
+ //       return matchAcct && matchStock && matchYear;
+//    });
 
+    // 3. PORTFOLIO POSITIONS ONLY — no Gain/Loss filters here
+    var posArr = Object.values(positions).filter(function(p) {
+        var qty = Math.abs(parseFloat(p.qty) || 0);
+        var amount = Math.abs(parseFloat(p.acbTotalCost) || 0);
+        var cadBal = Math.abs(parseFloat(p.cadBalance) || 0);
+        return qty > 0.001 || amount > 0.001 || cadBal > 0.001;
+    });
     console.log("Filtered Positions Remaining:", posArr.length);
    // console.table(posArr.map(p => ({ Symbol: p.symbol, Account: p.account, Qty: p.qty })));
     
     // 4. GROUPING
     var grouped = {};
+    var cashByAccount = getCashCadTotalByAccount(positions);
+    
     posArr.forEach(p => {
         var k = p.type + '-' + p.account;
         if (!grouped[k]) grouped[k] = [];
@@ -2578,7 +2601,7 @@ function renderPortfolio() {
         html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
 
         if (type === 'Stocks') {
-            html += `<table class="portfolio-table"><thead><tr>
+    /*        html += `<table class="portfolio-table"><thead><tr>
                 <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">MV</th>
                 <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
                 <th class="text-right" style="color:#aaa">Basis</th>
@@ -2587,6 +2610,31 @@ function renderPortfolio() {
                 <th class="text-right" style="color:#4caf50">Total ACB</th>
                 <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
             </tr></thead><tbody>`;
+*/
+            var unusedCashCad = cashByAccount[acct] || 0;
+            var totalWithCashCad = tMV + unusedCashCad;
+
+            html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
+            <td>TOTAL (CAD)</td><td colspan="2"></td>
+            <td class="text-right">$${fmt(tMV)}</td>
+            <td style="border-left:2px solid #444"></td>
+            <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
+            <td class="text-right ${tGLF>=0?'pos-gain':'pos-loss'}">$${fmt(tGLF)}</td>
+            <td style="border-left:2px solid #444"></td>
+            <td class="text-right" style="color:#4caf50">$${fmt(tACB)}</td>
+            <td class="text-right ${tGLA>=0?'pos-gain':'pos-loss'}">$${fmt(tGLA)}</td>
+            <td>CAD</td>
+        </tr>
+        <tr class="total-row" style="background:#0f1720; font-weight:bold;">
+            <td colspan="3">Unused Cash (CAD)</td>
+            <td class="text-right">$${fmt(unusedCashCad)}</td>
+            <td colspan="7"></td>
+        </tr>
+        <tr class="total-row" style="background:#16202a; font-weight:bold; border-top:1px solid #333">
+            <td colspan="3">Account Total incl. Cash (CAD)</td>
+            <td class="text-right">$${fmt(totalWithCashCad)}</td>
+            <td colspan="7"></td>
+        </tr></tbody></table>`;
 
             let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
 
