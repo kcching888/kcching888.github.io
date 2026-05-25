@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.22">
+    <meta name="version" content="4.3.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2472,6 +2472,73 @@ function getCashCadTotalByAccount(positions) {
     });
     return cashByAccount;
 }
+
+function buildCashLedger() {
+    var cashMap = {};
+
+    function ensure(account, currency) {
+        var key = String(account || '').trim() + '|' + String(currency || 'CAD').trim().toUpperCase();
+        if (!cashMap[key]) {
+            cashMap[key] = {
+                account: String(account || '').trim(),
+                currency: String(currency || 'CAD').trim().toUpperCase(),
+                amount: 0,
+                cadBalance: 0,
+                exchRate: 1
+            };
+        }
+        return cashMap[key];
+    }
+
+    function toNum(v) {
+        return parseFloat(v || 0) || 0;
+    }
+
+    (allTransfers || []).forEach(function(t) {
+        var row = ensure(t.account, t.currency);
+        row.amount += toNum(t.amount);
+        row.cadBalance += toNum(t.cadAmount);
+        row.exchRate = toNum(t.exchRate || row.exchRate || 1) || 1;
+    });
+
+    (allDivs || []).forEach(function(d) {
+        var row = ensure(d.account, d.currency);
+        var amt = toNum(d.amount);
+        var rate = toNum(d.exchRate || row.exchRate || 1) || 1;
+        var action = String(d.action || '').toLowerCase();
+
+        if (action.indexOf('withholding') >= 0 || amt < 0) {
+            row.amount -= Math.abs(amt);
+            row.cadBalance -= Math.abs(amt * rate);
+        } else {
+            row.amount += Math.abs(amt);
+            row.cadBalance += Math.abs(amt * rate);
+        }
+        row.exchRate = rate;
+    });
+
+    (allTrades || []).forEach(function(t) {
+        var action = String(t.action || '').toLowerCase();
+        if (action !== 'buy' && action !== 'sell') return;
+
+        var row = ensure(t.account, t.currency);
+        var qty = Math.abs(toNum(t.quantity));
+        var price = toNum(t.price);
+        var comm = Math.abs(toNum(t.commission || t.comm));
+        var rate = toNum(t.exchRate || row.exchRate || 1) || 1;
+
+        var gross = qty * price;
+        var netCash = action === 'buy'
+            ? -(gross + comm)
+            : (gross - comm);
+
+        row.amount += netCash;
+        row.cadBalance += netCash * rate;
+        row.exchRate = rate;
+    });
+
+    return Object.values(cashMap);
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
@@ -2519,7 +2586,8 @@ function renderPortfolio() {
     });
 
     // 2. CASH BALANCE
-   allTransfers.forEach(function(t) {
+   //allTransfers.forEach(function(t) {
+   buildCashLedger().forEach(function(t) { 
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
 
         if (!positions[key]) {
