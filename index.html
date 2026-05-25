@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.2.18">
+    <meta name="version" content="4.2.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -545,8 +545,8 @@
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
     var allHistory = JSON.parse(localStorage.getItem('ibkr_history') || '[]');
-    var currentFilteredTrades = [];
-    var currentFilteredDivs = [];
+    var transactionFilteredTrades = [];
+    let isTransactionFilterActive = false;
     let isFilterActive = false; // This helps the UI know when to override the full list
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
     var tradeCurrentPage = 1;
@@ -1032,10 +1032,10 @@ function applyFilters() {
 
     console.log("applyFilters() filters:", filters);
     // Set global flag
-    isFilterActive = Object.values(filters).some(val => val !== "");
+    isTransactionFilterActive = Object.values(filters).some(val => val !== "");
     console.log("applyFilter allTrades: ", allTrades);
     
-    currentFilteredTrades = allTrades.filter(t => {
+    transactionFilteredTrades = allTrades.filter(t => {
     // 1. Helper to safely compare strings (handles nulls and extra spaces)
         const safeMatch = (dataVal, filterVal) => {
         //    console.log("dataVal, filterVal: ", dataVal, filterVal);
@@ -1129,19 +1129,18 @@ function updateTradeCurrencyDropdown() {
             // --- 1. DYNAMIC CURRENCY FILTER ---
         updateTradeCurrencyDropdown();
         
-        const displayData = isFilterActive ? currentFilteredTrades : allTrades;
+        const displayData = isTransactionFilterActive ? transactionFilteredTrades : allTrades;
         var perPageVal = ($('f-perpage')||{}).value||'25';
-        var perPage = perPageVal==='all'?currentFilteredTrades.length:(parseInt(perPageVal)||25);
-        var total = currentFilteredTrades.length;
+        var perPage = perPageVal === 'all' ? displayData.length : (parseInt(perPageVal) || 25);
+        var total = displayData.length;
+        var rows = displayData.slice(start, perPage === displayData.length ? undefined : start + perPage);
         var totalPages = perPage>0?Math.max(1,Math.ceil(total/perPage)):1;
         if(tradeCurrentPage>totalPages) tradeCurrentPage=totalPages;
 
         var start = (tradeCurrentPage-1)*perPage;
         var rows = currentFilteredTrades.slice(start, perPage===currentFilteredTrades.length?undefined:start+perPage);
         
-        console.log("renderTradesTable() currentFilteredTrades: ", currentFilteredTrades);
-        console.log("renderTradesTable() allTrades: ", allTrades);
-        
+        console.log("renderTradesTable() transactionFilteredTrades: ", transactionFilteredTrades);
         $('trades-info').textContent = 'Showing '+(total===0?0:start+1)+'-'+Math.min(start+rows.length,total)+' of '+total+' records ('+allTrades.length+' total loaded)';
 
         if(!rows.length){
