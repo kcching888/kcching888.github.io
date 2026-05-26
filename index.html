@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.3">
+    <meta name="version" content="4.3.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3410,6 +3410,8 @@ function renderGainLoss() {
             var isCurrencyCode =
                 /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol);
 
+            console.log("isFxCategory: ", isFxCategory, " - ", assetCategory, " isFxSymbol: ", isFxSymbol, " - ", symbol, " isCurrencyCode: ", isCurrencyCode);
+               
             if (isFxCategory || isFxSymbol || isCurrencyCode) {
                 continue;
             }
