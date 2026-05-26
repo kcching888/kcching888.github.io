@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.2">
+    <meta name="version" content="4.3.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2534,6 +2534,19 @@ function buildCashLedger() {
     });
 
     (allTrades || []).forEach(function(t) {
+        var assetCategory = String(t.assetCategory || '').trim();
+        var symbol = String(t.symbol || '').trim().toUpperCase();
+        var currency = String(t.currency || '').trim().toUpperCase();
+
+        var isFxTrade =
+            /forex|fx|cash/i.test(assetCategory) ||
+            /^[A-Z]{3}\.[A-Z]{3}$/.test(symbol) ||
+            /^[A-Z]{6}$/.test(symbol) ||
+            /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol) ||
+            symbol === currency;
+
+        if (isFxTrade) return;
+        
         var action = String(t.action || '').toLowerCase();
         if (action !== 'buy' && action !== 'sell') return;
 
@@ -3370,11 +3383,52 @@ function renderGainLoss() {
                 if((cols[2]||'').trim()==='Account') currentAccount=(cols[3]||'').trim();
             }
             if(rowType!=='data') continue;
-            if(section==='Trades'&&cols.length>=12){
-                var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
-                if(!symbol||symbol===currency) continue;
-                trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
-           }    
+//            if(section==='Trades'&&cols.length>=12){
+//                var currency=cols[4], symbol=cols[5], datetime=cols[6], qty=parseFloat(cols[7]), price=parseFloat(cols[8]), proceeds=parseFloat(cols[10]), comm=Math.abs(parseFloat(cols[11])||0), assetCategory=cols[3]||'';
+//                if(!symbol||symbol===currency) continue;
+//                trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
+//           }    
+           if (section === 'Trades' && cols.length >= 12) {
+            var assetCategory = (cols[3] || '').trim();
+            var currency = (cols[4] || '').trim().toUpperCase();
+            var symbol = (cols[5] || '').trim().toUpperCase();
+            var datetime = (cols[6] || '').trim();
+            var qty = parseFloat(cols[7]);
+            var price = parseFloat(cols[8]);
+            var proceeds = parseFloat(cols[10]);
+            var comm = Math.abs(parseFloat(cols[11]) || 0);
+
+            if (!symbol || isNaN(qty) || !datetime) continue;
+
+            var isFxCategory = /forex|fx|cash/i.test(assetCategory);
+
+            var isFxSymbol =
+                /^[A-Z]{3}\.[A-Z]{3}$/.test(symbol) ||   // EUR.USD
+                /^[A-Z]{6}$/.test(symbol) ||             // EURUSD
+                symbol === currency;                     // CAD in CAD
+
+            var isCurrencyCode =
+                /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol);
+
+            if (isFxCategory || isFxSymbol || isCurrencyCode) {
+                continue;
+            }
+
+            trades.push({
+                id: 'T' + Date.now() + '_' + trades.length,
+                date: datetime.slice(0, 10),
+                account: currentAccount,
+                action: qty < 0 ? 'Sell' : 'Buy',
+                symbol: symbol,
+                description: symbol,
+                quantity: Math.abs(qty),
+                price: price,
+                amount: Math.abs(proceeds),
+                commission: comm,
+                currency: currency,
+                assetCategory: assetCategory
+            });
+        }
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
                 if (!date || isNaN(amount)) continue;
