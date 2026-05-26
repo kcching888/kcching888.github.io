@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.1">
+    <meta name="version" content="4.3.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2459,62 +2459,78 @@ function getRangeFilteredRows(rows) {
     });
 }
 
-function getCashCadTotalByAccount(positions) {
+function getCashCadTotalByAccount() {
     var cashByAccount = {};
-    Object.keys(positions).forEach(function(key) {
-        var p = positions[key];
-        if (p.type !== 'Funds') return;
-        var acct = String(p.account || '').trim();
-        var cadEqv = (p.cadBalance !== undefined && p.cadBalance !== null)
-            ? (parseFloat(p.cadBalance) || 0)
-            : (parseFloat(p.acbTotalCost) || 0) * (parseFloat(p.exchRate) || 1);
-        cashByAccount[acct] = (cashByAccount[acct] || 0) + cadEqv;
+    buildCashLedger().forEach(function(row) {
+        var acct = String(row.account || '').trim();
+        cashByAccount[acct] = (cashByAccount[acct] || 0) + (parseFloat(row.cadBalance) || 0);
     });
     return cashByAccount;
 }
 
+    
 function buildCashLedger() {
     var cashMap = {};
 
     function ensure(account, currency) {
-        var key = String(account || '').trim() + '|' + String(currency || 'CAD').trim().toUpperCase();
+        var acct = String(account || '').trim();
+        var curr = String(currency || 'CAD').trim().toUpperCase();
+        var key = acct + '|' + curr;
+
         if (!cashMap[key]) {
             cashMap[key] = {
-                account: String(account || '').trim(),
-                currency: String(currency || 'CAD').trim().toUpperCase(),
+                account: acct,
+                currency: curr,
                 amount: 0,
                 cadBalance: 0,
-                exchRate: 1
+                exchRate: curr === 'CAD' ? 1 : 0
             };
         }
         return cashMap[key];
     }
 
     function toNum(v) {
-        return parseFloat(v || 0) || 0;
+        var n = parseFloat(v);
+        return isFinite(n) ? n : 0;
+    }
+
+    function getFxRate(row, currency) {
+        var curr = String(currency || 'CAD').trim().toUpperCase();
+        if (curr === 'CAD') return 1;
+
+        var fx =
+            toNum(row && row.exchRate) ||
+            (toNum(row && row.cadAmount) && toNum(row && row.amount)
+                ? Math.abs(toNum(row.cadAmount) / toNum(row.amount))
+                : 0);
+
+        return fx || 1;
     }
 
     (allTransfers || []).forEach(function(t) {
         var row = ensure(t.account, t.currency);
-        row.amount += toNum(t.amount);
-        row.cadBalance += toNum(t.cadAmount);
-        row.exchRate = toNum(t.exchRate || row.exchRate || 1) || 1;
+        var amt = toNum(t.amount);
+        var fx = getFxRate(t, t.currency);
+
+        row.amount += amt;
+        row.cadBalance += amt * fx;
+        row.exchRate = fx;
     });
 
     (allDivs || []).forEach(function(d) {
         var row = ensure(d.account, d.currency);
         var amt = toNum(d.amount);
-        var rate = toNum(d.exchRate || row.exchRate || 1) || 1;
+        var fx = getFxRate(d, d.currency);
         var action = String(d.action || '').toLowerCase();
 
         if (action.indexOf('withholding') >= 0 || amt < 0) {
             row.amount -= Math.abs(amt);
-            row.cadBalance -= Math.abs(amt * rate);
+            row.cadBalance -= Math.abs(amt) * fx;
         } else {
             row.amount += Math.abs(amt);
-            row.cadBalance += Math.abs(amt * rate);
+            row.cadBalance += Math.abs(amt) * fx;
         }
-        row.exchRate = rate;
+        row.exchRate = fx;
     });
 
     (allTrades || []).forEach(function(t) {
@@ -2525,7 +2541,7 @@ function buildCashLedger() {
         var qty = Math.abs(toNum(t.quantity));
         var price = toNum(t.price);
         var comm = Math.abs(toNum(t.commission || t.comm));
-        var rate = toNum(t.exchRate || row.exchRate || 1) || 1;
+        var fx = getFxRate(t, t.currency);
 
         var gross = qty * price;
         var netCash = action === 'buy'
@@ -2533,8 +2549,8 @@ function buildCashLedger() {
             : (gross - comm);
 
         row.amount += netCash;
-        row.cadBalance += netCash * rate;
-        row.exchRate = rate;
+        row.cadBalance += netCash * fx;
+        row.exchRate = fx;
     });
 
     return Object.values(cashMap);
@@ -2590,24 +2606,22 @@ function renderPortfolio() {
    buildCashLedger().forEach(function(t) { 
         var key = '_CASH_BAL_|' + esc(t.currency) + '|' + esc(t.account);
 
-        if (!positions[key]) {
-            positions[key] = {
-                symbol: 'CASH (Balance)',
-                currency: t.currency,
-                acbTotalCost: 0,
-                cadBalance: 0,
-                account: t.account,
-                exchRate: t.exchRate || 1,
-                type: 'Funds'
-            };
-        }
-
-        positions[key].acbTotalCost += parseFloat(t.amount) || 0;
-        positions[key].cadBalance += parseFloat(t.cadAmount || 0) || 0;
+       positions[key] = {
+        symbol: 'CASH (Balance)',
+        currency: t.currency,
+        acbTotalCost: parseFloat(t.amount) || 0,
+        cadBalance: parseFloat(t.cadBalance) || 0,
+        account: t.account,
+        exchRate: t.exchRate || 1,
+        type: 'Funds'
+    };
  
       //  console.log("positions[", key, "]: ", positions[key]); 
     });
 
+    console.log('Cash ledger', buildCashLedger());
+    console.log('Cash by account', getCashCadTotalByAccount());
+    
     // 3. APPLY FILTERS (Account, Stock, Year)
 //    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
     
@@ -2649,7 +2663,7 @@ function renderPortfolio() {
     
     // 4. GROUPING
     var grouped = {};
-    var cashByAccount = getCashCadTotalByAccount(positions);
+    var cashByAccount = getCashCadTotalByAccount();
     
     posArr.forEach(p => {
         var k = p.type + '-' + p.account;
