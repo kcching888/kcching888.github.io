@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.4">
+    <meta name="version" content="4.3.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2534,21 +2534,14 @@ function buildCashLedger() {
     });
 
     (allTrades || []).forEach(function(t) {
-        var assetCategory = String(t.assetCategory || '').trim();
+        var action = String(t.action || '').toLowerCase();
+        if (action !== 'buy' && action !== 'sell') return;
+
+        var assetCategory = String(t.assetCategory || t.type || '').trim();
         var symbol = String(t.symbol || '').trim().toUpperCase();
         var currency = String(t.currency || '').trim().toUpperCase();
 
-        var isFxTrade =
-            /forex|fx|cash/i.test(assetCategory) ||
-            /^[A-Z]{3}\.[A-Z]{3}$/.test(symbol) ||
-            /^[A-Z]{6}$/.test(symbol) ||
-            /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol) ||
-            symbol === currency;
-
-        if (isFxTrade) return;
-        
-        var action = String(t.action || '').toLowerCase();
-        if (action !== 'buy' && action !== 'sell') return;
+        if (isFxLikeTrade(assetCategory, symbol, currency)) return;
 
         var row = ensure(t.account, t.currency);
         var qty = Math.abs(toNum(t.quantity));
@@ -2557,15 +2550,12 @@ function buildCashLedger() {
         var fx = getFxRate(t, t.currency);
 
         var gross = qty * price;
-        var netCash = action === 'buy'
-            ? -(gross + comm)
-            : (gross - comm);
+        var netCash = action === 'buy' ? -(gross + comm) : (gross - comm);
 
         row.amount += netCash;
         row.cadBalance += netCash * fx;
         row.exchRate = fx;
     });
-
     return Object.values(cashMap);
 }
     
@@ -3389,32 +3379,17 @@ function renderGainLoss() {
 //                trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
 //           }    
            if (section === 'Trades' && cols.length >= 12) {
-            var assetCategory = (cols[3] || '').trim();
-            var currency = (cols[4] || '').trim().toUpperCase();
-            var symbol = (cols[5] || '').trim().toUpperCase();
-            var datetime = (cols[6] || '').trim();
-            var qty = parseFloat(cols[7]);
-            var price = parseFloat(cols[8]);
-            var proceeds = parseFloat(cols[10]);
-            var comm = Math.abs(parseFloat(cols[11]) || 0);
+                var assetCategory = cols[3] || '';
+                var currency = normStr(cols[4] || 'CAD');
+                var symbol = normStr(cols[5] || '');
+                var datetime = cols[6] || '';
+                var qty = parseFloat(cols[7]);
+                var price = parseFloat(cols[8]);
+                var proceeds = parseFloat(cols[10]);
+                var comm = Math.abs(parseFloat(cols[11]) || 0);
 
-            if (!symbol || isNaN(qty) || !datetime) continue;
-
-            var isFxCategory = /forex|fx|cash/i.test(assetCategory);
-
-            var isFxSymbol =
-                /^[A-Z]{3}\.[A-Z]{3}$/.test(symbol) ||   // EUR.USD
-                /^[A-Z]{6}$/.test(symbol) ||             // EURUSD
-                symbol === currency;                     // CAD in CAD
-
-            var isCurrencyCode =
-                /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol);
-
-            console.log("isFxCategory: ", isFxCategory, " - ", assetCategory, " isFxSymbol: ", isFxSymbol, " - ", symbol, " isCurrencyCode: ", isCurrencyCode);
-               
-            if (isFxCategory || isFxSymbol || isCurrencyCode) {
-                continue;
-            }
+            if (!symbol || !datetime || isNaN(qty)) continue;
+            if (isFxLikeTrade(assetCategory, symbol, currency)) continue;
 
             trades.push({
                 id: 'T' + Date.now() + '_' + trades.length,
@@ -3424,13 +3399,13 @@ function renderGainLoss() {
                 symbol: symbol,
                 description: symbol,
                 quantity: Math.abs(qty),
-                price: price,
-                amount: Math.abs(proceeds),
+                price: isFinite(price) ? price : 0,
+                amount: isFinite(proceeds) ? Math.abs(proceeds) : 0,
                 commission: comm,
                 currency: currency,
                 assetCategory: assetCategory
             });
-        }
+          }
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
                 var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
                 if (!date || isNaN(amount)) continue;
@@ -3486,13 +3461,38 @@ function renderGainLoss() {
                 });
             }
         };
-        var addedT=0; var addedD=0;
-        trades.forEach(function(t){ if(!allTrades.some(function(x){return x.date===t.date&&x.symbol===t.symbol&&x.quantity===t.quantity;})){allTrades.push(t);addedT++;} });
-        divs.forEach(function(d){ if(!allDivs.some(function(x){return x.date===d.date&&x.symbol===d.symbol&&x.amount===d.amount;})){allDivs.push(d);addedD++;} });
-        saveLocal();
-        $('up-preview').textContent='Added '+addedT+' trades, '+addedD+' dividends';
-        closeModal('modal-upload'); updateFilterDropdowns(); updateAccountFilter(); applyFilters();
-    }
+        var addedT = 0, addedD = 0;
+
+        var existingTradeKeys = new Set((allTrades || []).map(tradeDedupKey));
+        var existingDivKeys = new Set((allDivs || []).map(divDedupKey));
+
+        trades.forEach(function(t) {
+        if (isFxLikeTrade(t.assetCategory || t.type, t.symbol, t.currency)) return;
+
+        var key = tradeDedupKey(t);
+        if (!existingTradeKeys.has(key)) {
+            existingTradeKeys.add(key);
+            allTrades.push(t);
+            addedT++;
+        }
+    });
+
+    divs.forEach(function(d) {
+        var key = divDedupKey(d);
+        if (!existingDivKeys.has(key)) {
+            existingDivKeys.add(key);
+            allDivs.push(d);
+            addedD++;
+        }
+    });
+
+    saveLocal();
+    $('up-preview').textContent = 'Added ' + addedT + ' trades, ' + addedD + ' dividends';
+    closeModal('modal-upload');
+    updateFilterDropdowns();
+    updateAccountFilter();
+    applyFilters();
+  }
 
     // Put this in your index.html script section
     async function getBOCRate(currency, date) {
@@ -3514,32 +3514,91 @@ function renderGainLoss() {
     }
     
     function parseTradesCsv(text){
-        var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
-        if(lines.length<2)return;
-        var headers=parseCSVLine(lines[0]).map(function(h){return h.toLowerCase().replace(/[^a-z]/g,'');});
-        var added=0;
-        lines.slice(1).forEach(function(l){
-            var v=parseCSVLine(l); var o={}; headers.forEach(function(h,i){o[h]=v[i];});
-            var t={id:'T'+Date.now()+'_'+added, date:o.date, account:o.account, action:o.action||'Buy', symbol:(o.symbol||'').toUpperCase(), description:o.description||o.symbol, quantity:parseFloat(o.quantity||o.qty)||0, price:parseFloat(o.price)||0, amount:parseFloat(o.amount)||0, commission:parseFloat(o.commission||o.comm)||0, currency:o.currency||'CAD'};
-            if(t.date&&t.symbol){allTrades.push(t);added++;}
-        });
-        saveLocal(); $('up-preview').textContent='Added '+added+' trades';
-        closeModal('modal-upload'); applyFilters(); updateAccountFilter();
-    }
+    var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+    if (lines.length < 2) return;
+
+    var headers = parseCSVLine(lines[0]).map(function(h){
+        return h.toLowerCase().replace(/[^a-z]/g,'');
+    });
+
+    var added = 0;
+    var existingTradeKeys = new Set((allTrades || []).map(tradeDedupKey));
+
+    lines.slice(1).forEach(function(l){
+        var v = parseCSVLine(l);
+        var o = {};
+        headers.forEach(function(h,i){ o[h] = v[i]; });
+
+        var t = {
+            id:'T'+Date.now()+'_'+added,
+            date:o.date,
+            account:o.account,
+            action:o.action || 'Buy',
+            symbol:normStr(o.symbol || ''),
+            description:o.description || o.symbol,
+            quantity:parseFloat(o.quantity || o.qty) || 0,
+            price:parseFloat(o.price) || 0,
+            amount:parseFloat(o.amount) || 0,
+            commission:parseFloat(o.commission || o.comm) || 0,
+            currency:normStr(o.currency || 'CAD'),
+            assetCategory:o.assetcategory || o.type || ''
+        };
+
+        if (!t.date || !t.symbol) return;
+        if (isFxLikeTrade(t.assetCategory, t.symbol, t.currency)) return;
+
+        var key = tradeDedupKey(t);
+        if (!existingTradeKeys.has(key)) {
+            existingTradeKeys.add(key);
+            allTrades.push(t);
+            added++;
+        }
+    });
+
+    saveLocal();
+    $('up-preview').textContent = 'Added ' + added + ' trades';
+    closeModal('modal-upload');
+    applyFilters();
+    updateAccountFilter();
+}
 
     function parseDivsCsv(text){
-        var lines=text.split(/\r?\n/).filter(function(l){return l.trim();});
-        if(lines.length<2)return;
-        var added=0;
-        lines.slice(1).forEach(function(l){
-            var v=parseCSVLine(l);
-            var d={id:'D'+Date.now()+'_'+added, date:v[0], account:v[1], symbol:v[2], description:v[3], amount:parseFloat(v[4]), currency:v[5]||'CAD'};
-            if(d.date&&d.symbol){allDivs.push(d);added++;}
-        });
-        saveLocal(); $('up-preview').textContent='Added '+added+' dividends';
-        closeModal('modal-upload'); applyDivFilters();
-    }
+        var lines = text.split(/\r?\n/).filter(function(l){ return l.trim(); });
+        if (lines.length < 2) return;
 
+        var added = 0;
+        var existingDivKeys = new Set((allDivs || []).map(divDedupKey));
+
+        lines.slice(1).forEach(function(l){
+            var v = parseCSVLine(l);
+
+            var d = {
+                id:'D'+Date.now()+'_'+added,
+                date:v[0],
+                account:v[1],
+                symbol:normStr(v[2]),
+                description:v[3] || '',
+                amount:parseFloat(v[4]),
+                currency:normStr(v[5] || 'CAD'),
+                action:v[6] || 'Dividends'
+            };
+
+            if (!d.date || !d.symbol || !isFinite(d.amount)) return;
+
+            var key = divDedupKey(d);
+            if (!existingDivKeys.has(key)) {
+                existingDivKeys.add(key);
+                allDivs.push(d);
+                added++;
+            }
+        });
+
+        saveLocal();
+        $('up-preview').textContent = 'Added ' + added + ' dividends';
+        closeModal('modal-upload');
+        applyDivFilters();
+    }
+    
     function exportTrades(){
         var csv='Date,Account,Action,Symbol,Description,Quantity,Price,Amount,Commission,Currency';
         transactionFilteredTrades.forEach(function(t){csv+=[fmtDate(t.date),t.account,t.action,t.symbol,t.description,t.quantity,t.price,t.amount,t.commission,t.currency].join(',')+'';});
@@ -3946,6 +4005,54 @@ function getPositionRowsFromLedger(ledger, filters = {}) {
   });
 }
 
+function normStr(v) {
+    return String(v == null ? '' : v).trim().toUpperCase();
+}
+
+function normNum(v, dp) {
+    var n = parseFloat(v);
+    if (!isFinite(n)) n = 0;
+    return Number(n).toFixed(dp == null ? 8 : dp);
+}
+
+function isFxLikeTrade(assetCategory, symbol, currency) {
+    assetCategory = normStr(assetCategory);
+    symbol = normStr(symbol);
+    currency = normStr(currency);
+
+    var isFxCategory = /FOREX|FX|CASH/.test(assetCategory);
+    var isFxPair = /^[A-Z]{3}\.[A-Z]{3}$/.test(symbol) || /^[A-Z]{6}$/.test(symbol);
+    var isCurrencyCode = /^(CAD|USD|HKD|CNH|CNY|JPY|EUR|GBP|AUD|NZD|CHF|SGD)$/.test(symbol);
+    var isSameAsTradeCurrency = symbol === currency;
+
+    return isFxCategory || isFxPair || isCurrencyCode || isSameAsTradeCurrency;
+}
+
+function tradeDedupKey(t) {
+    return [
+        normStr(t.date),
+        normStr(t.account),
+        normStr(t.action),
+        normStr(t.symbol),
+        normNum(t.quantity, 8),
+        normNum(t.price, 8),
+        normNum(t.amount, 2),
+        normNum(t.commission || t.comm, 2),
+        normStr(t.currency)
+    ].join('|');
+}
+
+function divDedupKey(d) {
+    return [
+        normStr(d.date),
+        normStr(d.account),
+        normStr(d.action),
+        normStr(d.symbol),
+        normNum(d.amount, 2),
+        normStr(d.currency),
+        normStr(d.description)
+    ].join('|');
+}
 
 syncVersion();
 </script>
