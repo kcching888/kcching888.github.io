@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.9">
+    <meta name="version" content="4.3.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -639,7 +639,15 @@
     }
 
     async function ensureDailyHistoryUntilYesterday() {
-          return true;
+        const res = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'backfillDailyHistory' })
+      });
+
+      const result = await res.json();
+      console.log('backfillDailyHistory result:', result);
+      return result;
     }
     
     function openModal(id){$(id).classList.add('show');}
