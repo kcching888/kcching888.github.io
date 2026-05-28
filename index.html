@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.12">
+    <meta name="version" content="4.3.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -544,6 +544,7 @@
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
+    var allFxTrades = JSON.parse(localStorage.getItem('ibkr_fx_trades') || '[]');
     var allHistory = JSON.parse(localStorage.getItem('ibkr_history') || '[]');
     var transactionFilteredTrades = [];
     let isTransactionFilterActive = false;
@@ -591,6 +592,7 @@
         localStorage.setItem('ibkr_trades', JSON.stringify(allTrades));
         localStorage.setItem('ibkr_divs', JSON.stringify(allDivs));
         localStorage.setItem('ibkr_history', JSON.stringify(allHistory));
+        localStorage.setItem('ibkr_fx_trades', JSON.stringify(allFxTrades || []));
     }
 
     function getAssetType(t) {
