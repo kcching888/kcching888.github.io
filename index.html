@@ -2623,6 +2623,50 @@ function buildCashLedger() {
 });
     return Object.values(cashMap);
 }
+
+function getLatestFxRate(currency) {
+    var curr = String(currency || 'CAD').trim().toUpperCase();
+    if (curr === 'CAD') return 1;
+
+    function toNum(v) {
+        var s = String(v == null ? '' : v).replace(/,/g, '').trim();
+        var n = parseFloat(s);
+        return isFinite(n) ? n : 0;
+    }
+
+    var candidates = [];
+
+    (allTransfers || []).forEach(function(r) {
+        if (String(r.currency || '').trim().toUpperCase() !== curr) return;
+        var rate = toNum(r.exchRate);
+        if (!rate) {
+            var amt = toNum(r.amount);
+            var cad = toNum(r.cadAmount || r.cadBalance);
+            if (amt && cad) rate = Math.abs(cad / amt);
+        }
+        if (rate) candidates.push(rate);
+    });
+
+    (allDivs || []).forEach(function(r) {
+        if (String(r.currency || '').trim().toUpperCase() !== curr) return;
+        var rate = toNum(r.exchRate);
+        if (!rate) {
+            var amt = toNum(r.amount);
+            var cad = toNum(r.cadAmount || r.cadBalance);
+            if (amt && cad) rate = Math.abs(cad / amt);
+        }
+        if (rate) candidates.push(rate);
+    });
+
+    (allTrades || []).forEach(function(r) {
+        if (String(r.currency || '').trim().toUpperCase() !== curr) return;
+        var rate = toNum(r.exchRate);
+        if (rate) candidates.push(rate);
+    });
+
+    if (!candidates.length) return 1;
+    return candidates[candidates.length - 1];
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
