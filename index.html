@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.19">
+    <meta name="version" content="4.3.20">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2554,19 +2554,11 @@ function buildCashLedger() {
         var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
 
         var row = ensure(fx.account, curr);
-        var rate = getFxRate(fx, curr);
-
         row.amount += proceeds;
-        row.cadBalance += proceeds * rate;
-        row.exchRate = rate;
 
-       console.log("row: ", row);
-       
         if (comm !== 0) {
             var cadRow = ensure(fx.account, 'CAD');
             cadRow.amount -= comm;
-            cadRow.cadBalance -= comm;
-            cadRow.exchRate = 1;
         }
     });
     
@@ -2609,6 +2601,26 @@ function buildCashLedger() {
         row.cadBalance += netCash * fx;
         row.exchRate = fx;
     });
+
+    Object.values(cashMap).forEach(function(row) {
+        var curr = row.currency;
+        var rate = 1;
+
+        if (curr === 'CAD') {
+            rate = 1;
+        } else if (curr === 'USD') {
+            rate = getLatestFxRate('USD');
+        } else if (curr === 'HKD') {
+            rate = getLatestFxRate('HKD');
+        } else if (curr === 'CNH') {
+            rate = getLatestFxRate('CNH');
+        } else {
+            rate = row.exchRate || 1;
+        }
+
+    row.exchRate = rate;
+    row.cadBalance = row.amount * rate;
+});
     return Object.values(cashMap);
 }
     
