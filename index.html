@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.18">
+    <meta name="version" content="4.3.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -721,13 +721,16 @@ function syncData() {
         return response.json();
     })
     .then(cloudData => {
+        console.log('cloudData keys:', Object.keys(cloudData || {}));
+        console.log('cloudData.fxTrades:', cloudData.fxTrades);
+        console.log('cloudData.FX:', cloudData.FX);
         // Merge: Take Cloud data if local is empty, otherwise keep local (User's choice)
         // Here we prioritize the cloud as the "Source of Truth"
         allTrades = cloudData.trades || [];
         allDivs = cloudData.dividends || [];
         allTransfers = cloudData.transfers || [];
         allHistory = cloudData.history || []; // [{ date, account, totalValue, netCashFlow, dividends, tax, fees, ... }]
-        allFxTrades = cloudData.FX || [];
+        allFxTrades = cloudData.fxTrades || cloudData.FX || cloudData.fx || [];
         
         saveLocal();
         updateFilterOptions();
