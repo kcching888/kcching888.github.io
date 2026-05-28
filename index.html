@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.16">
+    <meta name="version" content="4.3.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -727,7 +727,7 @@ function syncData() {
         allDivs = cloudData.dividends || [];
         allTransfers = cloudData.transfers || [];
         allHistory = cloudData.history || []; // [{ date, account, totalValue, netCashFlow, dividends, tax, fees, ... }]
-        allFxTrades = cloudData.fxTrades || [];
+        allFxTrades = cloudData.FX || [];
         
         saveLocal();
         updateFilterOptions();
