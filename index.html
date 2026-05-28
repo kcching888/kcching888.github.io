@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.15">
+    <meta name="version" content="4.3.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -593,6 +593,7 @@
 
     function saveLocal(){
         localStorage.setItem('ibkr_trades', JSON.stringify(allTrades));
+        localStorage.setItem('ibkr_transfers', JSON.stringify(allTransfers || []))
         localStorage.setItem('ibkr_divs', JSON.stringify(allDivs));
         localStorage.setItem('ibkr_history', JSON.stringify(allHistory));
         localStorage.setItem('ibkr_fx_trades', JSON.stringify(allFxTrades || []));
@@ -3537,7 +3538,7 @@ function renderGainLoss() {
             addedFx++;
         }
     });
-    });
+  //  });
 
     saveLocal();
     $('up-preview').textContent = 'Added ' + addedT + ' trades, ' + addedFx + ' FX trades, ' + addedD + ' dividends';
