@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.10">
+    <meta name="version" content="4.3.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3381,7 +3381,7 @@ function renderGainLoss() {
     }
 
     async function parseIBKR(text){
-        var trades=[]; var divs=[]; var currentAccount='';
+        var trades=[]; var divs=[]; var fxTrades=[]; var currentAccount='';
         var lines=text.split(/\r?\n/);
       for (const line of lines) {
             console.log("parseIBKR line: ", line);
@@ -3399,40 +3399,59 @@ function renderGainLoss() {
 //                trades.push({id:'T'+Date.now()+'_'+trades.length, date:datetime.slice(0,10), account:currentAccount, action:qty<0?'Sell':'Buy', symbol:symbol, description:symbol, quantity:Math.abs(qty), price:price, amount:Math.abs(proceeds), commission:comm, currency:currency, assetCategory:assetCategory});
 //           }    
            if (section === 'Trades' && cols.length >= 12) {
-                var assetCategory = cols[3] || '';
+                var assetCategory = normStr(cols[3] || '');
                 var currency = normStr(cols[4] || 'CAD');
                 var symbol = normStr(cols[5] || '');
                 var datetime = cols[6] || '';
-                var qty = parseFloat(cols[7]);
-                var price = parseFloat(cols[8]);
-                var proceeds = parseFloat(cols[10]);
-                var comm = Math.abs(parseFloat(cols[11]) || 0);
+                var qty = parseNum(cols[7]);
+                var price = parseNum(cols[8]);
+                var proceeds = parseNum(cols[10]);
+                var comm = Math.abs(parseNum(cols[11]) || 0);
 
-            if (!symbol || !datetime || isNaN(qty)) continue;
-            if (isFxLikeTrade(assetCategory, symbol, currency)) continue;
+                if (!symbol || !datetime || isNaN(qty)) continue;
 
-            trades.push({
-                id: 'T' + Date.now() + '_' + trades.length,
-                date: datetime.slice(0, 10),
-                account: currentAccount,
-                action: qty < 0 ? 'Sell' : 'Buy',
-                symbol: symbol,
-                description: symbol,
-                quantity: Math.abs(qty),
-                price: isFinite(price) ? price : 0,
-                amount: isFinite(proceeds) ? Math.abs(proceeds) : 0,
-                commission: comm,
-                currency: currency,
-                assetCategory: assetCategory
-            });
-          }
+                if (isFxLikeTrade(assetCategory, symbol, currency)) {
+                    fxTrades.push({
+                        id: 'FX' + Date.now() + '_' + fxTrades.length,
+                        date: datetime.slice(0, 10),
+                        datetime: datetime,
+                        account: currentAccount,
+                        action: qty < 0 ? 'FX Sell' : 'FX Buy',
+                        symbol: symbol,
+                        pair: symbol,
+                        quantity: qty,
+                        price: isFinite(price) ? price : 0,
+                        proceeds: isFinite(proceeds) ? proceeds : 0,
+                        commission: comm,
+                        currency: currency,
+                        assetCategory: assetCategory,
+                        description: symbol
+                    });
+                    continue;
+                }
+
+                trades.push({
+                    id: 'T' + Date.now() + '_' + trades.length,
+                    date: datetime.slice(0, 10),
+                    account: currentAccount,
+                    action: qty < 0 ? 'Sell' : 'Buy',
+                    symbol: symbol,
+                    description: symbol,
+                    quantity: Math.abs(qty),
+                    price: isFinite(price) ? price : 0,
+                    amount: isFinite(proceeds) ? Math.abs(proceeds) : 0,
+                    commission: comm,
+                    currency: currency,
+                    assetCategory: assetCategory
+                });
+           }
            else if (section === 'Deposits & Withdrawals' && cols.length >= 6) {
-                var currency = cols[2], date = cols[3], desc = cols[4], amount = parseFloat(cols[5]);
+                var currency = cols[2], date = cols[3], desc = cols[4], amount = parseNum(cols[5]);
                 if (!date || isNaN(amount)) continue;
                 
                console.log("currency date desc amount: ", currency, date, desc, amount);
                 // Fetch the rate from BoC via a helper (defined below)
-              //  let rate = 1;
+               let rate = 1;
               if (currency !== 'CAD') {
                    rate = await getBOCRate(currency, date);
                 }
@@ -3504,10 +3523,25 @@ function renderGainLoss() {
             allDivs.push(d);
             addedD++;
         }
+
+    var addedFx = 0;
+
+    var existingFxKeys = new Set((allFxTrades || []).map(function(f){
+        return [f.account, f.date, f.symbol, f.quantity, f.proceeds].join('|');
+    }));
+
+    fxTrades.forEach(function(f) {
+        var key = [f.account, f.date, f.symbol, f.quantity, f.proceeds].join('|');
+        if (!existingFxKeys.has(key)) {
+            existingFxKeys.add(key);
+            allFxTrades.push(f);
+            addedFx++;
+        }
+    });
     });
 
     saveLocal();
-    $('up-preview').textContent = 'Added ' + addedT + ' trades, ' + addedD + ' dividends';
+    $('up-preview').textContent = 'Added ' + addedT + ' trades, ' + addedFx + ' FX trades, ' + addedD + ' dividends';
     closeModal('modal-upload');
     updateFilterDropdowns();
     updateAccountFilter();
@@ -3531,6 +3565,14 @@ function renderGainLoss() {
             console.error("Proxy Rate Error for " + currency + " on " + date + ":", e);
             return 1; // Fallback so the upload doesn't fail
         }
+    }
+
+    function parseNum(val) {
+      if (val === null || val === undefined) return NaN;
+      var s = String(val).trim();
+      if (!s) return NaN;
+      s = s.replace(/,/g, '');
+      return parseFloat(s);
     }
     
     function parseTradesCsv(text){
