@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.7">
+    <meta name="version" content="4.3.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -617,20 +617,28 @@
     }
 
     function showTab(tab){
-    ['transactions','portfolio','performance','gainloss','dividends','transfers'].forEach(function(t){
-        $('page-'+t).style.display = t===tab ? '' : 'none';
-        $('tab-'+t).classList.toggle('active', t === tab);
-    });
-    console.log("tab: ", tab);
+        ['transactions','portfolio','performance','gainloss','dividends','transfers'].forEach(function(t){
+            $('page-'+t).style.display = t===tab ? '' : 'none';
+            $('tab-'+t).classList.toggle('active', t === tab);
+        });
+        console.log("tab: ", tab);
 
-    if (tab === 'portfolio') renderPortfolio();
-    if (tab === 'performance') {renderPerformanceControls(); renderPerfStats(); renderEquityDrawdown();}
-    if (tab === 'gainloss') renderGainLoss();
-    if (tab === 'dividends') applyDivFilters();
-    if (tab === 'transfers') renderTransfersTable();
-}
+        if (tab === 'portfolio') renderPortfolio();
+        if (tab === 'performance') loadPerformanceTab();
+        //if (tab === 'performance') {renderPerformanceControls(); renderPerfStats(); renderEquityDrawdown();}
+        if (tab === 'gainloss') renderGainLoss();
+        if (tab === 'dividends') applyDivFilters();
+        if (tab === 'transfers') renderTransfersTable();
+    }
+
+    async function loadPerformanceTab() {
+      await ensureDailyHistoryUntilYesterday();
+      renderPerformanceControls();
+      renderPerfStats();
+      renderEquityDrawdown();
+    }
     
-     function openModal(id){$(id).classList.add('show');}
+    function openModal(id){$(id).classList.add('show');}
     function closeModal(id){$(id).classList.remove('show');}
 
     function openSettings(){
