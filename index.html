@@ -727,6 +727,7 @@ function syncData() {
         allDivs = cloudData.dividends || [];
         allTransfers = cloudData.transfers || [];
         allHistory = cloudData.history || []; // [{ date, account, totalValue, netCashFlow, dividends, tax, fees, ... }]
+        allFxTrades = cloudData.fxTrades || [];
         
         saveLocal();
         updateFilterOptions();
@@ -3538,7 +3539,7 @@ function renderGainLoss() {
             addedFx++;
         }
     });
-  //  });
+   });
 
     saveLocal();
     $('up-preview').textContent = 'Added ' + addedT + ' trades, ' + addedFx + ' FX trades, ' + addedD + ' dividends';
