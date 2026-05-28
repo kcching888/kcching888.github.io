@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.11">
+    <meta name="version" content="4.3.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2509,8 +2509,9 @@ function buildCashLedger() {
         return cashMap[key];
     }
 
-    function toNum(v) {
-        var n = parseFloat(v);
+   function toNum(v) {
+        var s = String(v == null ? '' : v).replace(/,/g, '').trim();
+        var n = parseFloat(s);
         return isFinite(n) ? n : 0;
     }
 
@@ -2537,6 +2538,26 @@ function buildCashLedger() {
         row.exchRate = fx;
     });
 
+   (allFxTrades || []).forEach(function(fx) {
+        var curr = String(fx.currency || 'CAD').trim().toUpperCase();
+        var proceeds = toNum(fx.proceeds != null ? fx.proceeds : fx.amount);
+        var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
+
+        var row = ensure(fx.account, curr);
+        var rate = getFxRate(fx, curr);
+
+        row.amount += proceeds;
+        row.cadBalance += proceeds * rate;
+        row.exchRate = rate;
+
+        if (comm !== 0) {
+            var cadRow = ensure(fx.account, 'CAD');
+            cadRow.amount -= comm;
+            cadRow.cadBalance -= comm;
+            cadRow.exchRate = 1;
+        }
+    });
+    
     (allDivs || []).forEach(function(d) {
         var row = ensure(d.account, d.currency);
         var amt = toNum(d.amount);
@@ -2645,36 +2666,7 @@ function renderPortfolio() {
     console.log('Cash ledger', buildCashLedger());
     console.log('Cash by account', getCashCadTotalByAccount());
     
-    // 3. APPLY FILTERS (Account, Stock, Year)
-//    var posArr = Object.values(positions).filter(p => Math.abs(p.qty || p.acbTotalCost) > 0.001);
-    
-// Use a helper to get the value safely
-//    const getVal = (id) => {
-//        const el = document.getElementById(id);
-//        return el ? el.value : "";
-//    };
-
- //   const fAcct  = ($('f-gl-account') ? $('f-gl-account').value.trim() : "");
-//    const fStock = ($('f-gl-stock') ? $('f-gl-stock').value.trim().toUpperCase() : "");
-//    const fYear  = ($('f-gl-year') ? $('f-gl-year').value.trim() : "");
-    
- //   posArr = posArr.filter(p => {
- //       const matchAcct = !fAcct || String(p.account).trim() === fAcct;
- //       const matchStock = !fStock || String(p.symbol).trim().toUpperCase() === fStock;
-        
-        // Year filter: Show position if it had ANY activity in that year
-     //   let matchYear = true;
-   //     if (fYear) {
-//            matchYear = allTrades.some(t => 
-//                t.symbol === p.symbol && 
-//                t.account === p.account && 
-//                new Date(t.date).getFullYear().toString() <= parseInt(fYear)
- //           );
-  //      }
- //       return matchAcct && matchStock && matchYear;
-//    });
-
-    // 3. PORTFOLIO POSITIONS ONLY — no Gain/Loss filters here
+   
     var posArr = Object.values(positions).filter(function(p) {
         var qty = Math.abs(parseFloat(p.qty) || 0);
         var amount = Math.abs(parseFloat(p.acbTotalCost) || 0);
