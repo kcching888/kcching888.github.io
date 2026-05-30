@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.3.20">
+    <meta name="version" content="4.4.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2602,6 +2602,12 @@ function buildCashLedger() {
         row.exchRate = fx;
     });
 
+    (allInterest || []).forEach(function(r) {
+        var row = ensure(r.account, r.currency);
+        var amt = toNum(r.amount);
+        row.amount += amt;
+    });
+    
     Object.values(cashMap).forEach(function(row) {
         var curr = row.currency;
         var rate = 1;
@@ -2667,7 +2673,97 @@ function getLatestFxRate(currency) {
     if (!candidates.length) return 1;
     return candidates[candidates.length - 1];
 }
-    
+
+function buildCashBreakdownMap() {
+    var map = {};
+
+    function key(acct, curr) {
+        return String(acct || '').trim() + '|' + String(curr || 'CAD').trim().toUpperCase();
+    }
+
+    function ensure(acct, curr) {
+        var k = key(acct, curr);
+        if (!map[k]) {
+            map[k] = {
+                account: String(acct || '').trim(),
+                currency: String(curr || 'CAD').trim().toUpperCase(),
+                transferIn: 0,
+                transferOut: 0,
+                stockBuys: 0,
+                stockSells: 0,
+                dividends: 0,
+                interest: 0,
+                fxBuys: 0,
+                fxSells: 0
+            };
+        }
+        return map[k];
+    }
+
+    function toNum(v) {
+        var s = String(v == null ? '' : v).replace(/,/g, '').trim();
+        var n = parseFloat(s);
+        return isFinite(n) ? n : 0;
+    }
+
+    (allTransfers || []).forEach(function(t) {
+        var row = ensure(t.account, t.currency);
+        var amt = toNum(t.amount);
+        if (amt >= 0) row.transferIn += amt;
+        else row.transferOut += Math.abs(amt);
+    });
+
+    (allTrades || []).forEach(function(t) {
+        var action = String(t.action || '').toLowerCase();
+        var assetCategory = String(t.assetCategory || t.type || '').trim();
+        var symbol = String(t.symbol || '').trim().toUpperCase();
+        var currency = String(t.currency || '').trim().toUpperCase();
+
+        if (isFxLikeTrade(assetCategory, symbol, currency)) return;
+
+        var row = ensure(t.account, currency);
+        var qty = Math.abs(toNum(t.quantity));
+        var price = toNum(t.price);
+        var comm = Math.abs(toNum(t.commission || t.comm));
+        var gross = qty * price;
+
+        if (action === 'buy') row.stockBuys += (gross + comm);
+        if (action === 'sell') row.stockSells += (gross - comm);
+    });
+
+    (allDivs || []).forEach(function(d) {
+        var row = ensure(d.account, d.currency);
+        var amt = toNum(d.amount);
+        var action = String(d.action || '').toLowerCase();
+
+        if (action.indexOf('withholding') >= 0) {
+            row.dividends -= Math.abs(amt);
+        } else {
+            row.dividends += amt;
+        }
+    });
+
+    (allInterest || []).forEach(function(i) {
+        var row = ensure(i.account, i.currency);
+        row.interest += toNum(i.amount);
+    });
+
+    (allFxTrades || []).forEach(function(fx) {
+        var row = ensure(fx.account, fx.currency);
+        var amt = toNum(fx.proceeds != null ? fx.proceeds : fx.amount);
+        var action = String(fx.action || '').toLowerCase();
+
+        if (action.indexOf('buy') >= 0) row.fxBuys += Math.abs(amt);
+        else if (action.indexOf('sell') >= 0) row.fxSells += Math.abs(amt);
+        else {
+            if (amt < 0) row.fxBuys += Math.abs(amt);
+            else row.fxSells += amt;
+        }
+    });
+
+    return map;
+}
+
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
     if (container) container.innerHTML = '<div class="loading">Updating view...</div>';
@@ -2830,6 +2926,8 @@ function renderPortfolio() {
         </tr></tbody></table>`;
             
         } else {
+            var cashBreakdownMap = buildCashBreakdownMap();
+            
             html += `<table class="portfolio-table">
                 <thead>
                     <tr>
@@ -2840,7 +2938,36 @@ function renderPortfolio() {
                     </tr>
                 </thead>
                 <tbody>`;
+            
+            var bKey = String(p.account || '').trim() + '|' + String(p.currency || 'CAD').trim().toUpperCase();
+            var b = cashBreakdownMap[bKey] || {
+                    transferIn: 0, transferOut: 0, stockBuys: 0, stockSells: 0,
+                    dividends: 0, interest: 0, fxBuys: 0, fxSells: 0
+            };
 
+            html += `<tr>
+                <td>${esc(p.symbol)}</td>
+                <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
+                <td>${esc(p.currency)}</td>
+                <td class="text-right">$${fmt(cadEqv)}</td>
+            </tr>
+            <tr class="sub-row" style="background:#0b0f14; color:#9fb3c8;">
+            <td colspan="4" style="padding:10px 14px 14px 24px;">
+                <div style="display:grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap:8px 20px; font-size:12px;">
+                        <div>+ Transfers in: <strong>$${fmt(b.transferIn)}</strong></div>
+                        <div>- Transfers out: <strong>$${fmt(b.transferOut)}</strong></div>
+                        <div>- Stock buys: <strong>$${fmt(b.stockBuys)}</strong></div>
+                        <div>+ Stock sells: <strong>$${fmt(b.stockSells)}</strong></div>
+                        <div>+ Dividends: <strong>$${fmt(b.dividends)}</strong></div>
+                        <div>+ Interest: <strong>$${fmt(b.interest)}</strong></div>
+                        <div>- FX buys: <strong>$${fmt(b.fxBuys)}</strong></div>
+                        <div>+ FX sells: <strong>$${fmt(b.fxSells)}</strong></div>
+                    </div>
+                    <div style="grid-column:1 / -1; margin-top:6px; color:#d7e3f4;">
+                        Calculated cash balance: <strong>$${fmt(recomputed)}</strong>
+                    </div>
+                </td>
+            </tr>`;
             let totalCadEqv = 0;
 
             grouped[key].forEach(p => {
@@ -3441,7 +3568,7 @@ function renderGainLoss() {
     }
 
     async function parseIBKR(text){
-        var trades=[]; var divs=[]; var fxTrades=[]; var currentAccount='';
+        var trades=[]; var divs=[]; var fxTrades=[];var interest = [];var currentAccount='';
         var lines=text.split(/\r?\n/);
       for (const line of lines) {
             console.log("parseIBKR line: ", line);
@@ -3557,6 +3684,28 @@ function renderGainLoss() {
                     description: desc, 
                     amount: amount, 
                     currency: currency 
+                });
+            }
+            else-if ((row[0] === "Interest" || row[0] === "Interest Accruals") &&
+                row[1] === "Data" &&
+                !String(row[2] || "").includes("Total")) {
+
+                var intCurr = normText(row[2]);
+                var intDate = row[3];
+                var intDesc = row[4] || "";
+                var intAmt = parseNum(row[5]);
+
+                if (!intDate || isNaN(intAmt)) continue;
+
+                interest.push({
+                    date: intDate,
+                    action: "Interest",
+                    symbol: "INTEREST",
+                    amount: intAmt,
+                    currency: intCurr,
+                    account: currentAccount,
+                    description: intDesc,
+                    type: "Interest"
                 });
             }
         };
