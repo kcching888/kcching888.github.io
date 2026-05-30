@@ -2941,35 +2941,7 @@ function renderPortfolio() {
                 </thead>
                 <tbody>`;
             
-            var bKey = String(p.account || '').trim() + '|' + String(p.currency || 'CAD').trim().toUpperCase();
-            var b = cashBreakdownMap[bKey] || {
-                    transferIn: 0, transferOut: 0, stockBuys: 0, stockSells: 0,
-                    dividends: 0, interest: 0, fxBuys: 0, fxSells: 0
-            };
-
-            html += `<tr>
-                <td>${esc(p.symbol)}</td>
-                <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
-                <td>${esc(p.currency)}</td>
-                <td class="text-right">$${fmt(cadEqv)}</td>
-            </tr>
-            <tr class="sub-row" style="background:#0b0f14; color:#9fb3c8;">
-            <td colspan="4" style="padding:10px 14px 14px 24px;">
-                <div style="display:grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap:8px 20px; font-size:12px;">
-                        <div>+ Transfers in: <strong>$${fmt(b.transferIn)}</strong></div>
-                        <div>- Transfers out: <strong>$${fmt(b.transferOut)}</strong></div>
-                        <div>- Stock buys: <strong>$${fmt(b.stockBuys)}</strong></div>
-                        <div>+ Stock sells: <strong>$${fmt(b.stockSells)}</strong></div>
-                        <div>+ Dividends: <strong>$${fmt(b.dividends)}</strong></div>
-                        <div>+ Interest: <strong>$${fmt(b.interest)}</strong></div>
-                        <div>- FX buys: <strong>$${fmt(b.fxBuys)}</strong></div>
-                        <div>+ FX sells: <strong>$${fmt(b.fxSells)}</strong></div>
-                    </div>
-                    <div style="grid-column:1 / -1; margin-top:6px; color:#d7e3f4;">
-                        Calculated cash balance: <strong>$${fmt(recomputed)}</strong>
-                    </div>
-                </td>
-            </tr>`;
+           
             let totalCadEqv = 0;
 
             grouped[key].forEach(p => {
@@ -2982,15 +2954,54 @@ function renderPortfolio() {
                     : amount * (parseFloat(p.exchRate) || 1);
                 
                 totalCadEqv += cadEqv;
+                var bKey = String(p.account || '').trim() + '|' + String(p.currency || 'CAD').trim().toUpperCase();
+                var b = cashBreakdownMap[bKey] || {
+                    transferIn: 0, transferOut: 0, stockBuys: 0, stockSells: 0,
+                    dividends: 0, interest: 0, fxBuys: 0, fxSells: 0
+                };
 
-              //  console.log("grouped[", key, "]: ", grouped[key], " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
-                
+                 var recomputed =
+                        b.transferIn
+                        - b.transferOut
+                        - b.stockBuys
+                        + b.stockSells
+                        + b.dividends
+                        + b.interest
+                        - b.fxBuys
+                        + b.fxSells;
+
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
                     <td>${esc(p.currency)}</td>
                     <td class="text-right">$${fmt(cadEqv)}</td>
-                </tr>`;
+                </tr>
+                <tr class="sub-row" style="background:#0b0f14; color:#9fb3c8;">
+                <td colspan="4" style="padding:10px 14px 14px 24px;">
+                    <div style="display:grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap:8px 20px; font-size:12px;">
+                            <div>+ Transfers in: <strong>$${fmt(b.transferIn)}</strong></div>
+                            <div>- Transfers out: <strong>$${fmt(b.transferOut)}</strong></div>
+                            <div>- Stock buys: <strong>$${fmt(b.stockBuys)}</strong></div>
+                            <div>+ Stock sells: <strong>$${fmt(b.stockSells)}</strong></div>
+                            <div>+ Dividends: <strong>$${fmt(b.dividends)}</strong></div>
+                            <div>+ Interest: <strong>$${fmt(b.interest)}</strong></div>
+                            <div>- FX buys: <strong>$${fmt(b.fxBuys)}</strong></div>
+                            <div>+ FX sells: <strong>$${fmt(b.fxSells)}</strong></div>
+                            <div style="grid-column:1 / -1; margin-top:6px; color:#d7e3f4;">
+                                Calculated cash balance: <strong>$${fmt(recomputed)}</strong>
+                            </div>
+                    </div>
+                </td>
+            </tr>`;
+
+              //  console.log("grouped[", key, "]: ", grouped[key], " cadEqv: ", cadEqv, " totalCadEqv: ", totalCadEqv); 
+                
+      /*          html += `<tr>
+                    <td>${esc(p.symbol)}</td>
+                    <td class="text-right" style="font-weight:bold">$${fmt(p.acbTotalCost)}</td>
+                    <td>${esc(p.currency)}</td>
+                    <td class="text-right">$${fmt(cadEqv)}</td>
+                </tr>`;  */
             });
 
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
