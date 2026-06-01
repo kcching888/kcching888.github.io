@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.16">
+    <meta name="version" content="4.4.17">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2930,8 +2930,8 @@ function buildFundsBreakdownMap(showCadEqv, byYear) {
         var row = ensure(t.account, currency, year);
         var amount = Math.abs(toNum(t.amount));
         var cadAmount = Math.abs(toNum(t.cadAmount));
-        //var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
-        var comm = Math.abs(toNum(t.commission));
+        var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
+        //var comm = Math.abs(toNum(t.commission));
         var exchRate = toNum(t.exchRate) || 1;
 
         var amountVal = val(amount, cadAmount || amount * exchRate);
@@ -2940,7 +2940,7 @@ function buildFundsBreakdownMap(showCadEqv, byYear) {
         if (action === 'buy') row.stockBuys += amountVal;
         if (action === 'sell') row.stockSells += amountVal;
         row.stockTradeComm += commVal;
-        console.log("buildFundBreakdownMap(): t.commission, t.exchRate, comm, commVal, row: ", t.commission, t.exchRate, comm, commVal, row);
+        console.log("buildFundBreakdownMap(): t.comm, t.exchRate, comm, commVal, row: ", t.comm, t.exchRate, comm, commVal, row);
     });
     console.log("buildFundBreakdownMap(): allTrades: ", allTrades);
 
