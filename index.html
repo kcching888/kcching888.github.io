@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.5">
+    <meta name="version" content="4.4.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2865,8 +2865,8 @@ function buildFundsBreakdownMap_bkup(showCadEqv) {
         var row = ensure(t.account, currency);
         var amount = Math.abs(toNum(t.amount));
         var cadAmount = Math.abs(toNum(t.cadAmount));
-        //var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
-        var comm = Math.abs(toNum(t.commission));
+        var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
+        // var comm = Math.abs(toNum(t.commission));
         var exchRate = toNum(t.exchRate) || 1;
 
         var amountVal = val(amount, cadAmount || (amount * exchRate));
