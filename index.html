@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.2">
+    <meta name="version" content="4.4.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2860,7 +2860,8 @@ function buildFundsBreakdownMap(showCadEqv) {
         var row = ensure(t.account, currency);
         var amount = Math.abs(toNum(t.amount));
         var cadAmount = Math.abs(toNum(t.cadAmount));
-        var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
+        //var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
+        var comm = Math.abs(toNum(t.commission));
         var exchRate = toNum(t.exchRate) || 1;
 
         var amountVal = val(amount, cadAmount || (amount * exchRate));
@@ -2893,7 +2894,8 @@ function buildFundsBreakdownMap(showCadEqv) {
         var qty = Math.abs(toNum(fx.quantity));
         var proceeds = Math.abs(toNum(fx.proceeds != null ? fx.proceeds : fx.amount));
         var cadAmount = Math.abs(toNum(fx.cadAmount));
-        var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
+        //var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
+        var comm = Math.abs(toNum(fx.commission));
 
         var baseRow = ensure(fx.account, p.base);
         var quoteRow = ensure(fx.account, p.quote);
@@ -2921,8 +2923,8 @@ function buildFundsBreakdownMap(showCadEqv) {
             - r.stockTradeComm
             + r.dividends
             + r.interest
-            - r.fxBuys
-            + r.fxSells
+            + r.fxBuys
+            - r.fxSells
             - r.fxComm;
     });
 
