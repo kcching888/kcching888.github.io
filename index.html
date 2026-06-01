@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.8">
+    <meta name="version" content="4.4.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2722,26 +2722,49 @@ function buildCashBreakdownMap() {
         else row.transferOut += Math.abs(amt);
     });
 
-    (allTrades || []).forEach(function(t) {
-        var action = String(t.action || '').toLowerCase();
+   (allTrades || []).forEach(function(t) {
+        var action = String(t.action || '').trim().toLowerCase();
+        var currency = String(t.currency || '').trim().toUpperCase();
         var assetCategory = String(t.assetCategory || t.type || '').trim();
         var symbol = String(t.symbol || '').trim().toUpperCase();
-        var currency = String(t.currency || '').trim().toUpperCase();
 
         if (isFxLikeTrade(assetCategory, symbol, currency)) return;
 
-        var row = ensure(t.account, currency);
-        var qty = Math.abs(toNum(t.quantity));
-        var price = toNum(t.price);
-        var comm = Math.abs(toNum(t.commission || t.comm));
-        var gross = qty * price;
+        var year = getYear(t.date);
+        var row = ensure(t.account, currency, year);
 
-        if (action === 'buy') row.stockBuys += (gross + comm);
-        if (action === 'sell') row.stockSells += (gross - comm);
+        var amountRaw = Math.abs(toNum(t.amount));
+        var cadAmountRaw = Math.abs(toNum(t.cadAmount));
+        var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
+        var exchRate = toNum(t.exchRate) || 1;
 
-        row.stockTradeComm += comm;
+        var amountVal = showCadEqv
+            ? (cadAmountRaw || (amountRaw * exchRate))
+            : amountRaw;
+
+        var commVal = showCadEqv
+            ? (commRaw * exchRate)
+            : commRaw;
+
+        if (action === 'buy') row.stockBuys += amountVal;
+        if (action === 'sell') row.stockSells += amountVal;
+
+        row.stockTradeComm += commVal;
     });
 
+    console.log('Stock commission samples:',
+    (allTrades || []).slice(0, 10).map(function(t) {
+        return {
+            symbol: t.symbol,
+            action: t.action,
+            currency: t.currency,
+            comm: t.comm,
+            commission: t.commission,
+            exchRate: t.exchRate
+        };
+    })
+);
+    
     (allDivs || []).forEach(function(d) {
         var row = ensure(d.account, d.currency);
         var amt = toNum(d.amount);
