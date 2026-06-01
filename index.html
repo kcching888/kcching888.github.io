@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.13">
+    <meta name="version" content="4.4.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3081,6 +3081,7 @@ function buildFundsBreakdownMap(showCadEqv, byYear) {
         if (action === 'sell') row.stockSells += amountVal;
         row.stockTradeComm += commVal;
     });
+    console.log("buildFundBreakdownMap(): allTrades: ", allTrades);
 
     (allDivs || []).forEach(function(d) {
         var year = getYear(d.date);
