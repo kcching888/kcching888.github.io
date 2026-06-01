@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.12">
+    <meta name="version" content="4.4.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2715,6 +2715,28 @@ function buildCashBreakdownMap() {
         return isFinite(n) ? n : 0;
     }
 
+    function getTradeCommission(t) {
+        if (!t) return 0;
+
+        var candidates = [
+            t.comm,
+            t.commission,
+            t.Comm,
+            t.Commission,
+            t['Comm'],
+            t['Commission']
+        ];
+
+        for (var i = 0; i < candidates.length; i++) {
+            var raw = candidates[i];
+            if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
+                var n = parseFloat(String(raw).replace(/,/g, '').trim());
+                if (isFinite(n)) return Math.abs(n);
+            }
+        }
+        return 0;
+    }
+
     (allTransfers || []).forEach(function(t) {
         var row = ensure(t.account, t.currency);
         var amt = toNum(t.amount);
@@ -2736,11 +2758,9 @@ function buildCashBreakdownMap() {
         var amountRaw = Math.abs(toNum(t.amount));
         var cadAmountRaw = Math.abs(toNum(t.cadAmount));
         //var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
-        var commSource = (t.comm !== undefined && t.comm !== null && String(t.comm).trim() !== '')
-        ? t.comm
-        : t.commission;
-
-        var commRaw = Math.abs(toNum(commSource));
+        
+        //var commRaw = Math.abs(toNum(commSource));
+        var commRaw = getTradeCommission(t);
        
         var exchRate = toNum(t.exchRate) || 1;
      
