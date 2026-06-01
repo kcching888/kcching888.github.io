@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.6">
+    <meta name="version" content="4.4.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2599,7 +2599,6 @@ function buildCashLedger() {
         var price = toNum(t.price);
         var comm = Math.abs(toNum(t.commission || t.comm));
 
-        console.log("comm: ", comm, " t.commission: ", t.commission, " t.comm: ", t.comm);
         var fx = getFxRate(t, t.currency);
 
         var gross = qty * price;
@@ -2699,10 +2698,12 @@ function buildCashBreakdownMap() {
                 transferOut: 0,
                 stockBuys: 0,
                 stockSells: 0,
+                stockTradeComm: 0,
                 dividends: 0,
                 interest: 0,
                 fxBuys: 0,
-                fxSells: 0
+                fxSells: 0,
+                fxComm: 0
             };
         }
         return map[k];
@@ -2737,6 +2738,8 @@ function buildCashBreakdownMap() {
 
         if (action === 'buy') row.stockBuys += (gross + comm);
         if (action === 'sell') row.stockSells += (gross - comm);
+
+        row.stockTradeComm += commVal;
     });
 
     (allDivs || []).forEach(function(d) {
@@ -2760,13 +2763,15 @@ function buildCashBreakdownMap() {
         var row = ensure(fx.account, fx.currency);
         var amt = toNum(fx.proceeds != null ? fx.proceeds : fx.amount);
         var action = String(fx.action || '').toLowerCase();
+        var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
 
         if (action.indexOf('buy') >= 0) row.fxBuys += Math.abs(amt);
         else if (action.indexOf('sell') >= 0) row.fxSells += Math.abs(amt);
         else {
             if (amt < 0) row.fxBuys += Math.abs(amt);
-            else row.fxSells += amt;
+            else row.fxSells += amt;  
         }
+         commRow.fxComm += showCadEqv ? comm : comm;
     });
 
     return map;
@@ -3302,7 +3307,7 @@ function renderPortfolio() {
                         <th class="text-right">Transfer Out</th>
                         <th class="text-right">Stock Buys</th>
                         <th class="text-right">Stock Sells</th>
-                        <th class="text-right">Stock Trades Comm.</th>
+                        <th class="text-right">Stock Comm.</th>
                         <th class="text-right">Dividends</th>
                         <th class="text-right">Interest</th>
                         <th class="text-right">FX Buys</th>
