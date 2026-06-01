@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.9">
+    <meta name="version" content="4.4.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2738,6 +2738,8 @@ function buildCashBreakdownMap() {
         var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
         var exchRate = toNum(t.exchRate) || 1;
 
+        console.log("commRaw: ", commRaw, " t.comm: ", t.comm, " t.commission: ", t.commission);
+       
         var amountVal = showCadEqv
             ? (cadAmountRaw || (amountRaw * exchRate))
             : amountRaw;
@@ -2752,18 +2754,7 @@ function buildCashBreakdownMap() {
         row.stockTradeComm += commVal;
     });
 
-    console.log('Stock commission samples:',
-    (allTrades || []).slice(0, 10).map(function(t) {
-        return {
-            symbol: t.symbol,
-            action: t.action,
-            currency: t.currency,
-            comm: t.comm,
-            commission: t.commission,
-            exchRate: t.exchRate
-        };
-    })
-);
+   
     
     (allDivs || []).forEach(function(d) {
         var row = ensure(d.account, d.currency);
