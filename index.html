@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.10">
+    <meta name="version" content="4.4.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2735,10 +2735,11 @@ function buildCashBreakdownMap() {
 
         var amountRaw = Math.abs(toNum(t.amount));
         var cadAmountRaw = Math.abs(toNum(t.cadAmount));
-        var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
+        //var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
+        var commRaw = Math.abs(toNum(t.comm));
         var exchRate = toNum(t.exchRate) || 1;
 
-        console.log("commRaw: ", commRaw, " t.comm: ", t.comm, " t.commission: ", t.commission);
+        //console.log("commRaw: ", commRaw, " t.comm: ", t.comm, " t.commission: ", t.commission);
        
         var amountVal = showCadEqv
             ? (cadAmountRaw || (amountRaw * exchRate))
