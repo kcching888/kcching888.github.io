@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.15">
+    <meta name="version" content="4.4.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2853,146 +2853,6 @@ function renderFundsViewToggle() {
     `;
 }
 
-function buildFundsBreakdownMap_bkup(showCadEqv) {
-    var map = {};
-
-    function key(acct, curr) {
-        return String(acct || '').trim() + '|' + String(curr || 'CAD').trim().toUpperCase();
-    }
-
-    function ensure(acct, curr) {
-        var k = key(acct, curr);
-        if (!map[k]) {
-            map[k] = {
-                account: String(acct || '').trim(),
-                currency: String(curr || 'CAD').trim().toUpperCase(),
-                unusedCash: 0,
-                transferIn: 0,
-                transferOut: 0,
-                stockBuys: 0,
-                stockSells: 0,
-                stockTradeComm: 0,
-                dividends: 0,
-                interest: 0,
-                fxBuys: 0,
-                fxSells: 0,
-                fxComm: 0
-            };
-        }
-        return map[k];
-    }
-
-    function toNum(v) {
-        var s = String(v == null ? '' : v).replace(/,/g, '').trim();
-        var n = parseFloat(s);
-        return isFinite(n) ? n : 0;
-    }
-
-    function val(nativeAmt, cadAmt) {
-        return showCadEqv ? toNum(cadAmt) : toNum(nativeAmt);
-    }
-
-    function partsFromSymbol(sym) {
-        var s = String(sym || '').trim().toUpperCase();
-        if (!s.includes('.')) return null;
-        var parts = s.split('.');
-        if (parts.length !== 2) return null;
-        return { base: parts[0], quote: parts[1] };
-    }
-
-    (allTransfers || []).forEach(function(t) {
-        var row = ensure(t.account, t.currency);
-        var amount = toNum(t.amount);
-        var cadAmount = toNum(t.cadAmount);
-        var v = val(Math.abs(amount), Math.abs(cadAmount));
-
-        if (amount >= 0) row.transferIn += v;
-        else row.transferOut += v;
-    });
-
-    (allTrades || []).forEach(function(t) {
-        var action = String(t.action || '').trim().toLowerCase();
-        var currency = String(t.currency || '').trim().toUpperCase();
-        var assetCategory = String(t.assetCategory || t.type || '').trim();
-        var symbol = String(t.symbol || '').trim().toUpperCase();
-
-        if (isFxLikeTrade(assetCategory, symbol, currency)) return;
-
-        var row = ensure(t.account, currency);
-        var amount = Math.abs(toNum(t.amount));
-        var cadAmount = Math.abs(toNum(t.cadAmount));
-        var comm = Math.abs(toNum(t.comm != null ? t.comm : t.commission));
-        // var comm = Math.abs(toNum(t.commission));
-        var exchRate = toNum(t.exchRate) || 1;
-
-        var amountVal = val(amount, cadAmount || (amount * exchRate));
-        var commVal = showCadEqv ? (comm * exchRate) : comm;
-
-        if (action === 'buy') row.stockBuys += amountVal;
-        if (action === 'sell') row.stockSells += amountVal;
-        row.stockTradeComm += commVal;
-    });
-
-    (allDivs || []).forEach(function(d) {
-        var row = ensure(d.account, d.currency);
-        var amount = toNum(d.amount);
-        var cadAmount = toNum(d.cadAmount);
-        row.dividends += val(amount, cadAmount);
-    });
-
-    (allInterest || []).forEach(function(i) {
-        var row = ensure(i.account, i.currency);
-        var amount = toNum(i.amount);
-        var cadAmount = toNum(i.cadAmount);
-        row.interest += val(amount, cadAmount);
-    });
-
-    (allFxTrades || []).forEach(function(fx) {
-        var p = partsFromSymbol(fx.symbol);
-        if (!p) return;
-
-        var action = String(fx.action || '').trim();
-        var qty = Math.abs(toNum(fx.quantity));
-        var proceeds = Math.abs(toNum(fx.proceeds != null ? fx.proceeds : fx.amount));
-        var cadAmount = Math.abs(toNum(fx.cadAmount));
-        //var comm = Math.abs(toNum(fx.comm != null ? fx.comm : fx.commission));
-        var comm = Math.abs(toNum(fx.commission));
-
-        var baseRow = ensure(fx.account, p.base);
-        var quoteRow = ensure(fx.account, p.quote);
-
-        if (action === 'FX Buy') {
-            baseRow.fxBuys += val(qty, cadAmount);
-            quoteRow.fxSells += val(proceeds, cadAmount);
-        } else if (action === 'FX Sell') {
-            baseRow.fxSells += val(qty, cadAmount);
-            quoteRow.fxBuys += val(proceeds, cadAmount);
-        }
-
-        var commCurr = String(fx.currency || 'CAD').trim().toUpperCase();
-        var commRow = ensure(fx.account, commCurr);
-        commRow.fxComm += showCadEqv ? comm : comm;
-    });
-
-    Object.keys(map).forEach(function(k) {
-        var r = map[k];
-        r.unusedCash =
-            r.transferIn
-            - r.transferOut
-            - r.stockBuys
-            + r.stockSells
-            - r.stockTradeComm
-            + r.dividends
-            + r.interest
-            + r.fxBuys
-            - r.fxSells
-            - r.fxComm;
-    });
-
-    return map;
-}
-
-
 function buildFundsBreakdownMap(showCadEqv, byYear) {
     var map = {};
 
@@ -3080,7 +2940,7 @@ function buildFundsBreakdownMap(showCadEqv, byYear) {
         if (action === 'buy') row.stockBuys += amountVal;
         if (action === 'sell') row.stockSells += amountVal;
         row.stockTradeComm += commVal;
-        console.log("buildFundBreakdownMap(): row: ", row);
+        console.log("buildFundBreakdownMap(): t.commission, t.exchRate, comm, commVal, row: ", t.commission, t.exchRate, comm, commVal, row);
     });
     console.log("buildFundBreakdownMap(): allTrades: ", allTrades);
 
