@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.11">
+    <meta name="version" content="4.4.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2736,18 +2736,22 @@ function buildCashBreakdownMap() {
         var amountRaw = Math.abs(toNum(t.amount));
         var cadAmountRaw = Math.abs(toNum(t.cadAmount));
         //var commRaw = Math.abs(toNum(t.comm != null && t.comm !== '' ? t.comm : t.commission));
-        var commRaw = Math.abs(toNum(t.comm));
-        var exchRate = toNum(t.exchRate) || 1;
+        var commSource = (t.comm !== undefined && t.comm !== null && String(t.comm).trim() !== '')
+        ? t.comm
+        : t.commission;
 
-        //console.log("commRaw: ", commRaw, " t.comm: ", t.comm, " t.commission: ", t.commission);
+        var commRaw = Math.abs(toNum(commSource));
        
+        var exchRate = toNum(t.exchRate) || 1;
+     
         var amountVal = showCadEqv
             ? (cadAmountRaw || (amountRaw * exchRate))
             : amountRaw;
 
-        var commVal = showCadEqv
+       var commVal = showCadEqv
             ? (commRaw * exchRate)
             : commRaw;
+
 
         if (action === 'buy') row.stockBuys += amountVal;
         if (action === 'sell') row.stockSells += amountVal;
@@ -2755,7 +2759,19 @@ function buildCashBreakdownMap() {
         row.stockTradeComm += commVal;
     });
 
-   
+   console.log('Trade commission audit',
+    (allTrades || []).slice(0, 20).map(function(t) {
+        return {
+            date: t.date,
+            symbol: t.symbol,
+            action: t.action,
+            currency: t.currency,
+            comm: t.comm,
+            commission: t.commission,
+            normalized: getTradeCommission(t)
+        };
+    })
+);
     
     (allDivs || []).forEach(function(d) {
         var row = ensure(d.account, d.currency);
