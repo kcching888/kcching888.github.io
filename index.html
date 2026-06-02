@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.0">
+    <meta name="version" content="4.5.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4144,6 +4144,9 @@ function renderGainLoss() {
     // Put this in your index.html script section
     async function getBOCRate(currency, date) {
         if (currency === 'CAD') return 1;
+
+        if (currency === 'CNH') 
+            currency = 'CHN';
     
         try {
             // Ask your Apps Script for the rate instead of BoC directly
