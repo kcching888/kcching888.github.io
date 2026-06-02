@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.4.18">
+    <meta name="version" content="4.5.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -183,6 +183,7 @@
     <div class="nav-tab" onclick="showTab('gainloss')" id="tab-gainloss">Gain/Loss</div>
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
     <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer</div>        
+    <div class="nav-tab" onclick="triggerDailyHistoryBuild()">Build History</div>
     <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut(event)">Sheet</a>
 </div>
 
@@ -673,6 +674,58 @@
         if(checkbox) checkbox.checked = localStorage.getItem('ibkr_autosync') === 'true';
     }
 
+    async function triggerDailyHistoryBuild() {
+        if (!GAS_URL) {
+            alert('Please configure Google Sheets URL in Settings first.');
+            return;
+        }
+
+        const proceed = confirm('Rebuild DailyHistory now from Trades / Transfers / Dividends?');
+        if (!proceed) return;
+
+        try {
+            const conn = $('connStat');
+            if (conn) {
+                conn.textContent = 'Building DailyHistory...';
+                conn.className = '';
+            }
+
+            const res = await fetch(`${GAS_URL}?action=buildHistory`, {
+                method: 'GET',
+                mode: 'cors',
+                cache: 'no-cache',
+                redirect: 'follow'
+            });
+
+            if (!res.ok) throw new Error('Network response was not ok');
+
+            const result = await res.json();
+
+            if (!result || result.success !== true) {
+                throw new Error((result && result.error) || 'DailyHistory build failed');
+            }
+
+            alert(`DailyHistory generated successfully. Rows built: ${result.count || 0}`);
+
+            if (conn) {
+                conn.textContent = 'Connected';
+                conn.className = 'ok';
+            }
+
+            // Refresh cloud data so Performance tab sees latest history
+            syncData();
+
+        } catch (err) {
+            console.error('DailyHistory build error:', err);
+            const conn = $('connStat');
+            if (conn) {
+                conn.textContent = 'DailyHistory build failed';
+                conn.className = 'err';
+            }
+            alert('DailyHistory generation failed: ' + err.message);
+        }
+    }
+    
    function openSheetShortcut(e){
         if (e) e.preventDefault();
 
@@ -3148,9 +3201,8 @@ function renderPortfolio() {
     document.getElementById('port-table-wrap').innerHTML = '';
     let html = '';
 
-    // One shared controls block for all Funds sections
-    html += `<div style="margin:8px 0 16px 0;">${renderFundsControls()}</div>`;
-
+    var fundsSet = 0;
+    
     var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
 
     sortOrder.forEach(function(key) {
@@ -3238,6 +3290,12 @@ function renderPortfolio() {
                     return String(a.year || '').localeCompare(String(b.year || ''));
                 });
 
+            // One shared controls block for all Funds sections
+            if (fundsSet === 0) {
+                html += `<div style="margin:8px 0 16px 0;">${renderFundsControls()}</div>`;
+                fundsSet = 1;
+            }
+            
             html += `<div style="overflow-x:auto;">
                 <table class="portfolio-table">
                 <thead>
