@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.2">
+    <meta name="version" content="4.5.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3224,7 +3224,7 @@ function renderPortfolio() {
                 <th class="text-right" style="color:#4caf50">G/L</th><th>CCY</th>
             </tr></thead><tbody>`;
 
-            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0;
+            let tMV = 0, tBasis = 0, tGLF = 0, tACB = 0, tGLA = 0, tDailyPnL = 0;
 
             grouped[key].forEach(function(p) {
                 var curP = (livePrices[p.symbol] || {}).price || 0;
@@ -3241,6 +3241,7 @@ function renderPortfolio() {
                 tGLF += (glF * rate);
                 tACB += (p.acbTotalCost * rate);
                 tGLA += (glA * rate);
+                tDailyPnL += dailyPnL;
 
                 var quote = livePrices[p.symbol] || {};
                 var last = parseFloat(quote.price ?? quote.last ?? 0) || 0;
@@ -3275,6 +3276,7 @@ function renderPortfolio() {
 
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
                 <td>TOTAL (CAD)</td><td colspan="4"></td>
+                <td class="text-right">$${fmt(tDailyPnL)}</td> 
                 <td class="text-right">$${fmt(tMV)}</td>
                 <td style="border-left:2px solid #444"></td>
                 <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
