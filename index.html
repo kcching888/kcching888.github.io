@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.1">
+    <meta name="version" content="4.5.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3215,7 +3215,7 @@ function renderPortfolio() {
 
         if (type === 'Stocks') {
             html += `<table class="portfolio-table"><thead><tr>
-                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">MV</th>
+                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">Changes %</th><th class="text-right">Daily P&amp;L</th><th class="text-right">MV</th>
                 <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
                 <th class="text-right" style="color:#aaa">Basis</th>
                 <th class="text-right" style="color:#aaa">G/L</th>
@@ -3242,10 +3242,22 @@ function renderPortfolio() {
                 tACB += (p.acbTotalCost * rate);
                 tGLA += (glA * rate);
 
+                var last = parseFloat(pos.last || pos.price || 0);
+                var prevClose = parseFloat(pos.prevClose || pos.previousClose || pos.close || 0);
+                var qty = parseFloat(pos.quantity || 0);
+
+                var changePct = prevClose ? ((last - prevClose) / prevClose) * 100 : 0;
+                var dailyPnL = qty * (last - prevClose);
+
+                var changePctClass = changePct > 0 ? 'text-success' : (changePct < 0 ? 'text-danger' : '');
+                var dailyPnLClass = dailyPnL > 0 ? 'text-success' : (dailyPnL < 0 ? 'text-danger' : '');
+
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
                     <td class="text-right">$${fmt(curP)}</td>
+                    <td class="text-right ' + changePctClass + '">' + fmt(changePct, 2) + '%</td>
+                    <td class="text-right ' + dailyPnLClass + '">' + fmt(dailyPnL, 2) + '</td>
                     <td class="text-right">$${fmt(mv)}</td>
                     <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
                     <td class="text-right" style="color:#aaa">$${fmt(fifoBasis)}</td>
