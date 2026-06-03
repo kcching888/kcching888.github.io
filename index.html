@@ -3242,22 +3242,23 @@ function renderPortfolio() {
                 tACB += (p.acbTotalCost * rate);
                 tGLA += (glA * rate);
 
-                var last = parseFloat(pos.last || pos.price || 0);
-                var prevClose = parseFloat(pos.prevClose || pos.previousClose || pos.close || 0);
-                var qty = parseFloat(pos.quantity || 0);
-
+                var quote = livePrices[p.symbol] || {};
+                var last = parseFloat(quote.price ?? quote.last ?? 0) || 0;
+                var prevClose = parseFloat(quote.prevClose ?? quote.previousClose ?? quote.close ?? 0) || 0;
+                var qty = parseFloat(p.qty) || 0;
+    
                 var changePct = prevClose ? ((last - prevClose) / prevClose) * 100 : 0;
                 var dailyPnL = qty * (last - prevClose);
 
-                var changePctClass = changePct > 0 ? 'text-success' : (changePct < 0 ? 'text-danger' : '');
-                var dailyPnLClass = dailyPnL > 0 ? 'text-success' : (dailyPnL < 0 ? 'text-danger' : '');
+                var changePctClass = changePct > 0 ? 'pos-gain' : (changePct < 0 ? 'pos-loss' : '');
+                var dailyPnLClass = dailyPnL > 0 ? 'pos-gain' : (dailyPnL < 0 ? 'pos-loss' : '');
 
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
                     <td class="text-right">$${fmt(curP)}</td>
-                    <td class="text-right ' + changePctClass + '">' + fmt(changePct, 2) + '%</td>
-                    <td class="text-right ' + dailyPnLClass + '">' + fmt(dailyPnL, 2) + '</td>
+                    <td class="text-right ${changePctClass}">${fmt(changePct, 2)}%</td>
+                    <td class="text-right ${dailyPnLClass}">$${fmt(dailyPnL)}</td>
                     <td class="text-right">$${fmt(mv)}</td>
                     <td class="text-right" style="border-left:2px solid #444; color:#aaa">$${fmt(fifoAvg, 3)}</td>
                     <td class="text-right" style="color:#aaa">$${fmt(fifoBasis)}</td>
@@ -3273,7 +3274,7 @@ function renderPortfolio() {
             var totalWithCashCad = tMV + unusedCashCad;
 
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-                <td>TOTAL (CAD)</td><td colspan="2"></td>
+                <td>TOTAL (CAD)</td><td colspan="4"></td>
                 <td class="text-right">$${fmt(tMV)}</td>
                 <td style="border-left:2px solid #444"></td>
                 <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
@@ -3284,12 +3285,12 @@ function renderPortfolio() {
                 <td>CAD</td>
             </tr>
             <tr class="total-row" style="background:#0f1720; font-weight:bold;">
-                <td colspan="3">Unused Cash (CAD)</td>
+                <td colspan="5">Unused Cash (CAD)</td>
                 <td class="text-right">$${fmt(unusedCashCad)}</td>
                 <td colspan="7"></td>
             </tr>
             <tr class="total-row" style="background:#16202a; font-weight:bold; border-top:1px solid #333">
-                <td colspan="3">Account Total incl. Cash (CAD)</td>
+                <td colspan="5">Account Total incl. Cash (CAD)</td>
                 <td class="text-right">$${fmt(totalWithCashCad)}</td>
                 <td colspan="7"></td>
             </tr></tbody></table>`;
