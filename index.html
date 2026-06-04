@@ -4494,10 +4494,10 @@ function sortByDateThenId(arr) {
 
 function buyIntoLedger(ledger, tx) {
   const pos = ensureLedgerPosition(ledger, tx);
-  const lotCost = round2(tx.amount + tx.comm);
+  const lotCost = round2(tx.amount + tx.commission);
   const unitCost = tx.quantity ? round2(lotCost / tx.quantity) : 0;
 
-  console.log("buyIntoLedger tx: ", tx);
+ // console.log("buyIntoLedger tx: ", tx);
     
   pos.fifoLots.push({
     lotId: tx.id,
@@ -4509,7 +4509,7 @@ function buyIntoLedger(ledger, tx) {
   });
 
   pos.qty = round2(pos.qty + tx.quantity);
-  pos.fees = round2(pos.fees + tx.comm);
+  pos.fees = round2(pos.fees + tx.commission);
 
     
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
