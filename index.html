@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.8">
+    <meta name="version" content="4.5.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3215,7 +3215,7 @@ function renderPortfolio() {
 
         if (type === 'Stocks') {
             html += `<table class="portfolio-table"><thead><tr>
-                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">Changes %</th><th class="text-right">Daily P&amp;L</th><th class="text-right">MV</th>
+                <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">Changes</th><th class="text-right">Changes %</th><th class="text-right">Daily P&amp;L</th><th class="text-right">MV</th>
                 <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
                 <th class="text-right" style="color:#aaa">Basis</th>
                 <th class="text-right" style="color:#aaa">G/L</th>
@@ -3249,6 +3249,7 @@ function renderPortfolio() {
     
                 var changePct = prevClose ? ((last - prevClose) / prevClose) * 100 : 0;
                 var dailyPnL = qty * (last - prevClose);
+                var changeAbs = curP - prevClose;
 
                 var changePctClass = changePct > 0 ? 'pos-gain' : (changePct < 0 ? 'pos-loss' : '');
                 var dailyPnLClass = dailyPnL > 0 ? 'pos-gain' : (dailyPnL < 0 ? 'pos-loss' : '');
@@ -3259,6 +3260,7 @@ function renderPortfolio() {
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
                     <td class="text-right">$${fmt(curP)}</td>
+                    <td class="text-right ${changePctClass}">$${fmt(changeAbs)}</td>
                     <td class="text-right ${changePctClass}">${fmt(changePct, 2)}%</td>
                     <td class="text-right ${dailyPnLClass}">$${fmt(dailyPnL)}</td>
                     <td class="text-right">$${fmt(mv)}</td>
@@ -3276,7 +3278,7 @@ function renderPortfolio() {
             var totalWithCashCad = tMV + unusedCashCad;
 
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
-                <td>TOTAL (CAD)</td><td colspan="3"></td>
+                <td>TOTAL (CAD)</td><td colspan="4"></td>
                 <td class="text-right">$${fmt(tDailyPnL)}</td> 
                 <td class="text-right">$${fmt(tMV)}</td>
                 <td style="border-left:2px solid #444"></td>
