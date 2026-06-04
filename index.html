@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.10">
+    <meta name="version" content="4.5.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -605,6 +605,39 @@
         localStorage.setItem('ibkr_fx_trades', JSON.stringify(allFxTrades || []));
     }
 
+    function getPerfDateRange(range) {
+        const end = new Date();
+        const start = new Date(end);
+
+        if (range === '1M') start.setMonth(end.getMonth() - 1);
+        else if (range === '3M') start.setMonth(end.getMonth() - 3);
+        else if (range === '6M') start.setMonth(end.getMonth() - 6);
+        else if (range === 'YTD') start.setMonth(0, 1);
+        else if (range === '1Y') start.setFullYear(end.getFullYear() - 1);
+        else if (range === '3Y') start.setFullYear(end.getFullYear() - 3);
+        else if (range === '5Y') start.setFullYear(end.getFullYear() - 5);
+        else if (range === 'MAX') start.setFullYear(2000);
+
+        return {
+            from: fmtDate(start),
+            to: fmtDate(end)
+        };
+    }
+
+    function getPerformanceFeesFromTrades() {
+        const range = getPerfDateRange(perfRange || '1Y');
+        const acctFilter = String(perfAccount || 'ALL').trim();
+
+        return (allTrades || []).reduce(function(sum, t) {
+            const acct = String(t.account || '').trim();
+            const date = fmtDate(t.date);
+            if (!date) return sum;
+            if (acctFilter !== 'ALL' && acct !== acctFilter) return sum;
+            if (date < range.from || date > range.to) return sum;
+            return sum + getTradeCommission(t);
+        }, 0);
+    }
+    
     function getTradeCommission(t) {
         return Math.abs(parseFloat(
             t.commission != null && t.commission !== '' ? t.commission :
@@ -2191,7 +2224,22 @@ console.log('Flow sum check', {
   const realized = num(totals.realizedGain, 0);
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
-  const fees = num(totals.fees, 0);
+ 
+  const fees = (allTrades || []).reduce((sum, t) => {
+      const acct = String(t.account || '').trim();
+      const tradeDate = fmtDate(t.date);
+      const comm = Math.abs(parseFloat(
+        t.commission != null && t.commission !== '' ? t.commission :
+        t.comm != null && t.comm !== '' ? t.comm : 0
+      )) || 0;
+
+      if (perfAccount && perfAccount !== 'ALL' && acct !== perfAccount) return sum;
+      if (startDate && tradeDate < startDate) return sum;
+      if (endDate && tradeDate > endDate) return sum;
+
+      return sum + comm;
+  }, 0);
+    
   const netContributions = num(totals.netContributions, 0);
   const totalReturn = num(totals.totalReturn, 0);
   const priceReturn = num(totals.priceReturn, 0);
