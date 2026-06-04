@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.7">
+    <meta name="version" content="4.5.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4497,6 +4497,8 @@ function buyIntoLedger(ledger, tx) {
   const lotCost = round2(tx.amount + tx.comm);
   const unitCost = tx.quantity ? round2(lotCost / tx.quantity) : 0;
 
+  console.log("buyIntoLedger tx: ", tx);
+    
   pos.fifoLots.push({
     lotId: tx.id,
     date: tx.date,
@@ -4508,7 +4510,7 @@ function buyIntoLedger(ledger, tx) {
 
   pos.qty = round2(pos.qty + tx.quantity);
   pos.fees = round2(pos.fees + tx.comm);
-  console.log("buyIntoLedger tx: ", tx);
+
     
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
