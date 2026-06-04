@@ -3241,10 +3241,7 @@ function renderPortfolio() {
                 tGLF += (glF * rate);
                 tACB += (p.acbTotalCost * rate);
                 tGLA += (glA * rate);
-                tDailyPnL += dailyPnL;
-
-                console.log("tDailyPnL, dailyPnL: ", tDailyPnL, dailyPnL);
-
+             
                 var quote = livePrices[p.symbol] || {};
                 var last = parseFloat(quote.price ?? quote.last ?? 0) || 0;
                 var prevClose = parseFloat(quote.prevClose ?? quote.previousClose ?? quote.close ?? 0) || 0;
@@ -3255,6 +3252,9 @@ function renderPortfolio() {
 
                 var changePctClass = changePct > 0 ? 'pos-gain' : (changePct < 0 ? 'pos-loss' : '');
                 var dailyPnLClass = dailyPnL > 0 ? 'pos-gain' : (dailyPnL < 0 ? 'pos-loss' : '');
+
+                tDailyPnL += dailyPnL;
+                console.log("tDailyPnL, dailyPnL: ", tDailyPnL, dailyPnL);
 
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
