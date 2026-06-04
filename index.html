@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.9">
+    <meta name="version" content="4.5.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -605,6 +605,40 @@
         localStorage.setItem('ibkr_fx_trades', JSON.stringify(allFxTrades || []));
     }
 
+    function getTradeCommission(t) {
+        return Math.abs(parseFloat(
+            t.commission != null && t.commission !== '' ? t.commission :
+            t.comm != null && t.comm !== '' ? t.comm : 0
+        )) || 0;
+    }
+
+    function getFeesByAccountAndDate() {
+        const map = {};
+        (allTrades || []).forEach(function(t) {
+            const acct = String(t.account || '').trim();
+            const date = fmtDate(t.date);
+            if (!acct || !date) return;
+            const key = acct + '|' + date;
+            map[key] = (map[key] || 0) + getTradeCommission(t);
+        });
+        return map;
+    }
+
+    function enrichHistoryWithDerivedFees(rows) {
+        const feeMap = getFeesByAccountAndDate();
+        return (rows || []).map(function(r) {
+            const acct = String(r.account || '').trim();
+            const date = fmtDate(r.date);
+            const key = acct + '|' + date;
+            const existingFees = parseFloat(r.fees);
+            return Object.assign({}, r, {
+                fees: !isNaN(existingFees) && Math.abs(existingFees) > 0
+                    ? existingFees
+                    : (feeMap[key] || 0)
+            });
+        });
+    }
+    
     function getAssetType(t) {
         if (!t.symbol) return 'Stocks';
           //  if (t.assetCategory) { var cat = String(t.assetCategory).toLowerCase(); if (cat.includes('stocks')) return 'Stocks'; if (cat.includes('funds')) return 'Funds'; if (cat.includes('bond') || cat.includes('note') || cat.includes('bill')) return 'Fixed Income'; if (cat.includes('option')) return 'Options'; }
@@ -644,10 +678,11 @@
     }
 
     async function loadPerformanceTab() {
-      await ensureDailyHistoryUntilYesterday();
-      renderPerformanceControls();
-      renderPerfStats();
-      renderEquityDrawdown();
+        await ensureDailyHistoryUntilYesterday();
+        allHistory = enrichHistoryWithDerivedFees(allHistory || []);
+        renderPerformanceControls();
+        renderPerfStats();
+        renderEquityDrawdown();
     }
 
     async function ensureDailyHistoryUntilYesterday() {
@@ -787,7 +822,7 @@ function syncData() {
         allTrades = cloudData.trades || [];
         allDivs = cloudData.dividends || [];
         allTransfers = cloudData.transfers || [];
-        allHistory = cloudData.history || []; // [{ date, account, totalValue, netCashFlow, dividends, tax, fees, ... }]
+        allHistory = enrichHistoryWithDerivedFees(cloudData.history || []);
         allFxTrades = cloudData.fxTrades || cloudData.FX || cloudData.fx || [];
         allInterest = cloudData.interest || cloudData.Interest || [];
         
