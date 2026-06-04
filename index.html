@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.4">
+    <meta name="version" content="4.5.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3242,6 +3242,8 @@ function renderPortfolio() {
                 tACB += (p.acbTotalCost * rate);
                 tGLA += (glA * rate);
                 tDailyPnL += dailyPnL;
+
+                console.log("tDailyPnL, dailyPnL: ", tDailyPnL, dailyPnL);
 
                 var quote = livePrices[p.symbol] || {};
                 var last = parseFloat(quote.price ?? quote.last ?? 0) || 0;
