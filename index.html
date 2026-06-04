@@ -4508,7 +4508,7 @@ function buyIntoLedger(ledger, tx) {
 
   pos.qty = round2(pos.qty + tx.quantity);
   pos.fees = round2(pos.fees + tx.comm);
-  console.log("buyIntoLedger t: ", t, "tx: ", tx);
+  console.log("buyIntoLedger tx: ", tx);
     
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
