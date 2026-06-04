@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.6">
+    <meta name="version" content="4.5.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4508,6 +4508,8 @@ function buyIntoLedger(ledger, tx) {
 
   pos.qty = round2(pos.qty + tx.quantity);
   pos.fees = round2(pos.fees + tx.comm);
+  console.log("buyIntoLedger t: ", t, "tx: ", tx);
+    
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
 
