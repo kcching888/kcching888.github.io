@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.5">
+    <meta name="version" content="4.5.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3254,8 +3254,7 @@ function renderPortfolio() {
                 var dailyPnLClass = dailyPnL > 0 ? 'pos-gain' : (dailyPnL < 0 ? 'pos-loss' : '');
 
                 tDailyPnL += dailyPnL;
-                console.log("tDailyPnL, dailyPnL: ", tDailyPnL, dailyPnL);
-
+                
                 html += `<tr>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
@@ -4495,7 +4494,7 @@ function sortByDateThenId(arr) {
 
 function buyIntoLedger(ledger, tx) {
   const pos = ensureLedgerPosition(ledger, tx);
-  const lotCost = round2(tx.amount + tx.commission);
+  const lotCost = round2(tx.amount + tx.comm);
   const unitCost = tx.quantity ? round2(lotCost / tx.quantity) : 0;
 
   pos.fifoLots.push({
@@ -4508,7 +4507,7 @@ function buyIntoLedger(ledger, tx) {
   });
 
   pos.qty = round2(pos.qty + tx.quantity);
-  pos.fees = round2(pos.fees + tx.commission);
+  pos.fees = round2(pos.fees + tx.comm);
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
 
