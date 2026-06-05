@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.12">
+    <meta name="version" content="4.5.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -670,6 +670,28 @@
                     : (feeMap[key] || 0)
             });
         });
+    }
+
+    function getPerformanceFilteredData() {
+      const range = getPerfDateRange(perfRange || '1Y');
+      const acctFilter = String(perfAccount || 'ALL').trim();
+
+      function inScope(row) {
+        const acct = String(row.account || '').trim();
+        const date = fmtDate(row.date);
+        if (acctFilter !== 'ALL' && acct !== acctFilter) return false;
+        if (date && range.from && date < range.from) return false;
+        if (date && range.to && date > range.to) return false;
+        return true;
+      }
+
+      return {
+        trades: (allTrades || []).filter(inScope),
+        dividends: (allDivs || []).filter(inScope),
+        transfers: (allTransfers || []).filter(inScope),
+        fxTrades: (allFxTrades || []).filter(inScope),
+        interest: (allInterest || []).filter(inScope)
+      };
     }
     
     function getAssetType(t) {
@@ -2112,15 +2134,21 @@ async function loadBenchmarkHistory(ticker) {
 }
     
 async function renderPerfStats() {
-  const ledger = buildLedgerFromCurrentAppData({
-    baseCurrency: 'CAD',
-    livePrices: window.currentPrices || {}
-  });
+  
+  const perfData = getPerformanceFilteredData();
+
+  const ledger = buildLedgerFromData({
+      trades: perfData.trades,
+      dividends: perfData.dividends,
+      transfers: perfData.transfers,
+      fxTrades: perfData.fxTrades,
+      interest: perfData.interest,
+      baseCurrency: 'CAD',
+      livePrices: window.currentPrices || {}
+    });
 
   const totals = ledger.totals || {};
-  //const historyRows = getFilteredHistoryRows(perfAccount || 'ALL');
-  //const flowMap = groupExternalFlowsByDate(allTransfers || [], perfAccount || 'ALL');
-  //const twrResult = computeDailyTWR(historyRows, flowMap);
+    
   const rawHistoryRows = getFilteredHistoryRows(perfAccount || 'ALL');
   const historyRows = filterHistoryRowsByPerfRange(rawHistoryRows, perfRange);
   const endDateStr = historyRows.length ? historyRows[historyRows.length - 1].date : '';
@@ -4730,6 +4758,33 @@ function updateLedgerMarketValues(ledger, livePrices) {
     ledger.totals.incomeReturn -
     ledger.totals.fees
   );
+}
+
+function buildLedgerFromData(opts) {
+  const originalTrades = allTrades;
+  const originalDivs = allDivs;
+  const originalTransfers = allTransfers;
+  const originalFxTrades = allFxTrades;
+  const originalInterest = allInterest;
+
+  try {
+    allTrades = opts.trades || [];
+    allDivs = opts.dividends || [];
+    allTransfers = opts.transfers || [];
+    allFxTrades = opts.fxTrades || [];
+    allInterest = opts.interest || [];
+
+    return buildLedgerFromCurrentAppData({
+      baseCurrency: opts.baseCurrency || 'CAD',
+      livePrices: opts.livePrices || {}
+    });
+  } finally {
+    allTrades = originalTrades;
+    allDivs = originalDivs;
+    allTransfers = originalTransfers;
+    allFxTrades = originalFxTrades;
+    allInterest = originalInterest;
+  }
 }
 
 function buildLedgerFromCurrentAppData(opts = {}) {
