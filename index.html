@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.15">
+    <meta name="version" content="4.5.16">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1946,7 +1946,7 @@ function renderPerformanceControls() {
     const acctLabel = perfAccount && perfAccount !== 'ALL' ? perfAccount : 'All accounts';
     const rangeLabel = getPerfRangeLabel(perfRange || 'ALL');
 
-    html += `
+    el.innerHTML += `
       <div class="perf-active-range" style="margin-top:8px; color:#aaa; font-size:12px;">
         Showing <strong>${esc(acctLabel)}</strong> • <strong>${esc(rangeLabel)}</strong>
       </div>
