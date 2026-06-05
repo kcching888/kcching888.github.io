@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.13">
+    <meta name="version" content="4.5.15">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -672,16 +672,24 @@
         });
     }
 
-    function getPerformanceFilteredData() {
-      const range = getPerfDateRange(perfRange || '1Y');
+   function getPerformanceFilteredData() {
+      const rangeKey = String(perfRange || 'ALL').trim().toUpperCase();
       const acctFilter = String(perfAccount || 'ALL').trim();
+
+      const useDateFilter = !(rangeKey === 'ALL' || rangeKey === 'MAX');
+      const range = useDateFilter ? getPerfDateRange(rangeKey) : { from: '', to: '' };
 
       function inScope(row) {
         const acct = String(row.account || '').trim();
         const date = fmtDate(row.date);
+
         if (acctFilter !== 'ALL' && acct !== acctFilter) return false;
-        if (date && range.from && date < range.from) return false;
-        if (date && range.to && date > range.to) return false;
+
+        if (useDateFilter) {
+          if (date && range.from && date < range.from) return false;
+          if (date && range.to && date > range.to) return false;
+        }
+
         return true;
       }
 
@@ -726,7 +734,7 @@
 
         if (tab === 'portfolio') renderPortfolio();
         if (tab === 'performance') loadPerformanceTab();
-        //if (tab === 'performance') {renderPerformanceControls(); renderPerfStats(); renderEquityDrawdown();}
+
         if (tab === 'gainloss') renderGainLoss();
         if (tab === 'dividends') applyDivFilters();
         if (tab === 'transfers') renderTransfersTable();
@@ -1874,6 +1882,22 @@ function getPerformanceAccounts() {
     return Array.from(set).sort();
 }
 
+function getPerfRangeLabel(rangeKey) {
+  const key = String(rangeKey || 'ALL').trim().toUpperCase();
+  const labels = {
+    ALL: 'All available dates',
+    MAX: 'All available dates',
+    YTD: 'Year to date',
+    '1M': 'Last 1 month',
+    '3M': 'Last 3 months',
+    '6M': 'Last 6 months',
+    '1Y': 'Last 1 year',
+    '3Y': 'Last 3 years',
+    '5Y': 'Last 5 years'
+  };
+  return labels[key] || key;
+}
+
 function renderPerformanceControls() {
     const el = $('performance-controls');
     if (!el) return;
@@ -1918,6 +1942,15 @@ function renderPerformanceControls() {
                 '</div>' +
             '</div>' +
         '</div>';
+
+    const acctLabel = perfAccount && perfAccount !== 'ALL' ? perfAccount : 'All accounts';
+    const rangeLabel = getPerfRangeLabel(perfRange || 'ALL');
+
+    html += `
+      <div class="perf-active-range" style="margin-top:8px; color:#aaa; font-size:12px;">
+        Showing <strong>${esc(acctLabel)}</strong> • <strong>${esc(rangeLabel)}</strong>
+      </div>
+    `;
 }
 
 function groupExternalFlowsByDate(transfers, accountFilter = 'ALL') {
@@ -2395,12 +2428,12 @@ function renderEquityDrawdown() {
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'1M\')">1M</button>' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'3M\')">3M</button>' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'6M\')">6M</button>' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'YTD\')">YTD</button>' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'1Y\')">1Y</button>' +
-            '<button class="btn-secondary" onclick="setPerfRange(\'ALL\')">All</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'1M\')">1M</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'3M\')">3M</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'6M\')">6M</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'YTD\')">YTD</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'1Y\')">1Y</button>' +
+   //         '<button class="btn-secondary" onclick="setPerfRange(\'ALL\')">All</button>' +
         '</div>' +
     '</div>';
     
