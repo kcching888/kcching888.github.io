@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.18">
+    <meta name="version" content="4.5.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2285,32 +2285,11 @@ console.log('Flow sum check', {
 const realizedRows = getRealizedGainRowsFromLedger(ledger) || [];
 
 const realized = realizedRows.reduce((sum, r) => {
-  const acct = String(
-    r.account ?? r.acct ?? r.accountId ?? ''
-  ).trim();
+  const acct = String(r.account || '').trim();
+  const rowDate = fmtDate(r.date || '');
+  const gain = num(r.gain, 0);   // ← matches ledger builder line 4778 and Gain/Loss tab line 3968
 
-  const rowDate = fmtDate(
-    r.sellDate ??
-    r.disposalDate ??
-    r.closeDate ??
-    r.tradeDate ??
-    r.date ??
-    ''
-  );
-
-  const gain = num(
-    r.gainLoss ??
-    r.realizedGain ??
-    r.realizedGL ??
-    r.gl ??
-    r.pnl ??
-    r.realized ??
-    0,
-    0
-  );
-
-  if (perfAccount && perfAccount !== 'ALL' && acct !== perfAccount) return sum;
-
+  if (perfAccount && perfAccount !== 'ALL' && acct && acct !== perfAccount) return sum;
   if (startDate && rowDate && rowDate < startDate) return sum;
   if (endDate && rowDate && rowDate > endDate) return sum;
 
