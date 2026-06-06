@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.4">
+    <meta name="version" content="5.0.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4059,16 +4059,23 @@ async function processUpload() {
                 throw new Error(result.error || 'HSBC import failed');
             }
 
+            const tradesParsed = result.tradesParsed || 0;
+            const tradesAdded = result.tradesAdded ?? result.tradesWritten ?? 0;
+            const dividendsParsed = result.dividendsParsed || 0;
+            const dividendsAdded = result.dividendsAdded ?? result.dividendsWritten ?? 0;
+            const warnings = result.warnings || [];
+            
             preview.textContent =
                 'Imported successfully\n' +
-                'Trades parsed: ' + ((result.result && result.result.tradesParsed) || 0) + '\n' +
-                'Trades added: ' + ((result.result && result.result.tradesAdded) || 0) + '\n' +
-                'Dividends parsed: ' + ((result.result && result.result.dividendsParsed) || 0) + '\n' +
-                'Dividends added: ' + ((result.result && result.result.dividendsAdded) || 0) + '\n' +
-                (((result.result && result.result.warnings) || []).length
-                    ? ('Warnings:\n- ' + result.result.warnings.join('\n- '))
+                  'Trades parsed: ' + tradesParsed + '\n' +
+                  'Trades added: ' + tradesAdded + '\n' +
+                  'Dividends parsed: ' + dividendsParsed + '\n' +
+                  'Dividends added: ' + dividendsAdded + '\n' +
+              (warnings.length
+                    ? ('Warnings:\n- ' + warnings.join('\n- '))
                     : '');
 
+            
             await syncData();
 
             if (typeof renderPortfolio === 'function') renderPortfolio();
@@ -4076,9 +4083,9 @@ async function processUpload() {
             if (typeof renderGainLoss === 'function') renderGainLoss();
 
             alert(
-                'HSBC PDF import complete. ' +
-                (((result.result && result.result.tradesAdded) || 0)) + ' trades added, ' +
-                (((result.result && result.result.dividendsAdded) || 0)) + ' dividends added.'
+              'HSBC PDF import complete. ' +
+              tradesAdded + ' trades added, ' +
+              dividendsAdded + ' dividends added.'
             );
             return;
         }
