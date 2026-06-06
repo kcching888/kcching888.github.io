@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.2">
+    <meta name="version" content="5.0.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4067,7 +4067,7 @@ function parseHSBCHKMonthlyStatement(text, accountLabel) {
     const fees = [];
     const warnings = [];
 
-    const lines = text
+    const lines = String(text || '')
         .split(/\r?\n/)
         .map(function(l) { return l.replace(/\s+/g, ' ').trim(); })
         .filter(Boolean);
@@ -4079,170 +4079,164 @@ function parseHSBCHKMonthlyStatement(text, accountLabel) {
             JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06',
             JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12'
         };
-        return m[3] + '-' + months[m[2].toUpperCase()] + '-' + m[1];
+        const mm = months[m[2].toUpperCase()];
+        return mm ? (m[3] + '-' + mm + '-' + m[1]) : '';
     }
 
     function parseNumHsbc(v) {
         if (v == null) return 0;
         const s = String(v).replace(/,/g, '').trim();
         if (!s) return 0;
-        if (/^\d+(\.\d+)?-$/.test(s)) return -parseFloat(s.replace('-', ''));
+        if (/^\d+(\.\d+)?-$/.test(s)) return -parseFloat(s.slice(0, -1));
         return parseFloat(s) || 0;
     }
 
     function hkSymbol(code, desc) {
         const c = String(code || '').trim();
-        if (/^\d{4,5}$/.test(c)) return c.padStart(4, '0') + '.HK';
-        if (/GOOG|TSM/i.test(desc || '')) return String((desc || '').match(/\b(GOOG|TSM)\b/i)?.[1] || '').toUpperCase();
+        const d = String(desc || '').trim();
+
+        if (/^\d{4,5}$/.test(c)) return c.padStart(5, '0') + '.HK';
+        if (/^U\d+$/i.test(c)) return c.toUpperCase();
+        if (/^(GOOG|TSM|AAPL|MSFT|NVDA|AMZN)$/i.test(c)) return c.toUpperCase();
+
+        const m = d.match(/\b(GOOG|TSM|AAPL|MSFT|NVDA|AMZN)\b/i);
+        if (m) return m[1].toUpperCase();
+
         return c || 'UNKNOWN';
     }
 
     let mode = '';
-    let currentSection = '';
-    let currentTrade = null;
-    let currentIncome = null;
+    let section = '';
+    let currentSecurity = null;
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
 
-        if (/^Transaction summary/i.test(line)) {
+        if (/^Transaction summary\b/i.test(line)) {
             mode = 'txn';
-            currentSection = '';
+            section = '';
+            currentSecurity = null;
             continue;
         }
-        if (/^Charges and income summary/i.test(line)) {
+        if (/^Charges and income summary\b/i.test(line)) {
             mode = 'income';
-            currentSection = '';
-            continue;
-        }
-        if (/^Portfolio details/i.test(line) || /^Exchange rate against HKD/i.test(line)) {
-            mode = '';
+            section = '';
+            currentSecurity = null;
             continue;
         }
 
         if (mode === 'txn') {
             if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS|BONDS\/CERTIFICATES OF DEPOSIT)$/i.test(line)) {
-                currentSection = line.toUpperCase();
+                section = line.toUpperCase();
                 continue;
             }
 
-            const secHeader = line.match(/^(\d{4,5}|[A-Z]{1,10})\s+(.+)$/);
-            if (secHeader && !/^(Reference:|Type:)/i.test(line) && !/^\d{2}[A-Z]{3}\d{4}/.test(line)) {
-                currentTrade = {
-                    code: secHeader[1],
-                    desc: secHeader[2],
-                    section: currentSection
+            const secMatch = line.match(/^([A-Z0-9]{4,10})\s+(.+?)\s+\((SHS|UNT|FMT)\)$/i);
+            if (secMatch) {
+                currentSecurity = {
+                    code: secMatch[1],
+                    desc: secMatch[2],
+                    section: section
                 };
                 continue;
             }
 
-            const txnLine = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,]+\.\d+)\s+([\d,]+\.-?|[\d,]+-?)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
-            if (txnLine && currentTrade) {
-                currentTrade.tradeDate = parseHsbcDate(txnLine[1]);
-                currentTrade.settleDate = parseHsbcDate(txnLine[2]);
-                currentTrade.currency = txnLine[3].toUpperCase();
-                currentTrade.price = parseNumHsbc(txnLine[4]);
-                currentTrade.quantityRaw = txnLine[5];
-                currentTrade.quantity = Math.abs(parseNumHsbc(txnLine[5]));
-                currentTrade.amount = parseNumHsbc(txnLine[7]);
-                continue;
-            }
+            const tradeLine = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,]+\.\d+)\s+([\d,]+-?)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
+            if (tradeLine && currentSecurity) {
+                const tradeDate = parseHsbcDate(tradeLine[1]);
+                const settleDate = parseHsbcDate(tradeLine[2]);
+                const currency = tradeLine[3].toUpperCase();
+                const price = parseNumHsbc(tradeLine[4]);
+                const qtyVal = parseNumHsbc(tradeLine[5]);
+                const amount = parseNumHsbc(tradeLine[7]);
 
-            const refTypeLine = line.match(/^Reference:\s*([A-Z0-9]+)\s+Type:\s*([A-Z]{3})$/i);
-            if (refTypeLine && currentTrade && currentTrade.tradeDate) {
-                const type = refTypeLine[2].toUpperCase();
-                const action = type === 'SAL' ? 'Sell' : (type === 'PUR' ? 'Buy' : type);
+                const refLine = lines[i + 1] || '';
+                const refMatch = refLine.match(/^Reference:\s*([A-Z0-9]+)\s+Type:\s*([A-Z]{3})$/i);
 
-                trades.push({
-                    id: 'HKT' + Date.now() + '_' + trades.length,
-                    date: currentTrade.tradeDate,
-                    settleDate: currentTrade.settleDate,
-                    account: accountLabel,
-                    action: action,
-                    symbol: hkSymbol(currentTrade.code, currentTrade.desc),
-                    description: currentTrade.desc,
-                    quantity: currentTrade.quantity,
-                    price: currentTrade.price,
-                    amount: Math.abs(currentTrade.amount),
-                    commission: 0,
-                    currency: currentTrade.currency || 'HKD',
-                    assetCategory: /UNIT TRUST/i.test(currentTrade.section) ? 'Funds'
-                        : /FOREIGN/i.test(currentTrade.section) ? 'Stocks'
-                        : /LOCAL/i.test(currentTrade.section) ? 'Stocks'
-                        : 'Investments',
-                    brokerRef: refTypeLine[1],
-                    source: 'HSBC_HK_PDF'
-                });
-
-                currentTrade = null;
+                if (refMatch) {
+                    const typ = refMatch[2].toUpperCase();
+                    trades.push({
+                        id: 'HKT' + Date.now() + '_' + trades.length,
+                        date: tradeDate,
+                        settleDate: settleDate,
+                        account: accountLabel,
+                        action: typ === 'SAL' ? 'Sell' : (typ === 'PUR' ? 'Buy' : typ),
+                        symbol: hkSymbol(currentSecurity.code, currentSecurity.desc),
+                        description: currentSecurity.desc,
+                        quantity: Math.abs(qtyVal),
+                        price: price,
+                        amount: Math.abs(amount),
+                        commission: 0,
+                        currency: currency,
+                        assetCategory: /UNIT TRUST/i.test(currentSecurity.section) ? 'Funds'
+                            : /BONDS/i.test(currentSecurity.section) ? 'Bonds'
+                            : 'Stocks',
+                        brokerRef: refMatch[1],
+                        source: 'HSBC_HK_PDF'
+                    });
+                    i += 1;
+                }
                 continue;
             }
         }
 
         if (mode === 'income') {
             if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS)$/i.test(line)) {
-                currentSection = line.toUpperCase();
+                section = line.toUpperCase();
                 continue;
             }
 
-            const dateAndType = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(.+)$/i);
-            if (dateAndType) {
-                currentIncome = {
-                    date: parseHsbcDate(dateAndType[1]),
-                    headline: dateAndType[2],
-                    section: currentSection,
-                    rawLines: [line]
-                };
-                continue;
-            }
+            const headMatch = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(.+)$/i);
+            if (headMatch) {
+                const date = parseHsbcDate(headMatch[1]);
+                const headline = headMatch[2];
+                const descLine = lines[i + 1] || '';
+                const refLine = lines[i + 2] || '';
+                const amtLine = lines[i + 3] || '';
 
-            if (currentIncome) {
-                currentIncome.rawLines.push(line);
+                const codeMatch =
+                    headline.match(/\b([A-Z0-9]{4,10})\b$/) ||
+                    descLine.match(/^([A-Z0-9]{4,10})\s+/);
 
-                const codeMatch = line.match(/\b(\d{4,5}|U\d{5,})\b/);
-                if (codeMatch && !currentIncome.code) currentIncome.code = codeMatch[1];
+                const code = codeMatch ? codeMatch[1] : '';
 
-                if (/PAID BENEFITS/i.test(line)) {
-                    currentIncome.paidBenefits = true;
+                const paidMatch = amtLine.match(/^PAID BENEFITS\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
+                const feeMatch = amtLine.match(/^(SCRIP FEE|CHARGE|COMMISSION|LEVY|DUTY)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
+
+                if (/DIVIDEND/i.test(headline) && paidMatch) {
+                    divs.push({
+                        id: 'HKD' + Date.now() + '_' + divs.length,
+                        date: date,
+                        account: accountLabel,
+                        symbol: hkSymbol(code, descLine),
+                        description: (headline + ' ' + descLine).slice(0, 180),
+                        amount: parseNumHsbc(paidMatch[2]),
+                        currency: paidMatch[1].toUpperCase(),
+                        source: 'HSBC_HK_PDF'
+                    });
+                    i += 3;
                     continue;
                 }
 
-                const amtMatch = line.match(/\b([A-Z]{3})\s+([\d,]+\.\d{2})$/);
-                if (amtMatch) {
-                    const ccy = amtMatch[1].toUpperCase();
-                    const amt = parseNumHsbc(amtMatch[2]);
-                    const headline = currentIncome.headline || '';
-
-                    if (/DIVIDEND/i.test(headline) && currentIncome.paidBenefits) {
-                        divs.push({
-                            id: 'HKD' + Date.now() + '_' + divs.length,
-                            date: currentIncome.date,
-                            account: accountLabel,
-                            symbol: hkSymbol(currentIncome.code, currentIncome.rawLines.join(' ')),
-                            description: currentIncome.rawLines.join(' ').slice(0, 180),
-                            amount: amt,
-                            currency: ccy,
-                            source: 'HSBC_HK_PDF'
-                        });
-                    } else if (/FEE|CHARGE|LEVY|DUTY|COMMISSION|SCRIP FEE/i.test(headline)) {
-                        fees.push({
-                            id: 'HKF' + Date.now() + '_' + fees.length,
-                            date: currentIncome.date,
-                            account: accountLabel,
-                            action: 'Fee',
-                            symbol: 'FEE',
-                            description: currentIncome.rawLines.join(' ').slice(0, 180),
-                            quantity: 1,
-                            price: amt,
-                            amount: -Math.abs(amt),
-                            commission: 0,
-                            currency: ccy,
-                            assetCategory: 'Fee',
-                            source: 'HSBC_HK_PDF'
-                        });
-                    }
-
-                    currentIncome = null;
+                if ((/PURCHASE|FEE|CHARGE|COMMISSION|LEVY|DUTY/i.test(headline) || /SCRIP FEE/i.test(amtLine)) && feeMatch) {
+                    fees.push({
+                        id: 'HKF' + Date.now() + '_' + fees.length,
+                        date: date,
+                        account: accountLabel,
+                        action: 'Fee',
+                        symbol: hkSymbol(code, descLine),
+                        description: (headline + ' ' + descLine + ' ' + refLine).slice(0, 180),
+                        quantity: 1,
+                        price: parseNumHsbc(feeMatch[3]),
+                        amount: -Math.abs(parseNumHsbc(feeMatch[3])),
+                        commission: 0,
+                        currency: feeMatch[2].toUpperCase(),
+                        assetCategory: 'Fee',
+                        brokerRef: (refLine.match(/OUR REFERENCE:([A-Z0-9]+)/i) || [,''])[1],
+                        source: 'HSBC_HK_PDF'
+                    });
+                    i += 3;
+                    continue;
                 }
             }
         }
@@ -4250,6 +4244,14 @@ function parseHSBCHKMonthlyStatement(text, accountLabel) {
 
     if (!trades.length) warnings.push('No trades detected from Transaction summary.');
     if (!divs.length) warnings.push('No dividends detected from Charges and income summary.');
+
+    console.log('HSBC parsed', {
+        trades: trades,
+        divs: divs,
+        fees: fees,
+        warnings: warnings,
+        sampleLines: lines.slice(0, 120)
+    });
 
     return { trades: trades, divs: divs, fees: fees, warnings: warnings };
 }
@@ -4273,6 +4275,8 @@ async function processUpload() {
 
             preview.textContent = 'Reading PDF...';
             const text = await extractPdfText(file);
+
+            console.log('HSBC PDF extracted text:', text);
 
             preview.textContent = 'Parsing HSBC monthly statement...';
             const parsed = parseHSBCHKMonthlyStatement(text, accountLabel);
