@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.21">
+    <meta name="version" content="5.0.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -512,6 +512,7 @@
             <button class="tab-modal-btn active" onclick="switchUploadTab('ibkr')">IBKR Raw</button>
             <button class="tab-modal-btn" onclick="switchUploadTab('trades')">Trades CSV</button>
             <button class="tab-modal-btn" onclick="switchUploadTab('divs')">Dividends CSV</button>
+            <button class="tab-modal-btn" onclick="switchUploadTab('hkpdf')">HSBC HK PDF</button>
         </div>
         
         <div id="up-ibkr">
@@ -536,6 +537,21 @@
             <input id="up-divs-file" type="file" accept=".csv">
         </div>
 
+        <div id="up-hkpdf" style="display:none">
+            <p style="font-size:0.85em;color:#aaa;margin-bottom:10px">
+            Upload HSBC Hong Kong monthly securities statement PDF. The app will import trades, dividends and statement fees from the PDF.
+            </p>
+            <div class="form-group">
+                <label>Upload PDF</label>
+                <input id="up-hkpdf-file" type="file" accept=".pdf">
+            </div>
+            <div class="form-group">
+                <label>Account Label</label>
+                <input id="up-hkpdf-account" type="text" placeholder="e.g. HSBC-HK" value="HSBC-HK">
+            </div>
+            <div id="up-hkpdf-preview" style="margin-top:10px;font-size:0.85em;color:#4caf50;white-space:pre-wrap"></div>
+        </div>
+        
         <div id="up-preview" style="margin-top:10px;font-size:0.85em;color:#4caf50"></div>
         
         <div class="modal-footer">
@@ -545,6 +561,8 @@
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
@@ -998,16 +1016,16 @@ function attachFilterListeners_bkp() {
 
     function switchUploadTab(tab){
         currentUploadTab = tab;
-        ['ibkr','trades','divs'].forEach(function(t){
+        ['ibkr','trades','divs','hkpdf'].forEach(function(t){
             var el = $('up-'+t);
             if(el) el.style.display = t===tab?'block':'none';
         });
         document.querySelectorAll('.tab-modal-btn').forEach(function(btn, i){
-            var labels = ['ibkr','trades','divs'];
+            var labels = ['ibkr','trades','divs','hkpdf'];
             btn.classList.toggle('active', labels[i]===tab);
         });
     }
-
+    
     function uploadData() {
     if (!GAS_URL) return alert('No Google Sheets URL configured.');
 
@@ -3999,9 +4017,332 @@ function renderGainLoss() {
         allDivs=allDivs.filter(function(d){return String(d.id)!==String(id);});
         saveLocal();if(GAS_URL)gasPost({action:'deleteDividend',id:id});applyDivFilters();
     }
+async function extractPdfText(file) {
+    if (!window.pdfjsLib) {
+        throw new Error('PDF.js failed to load.');
+    }
 
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    async function processUpload() {
+    const ab = await file.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
+    let pages = [];
+
+    for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const text = await page.getTextContent();
+        const linesMap = {};
+
+        text.items.forEach(function(item) {
+            const y = Math.round(item.transform[5]);
+            if (!linesMap[y]) linesMap[y] = [];
+            linesMap[y].push({
+                x: item.transform[4],
+                str: item.str
+            });
+        });
+
+        const pageLines = Object.keys(linesMap)
+            .sort(function(a, b) { return Number(b) - Number(a); })
+            .map(function(y) {
+                return linesMap[y]
+                    .sort(function(a, b) { return a.x - b.x; })
+                    .map(function(it) { return it.str; })
+                    .join(' ')
+                    .replace(/\\s+/g, ' ')
+                    .trim();
+            })
+            .filter(Boolean);
+
+        pages.push(pageLines.join('\\n'));
+    }
+
+    return pages.join('\\n---PAGE---\\n');
+}
+
+function parseHSBCHKMonthlyStatement(text, accountLabel) {
+    const trades = [];
+    const divs = [];
+    const fees = [];
+    const warnings = [];
+
+    const lines = text
+        .split(/\r?\n/)
+        .map(function(l) { return l.replace(/\s+/g, ' ').trim(); })
+        .filter(Boolean);
+
+    function parseHsbcDate(v) {
+        const m = String(v || '').trim().match(/^(\d{2})([A-Z]{3})(\d{4})$/i);
+        if (!m) return '';
+        const months = {
+            JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06',
+            JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12'
+        };
+        return m[3] + '-' + months[m[2].toUpperCase()] + '-' + m[1];
+    }
+
+    function parseNumHsbc(v) {
+        if (v == null) return 0;
+        const s = String(v).replace(/,/g, '').trim();
+        if (!s) return 0;
+        if (/^\d+(\.\d+)?-$/.test(s)) return -parseFloat(s.replace('-', ''));
+        return parseFloat(s) || 0;
+    }
+
+    function hkSymbol(code, desc) {
+        const c = String(code || '').trim();
+        if (/^\d{4,5}$/.test(c)) return c.padStart(4, '0') + '.HK';
+        if (/GOOG|TSM/i.test(desc || '')) return String((desc || '').match(/\b(GOOG|TSM)\b/i)?.[1] || '').toUpperCase();
+        return c || 'UNKNOWN';
+    }
+
+    let mode = '';
+    let currentSection = '';
+    let currentTrade = null;
+    let currentIncome = null;
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (/^Transaction summary/i.test(line)) {
+            mode = 'txn';
+            currentSection = '';
+            continue;
+        }
+        if (/^Charges and income summary/i.test(line)) {
+            mode = 'income';
+            currentSection = '';
+            continue;
+        }
+        if (/^Portfolio details/i.test(line) || /^Exchange rate against HKD/i.test(line)) {
+            mode = '';
+            continue;
+        }
+
+        if (mode === 'txn') {
+            if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS|BONDS\/CERTIFICATES OF DEPOSIT)$/i.test(line)) {
+                currentSection = line.toUpperCase();
+                continue;
+            }
+
+            const secHeader = line.match(/^(\d{4,5}|[A-Z]{1,10})\s+(.+)$/);
+            if (secHeader && !/^(Reference:|Type:)/i.test(line) && !/^\d{2}[A-Z]{3}\d{4}/.test(line)) {
+                currentTrade = {
+                    code: secHeader[1],
+                    desc: secHeader[2],
+                    section: currentSection
+                };
+                continue;
+            }
+
+            const txnLine = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,]+\.\d+)\s+([\d,]+\.-?|[\d,]+-?)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
+            if (txnLine && currentTrade) {
+                currentTrade.tradeDate = parseHsbcDate(txnLine[1]);
+                currentTrade.settleDate = parseHsbcDate(txnLine[2]);
+                currentTrade.currency = txnLine[3].toUpperCase();
+                currentTrade.price = parseNumHsbc(txnLine[4]);
+                currentTrade.quantityRaw = txnLine[5];
+                currentTrade.quantity = Math.abs(parseNumHsbc(txnLine[5]));
+                currentTrade.amount = parseNumHsbc(txnLine[7]);
+                continue;
+            }
+
+            const refTypeLine = line.match(/^Reference:\s*([A-Z0-9]+)\s+Type:\s*([A-Z]{3})$/i);
+            if (refTypeLine && currentTrade && currentTrade.tradeDate) {
+                const type = refTypeLine[2].toUpperCase();
+                const action = type === 'SAL' ? 'Sell' : (type === 'PUR' ? 'Buy' : type);
+
+                trades.push({
+                    id: 'HKT' + Date.now() + '_' + trades.length,
+                    date: currentTrade.tradeDate,
+                    settleDate: currentTrade.settleDate,
+                    account: accountLabel,
+                    action: action,
+                    symbol: hkSymbol(currentTrade.code, currentTrade.desc),
+                    description: currentTrade.desc,
+                    quantity: currentTrade.quantity,
+                    price: currentTrade.price,
+                    amount: Math.abs(currentTrade.amount),
+                    commission: 0,
+                    currency: currentTrade.currency || 'HKD',
+                    assetCategory: /UNIT TRUST/i.test(currentTrade.section) ? 'Funds'
+                        : /FOREIGN/i.test(currentTrade.section) ? 'Stocks'
+                        : /LOCAL/i.test(currentTrade.section) ? 'Stocks'
+                        : 'Investments',
+                    brokerRef: refTypeLine[1],
+                    source: 'HSBC_HK_PDF'
+                });
+
+                currentTrade = null;
+                continue;
+            }
+        }
+
+        if (mode === 'income') {
+            if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS)$/i.test(line)) {
+                currentSection = line.toUpperCase();
+                continue;
+            }
+
+            const dateAndType = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(.+)$/i);
+            if (dateAndType) {
+                currentIncome = {
+                    date: parseHsbcDate(dateAndType[1]),
+                    headline: dateAndType[2],
+                    section: currentSection,
+                    rawLines: [line]
+                };
+                continue;
+            }
+
+            if (currentIncome) {
+                currentIncome.rawLines.push(line);
+
+                const codeMatch = line.match(/\b(\d{4,5}|U\d{5,})\b/);
+                if (codeMatch && !currentIncome.code) currentIncome.code = codeMatch[1];
+
+                if (/PAID BENEFITS/i.test(line)) {
+                    currentIncome.paidBenefits = true;
+                    continue;
+                }
+
+                const amtMatch = line.match(/\b([A-Z]{3})\s+([\d,]+\.\d{2})$/);
+                if (amtMatch) {
+                    const ccy = amtMatch[1].toUpperCase();
+                    const amt = parseNumHsbc(amtMatch[2]);
+                    const headline = currentIncome.headline || '';
+
+                    if (/DIVIDEND/i.test(headline) && currentIncome.paidBenefits) {
+                        divs.push({
+                            id: 'HKD' + Date.now() + '_' + divs.length,
+                            date: currentIncome.date,
+                            account: accountLabel,
+                            symbol: hkSymbol(currentIncome.code, currentIncome.rawLines.join(' ')),
+                            description: currentIncome.rawLines.join(' ').slice(0, 180),
+                            amount: amt,
+                            currency: ccy,
+                            source: 'HSBC_HK_PDF'
+                        });
+                    } else if (/FEE|CHARGE|LEVY|DUTY|COMMISSION|SCRIP FEE/i.test(headline)) {
+                        fees.push({
+                            id: 'HKF' + Date.now() + '_' + fees.length,
+                            date: currentIncome.date,
+                            account: accountLabel,
+                            action: 'Fee',
+                            symbol: 'FEE',
+                            description: currentIncome.rawLines.join(' ').slice(0, 180),
+                            quantity: 1,
+                            price: amt,
+                            amount: -Math.abs(amt),
+                            commission: 0,
+                            currency: ccy,
+                            assetCategory: 'Fee',
+                            source: 'HSBC_HK_PDF'
+                        });
+                    }
+
+                    currentIncome = null;
+                }
+            }
+        }
+    }
+
+    if (!trades.length) warnings.push('No trades detected from Transaction summary.');
+    if (!divs.length) warnings.push('No dividends detected from Charges and income summary.');
+
+    return { trades: trades, divs: divs, fees: fees, warnings: warnings };
+}
+    
+async function processUpload() {
+    const btn = $('import-btn');
+    if (btn) {
+        btn.innerText = "Processing...";
+        btn.disabled = true;
+    }
+
+    try {
+        if (currentUploadTab === 'hkpdf') {
+            const file = $('up-hkpdf-file').files[0];
+            const preview = $('up-hkpdf-preview');
+            const accountLabel = (($('up-hkpdf-account') || {}).value || 'HSBC-HK').trim() || 'HSBC-HK';
+
+            if (!file) {
+                throw new Error("Please select an HSBC HK PDF statement.");
+            }
+
+            preview.textContent = 'Reading PDF...';
+            const text = await extractPdfText(file);
+
+            preview.textContent = 'Parsing HSBC monthly statement...';
+            const parsed = parseHSBCHKMonthlyStatement(text, accountLabel);
+
+            parsed.trades.forEach(function(t){ allTrades.push(t); });
+            parsed.divs.forEach(function(d){ allDivs.push(d); });
+            parsed.fees.forEach(function(f){ allTransfers.push(f); });
+
+            saveLocal();
+            renderPortfolio();
+            renderPerfStats();
+            renderTransactions && renderTransactions();
+
+            preview.textContent =
+                'Imported successfully\\n' +
+                'Trades: ' + parsed.trades.length + '\\n' +
+                'Dividends: ' + parsed.divs.length + '\\n' +
+                'Fees/adjustments: ' + parsed.fees.length + '\\n' +
+                (parsed.warnings.length ? ('Warnings:\\n- ' + parsed.warnings.join('\\n- ')) : '');
+
+            alert(
+                'HSBC PDF import complete. ' +
+                parsed.trades.length + ' trades, ' +
+                parsed.divs.length + ' dividends, ' +
+                parsed.fees.length + ' fee items imported.'
+            );
+            return;
+        }
+
+        const file = $('up-ibkr-file').files[0];
+        const text = $('up-ibkr-text').value.trim();
+        let csvContent = text;
+
+        if (file) {
+            csvContent = await file.text();
+        }
+
+        if (!csvContent) return alert("Please provide CSV data.");
+
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+                action: 'importCsv',
+                csvString: csvContent
+            })
+        });
+        const result = await response.json();
+        console.log("processUpload result: ", result);
+
+        if (result.success) {
+            alert(
+                "Import complete. Added " + (result.addedCount || 0) +
+                " new records; skipped " + (result.duplicateCount || 0) +
+                " duplicates."
+            );
+        } else {
+            throw new Error(result.error || "Unknown error");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("Upload failed: " + e.message);
+    } finally {
+        if (btn) {
+            btn.innerText = "Import";
+            btn.disabled = false;
+        }
+    }
+}
+    
+async function processUpload_bkup() {
     const file = $('up-ibkr-file').files[0];
     const text = $('up-ibkr-text').value.trim();
     let csvContent = text;
