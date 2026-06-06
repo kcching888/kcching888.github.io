@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.3">
+    <meta name="version" content="5.0.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4017,244 +4017,8 @@ function renderGainLoss() {
         allDivs=allDivs.filter(function(d){return String(d.id)!==String(id);});
         saveLocal();if(GAS_URL)gasPost({action:'deleteDividend',id:id});applyDivFilters();
     }
-async function extractPdfText(file) {
-    if (!window.pdfjsLib) {
-        throw new Error('PDF.js failed to load.');
-    }
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc =
-        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    const ab = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: ab }).promise;
-    let pages = [];
-
-    for (let p = 1; p <= pdf.numPages; p++) {
-        const page = await pdf.getPage(p);
-        const text = await page.getTextContent();
-        const linesMap = {};
-
-        text.items.forEach(function(item) {
-            const y = Math.round(item.transform[5]);
-            if (!linesMap[y]) linesMap[y] = [];
-            linesMap[y].push({
-                x: item.transform[4],
-                str: item.str
-            });
-        });
-
-        const pageLines = Object.keys(linesMap)
-            .sort(function(a, b) { return Number(b) - Number(a); })
-            .map(function(y) {
-                return linesMap[y]
-                    .sort(function(a, b) { return a.x - b.x; })
-                    .map(function(it) { return it.str; })
-                    .join(' ')
-                    .replace(/\\s+/g, ' ')
-                    .trim();
-            })
-            .filter(Boolean);
-
-        pages.push(pageLines.join('\\n'));
-    }
-
-    return pages.join('\\n---PAGE---\\n');
-}
-
-function parseHSBCHKMonthlyStatement(text, accountLabel) {
-    const trades = [];
-    const divs = [];
-    const fees = [];
-    const warnings = [];
-
-    const lines = String(text || '')
-        .split(/\r?\n/)
-        .map(function(l) { return l.replace(/\s+/g, ' ').trim(); })
-        .filter(Boolean);
-
-    function parseHsbcDate(v) {
-        const m = String(v || '').trim().match(/^(\d{2})([A-Z]{3})(\d{4})$/i);
-        if (!m) return '';
-        const months = {
-            JAN:'01', FEB:'02', MAR:'03', APR:'04', MAY:'05', JUN:'06',
-            JUL:'07', AUG:'08', SEP:'09', OCT:'10', NOV:'11', DEC:'12'
-        };
-        const mm = months[m[2].toUpperCase()];
-        return mm ? (m[3] + '-' + mm + '-' + m[1]) : '';
-    }
-
-    function parseNumHsbc(v) {
-        if (v == null) return 0;
-        const s = String(v).replace(/,/g, '').trim();
-        if (!s) return 0;
-        if (/^\d+(\.\d+)?-$/.test(s)) return -parseFloat(s.slice(0, -1));
-        return parseFloat(s) || 0;
-    }
-
-    function hkSymbol(code, desc) {
-        const c = String(code || '').trim();
-        const d = String(desc || '').trim();
-
-        if (/^\d{4,5}$/.test(c)) return c.padStart(5, '0') + '.HK';
-        if (/^U\d+$/i.test(c)) return c.toUpperCase();
-        if (/^(GOOG|TSM|AAPL|MSFT|NVDA|AMZN)$/i.test(c)) return c.toUpperCase();
-
-        const m = d.match(/\b(GOOG|TSM|AAPL|MSFT|NVDA|AMZN)\b/i);
-        if (m) return m[1].toUpperCase();
-
-        return c || 'UNKNOWN';
-    }
-
-    let mode = '';
-    let section = '';
-    let currentSecurity = null;
-
-    for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (/^Transaction summary\b/i.test(line)) {
-            mode = 'txn';
-            section = '';
-            currentSecurity = null;
-            continue;
-        }
-        if (/^Charges and income summary\b/i.test(line)) {
-            mode = 'income';
-            section = '';
-            currentSecurity = null;
-            continue;
-        }
-
-        if (mode === 'txn') {
-            if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS|BONDS\/CERTIFICATES OF DEPOSIT)$/i.test(line)) {
-                section = line.toUpperCase();
-                continue;
-            }
-
-            const secMatch = line.match(/^([A-Z0-9]{4,10})\s+(.+?)\s+\((SHS|UNT|FMT)\)$/i);
-            if (secMatch) {
-                currentSecurity = {
-                    code: secMatch[1],
-                    desc: secMatch[2],
-                    section: section
-                };
-                continue;
-            }
-
-            const tradeLine = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(\d{2}[A-Z]{3}\d{4})\s+([A-Z]{3})\s+([\d,]+\.\d+)\s+([\d,]+-?)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
-            if (tradeLine && currentSecurity) {
-                const tradeDate = parseHsbcDate(tradeLine[1]);
-                const settleDate = parseHsbcDate(tradeLine[2]);
-                const currency = tradeLine[3].toUpperCase();
-                const price = parseNumHsbc(tradeLine[4]);
-                const qtyVal = parseNumHsbc(tradeLine[5]);
-                const amount = parseNumHsbc(tradeLine[7]);
-
-                const refLine = lines[i + 1] || '';
-                const refMatch = refLine.match(/^Reference:\s*([A-Z0-9]+)\s+Type:\s*([A-Z]{3})$/i);
-
-                if (refMatch) {
-                    const typ = refMatch[2].toUpperCase();
-                    trades.push({
-                        id: 'HKT' + Date.now() + '_' + trades.length,
-                        date: tradeDate,
-                        settleDate: settleDate,
-                        account: accountLabel,
-                        action: typ === 'SAL' ? 'Sell' : (typ === 'PUR' ? 'Buy' : typ),
-                        symbol: hkSymbol(currentSecurity.code, currentSecurity.desc),
-                        description: currentSecurity.desc,
-                        quantity: Math.abs(qtyVal),
-                        price: price,
-                        amount: Math.abs(amount),
-                        commission: 0,
-                        currency: currency,
-                        assetCategory: /UNIT TRUST/i.test(currentSecurity.section) ? 'Funds'
-                            : /BONDS/i.test(currentSecurity.section) ? 'Bonds'
-                            : 'Stocks',
-                        brokerRef: refMatch[1],
-                        source: 'HSBC_HK_PDF'
-                    });
-                    i += 1;
-                }
-                continue;
-            }
-        }
-
-        if (mode === 'income') {
-            if (/^(LOCAL SHARES|FOREIGN SHARES|UNIT TRUSTS)$/i.test(line)) {
-                section = line.toUpperCase();
-                continue;
-            }
-
-            const headMatch = line.match(/^(\d{2}[A-Z]{3}\d{4})\s+(.+)$/i);
-            if (headMatch) {
-                const date = parseHsbcDate(headMatch[1]);
-                const headline = headMatch[2];
-                const descLine = lines[i + 1] || '';
-                const refLine = lines[i + 2] || '';
-                const amtLine = lines[i + 3] || '';
-
-                const codeMatch =
-                    headline.match(/\b([A-Z0-9]{4,10})\b$/) ||
-                    descLine.match(/^([A-Z0-9]{4,10})\s+/);
-
-                const code = codeMatch ? codeMatch[1] : '';
-
-                const paidMatch = amtLine.match(/^PAID BENEFITS\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
-                const feeMatch = amtLine.match(/^(SCRIP FEE|CHARGE|COMMISSION|LEVY|DUTY)\s+([A-Z]{3})\s+([\d,]+\.\d+)$/i);
-
-                if (/DIVIDEND/i.test(headline) && paidMatch) {
-                    divs.push({
-                        id: 'HKD' + Date.now() + '_' + divs.length,
-                        date: date,
-                        account: accountLabel,
-                        symbol: hkSymbol(code, descLine),
-                        description: (headline + ' ' + descLine).slice(0, 180),
-                        amount: parseNumHsbc(paidMatch[2]),
-                        currency: paidMatch[1].toUpperCase(),
-                        source: 'HSBC_HK_PDF'
-                    });
-                    i += 3;
-                    continue;
-                }
-
-                if ((/PURCHASE|FEE|CHARGE|COMMISSION|LEVY|DUTY/i.test(headline) || /SCRIP FEE/i.test(amtLine)) && feeMatch) {
-                    fees.push({
-                        id: 'HKF' + Date.now() + '_' + fees.length,
-                        date: date,
-                        account: accountLabel,
-                        action: 'Fee',
-                        symbol: hkSymbol(code, descLine),
-                        description: (headline + ' ' + descLine + ' ' + refLine).slice(0, 180),
-                        quantity: 1,
-                        price: parseNumHsbc(feeMatch[3]),
-                        amount: -Math.abs(parseNumHsbc(feeMatch[3])),
-                        commission: 0,
-                        currency: feeMatch[2].toUpperCase(),
-                        assetCategory: 'Fee',
-                        brokerRef: (refLine.match(/OUR REFERENCE:([A-Z0-9]+)/i) || [,''])[1],
-                        source: 'HSBC_HK_PDF'
-                    });
-                    i += 3;
-                    continue;
-                }
-            }
-        }
-    }
-
-    if (!trades.length) warnings.push('No trades detected from Transaction summary.');
-    if (!divs.length) warnings.push('No dividends detected from Charges and income summary.');
-
-    console.log('HSBC parsed', {
-        trades: trades,
-        divs: divs,
-        fees: fees,
-        warnings: warnings,
-        sampleLines: lines.slice(0, 120)
-    });
-
-    return { trades: trades, divs: divs, fees: fees, warnings: warnings };
-}
     
 async function processUpload() {
     const btn = $('import-btn');
@@ -4273,35 +4037,48 @@ async function processUpload() {
                 throw new Error("Please select an HSBC HK PDF statement.");
             }
 
-            preview.textContent = 'Reading PDF...';
-            const text = await extractPdfText(file);
+            preview.textContent = 'Uploading HSBC PDF to Drive...';
 
-            console.log('HSBC PDF extracted text:', text);
+            const uploaded = await uploadHsbcPdfToDrive(file);
 
-            preview.textContent = 'Parsing HSBC monthly statement...';
-            const parsed = parseHSBCHKMonthlyStatement(text, accountLabel);
+            preview.textContent = 'Submitting HSBC PDF for server-side import...';
 
-            parsed.trades.forEach(function(t){ allTrades.push(t); });
-            parsed.divs.forEach(function(d){ allDivs.push(d); });
-            parsed.fees.forEach(function(f){ allTransfers.push(f); });
+            const response = await fetch(GAS_URL, {
+                method: 'POST',
+                body: JSON.stringify({
+                    action: 'importHsbcPdf',
+                    fileId: uploaded.fileId,
+                    account: accountLabel
+                })
+            });
 
-            saveLocal();
-            renderPortfolio();
-            renderPerfStats();
-            renderGainLoss();
+            const result = await response.json();
+            console.log('HSBC import result:', result);
+
+            if (!result.success) {
+                throw new Error(result.error || 'HSBC import failed');
+            }
 
             preview.textContent =
-                'Imported successfully\\n' +
-                'Trades: ' + parsed.trades.length + '\\n' +
-                'Dividends: ' + parsed.divs.length + '\\n' +
-                'Fees/adjustments: ' + parsed.fees.length + '\\n' +
-                (parsed.warnings.length ? ('Warnings:\\n- ' + parsed.warnings.join('\\n- ')) : '');
+                'Imported successfully\n' +
+                'Trades parsed: ' + ((result.result && result.result.tradesParsed) || 0) + '\n' +
+                'Trades added: ' + ((result.result && result.result.tradesAdded) || 0) + '\n' +
+                'Dividends parsed: ' + ((result.result && result.result.dividendsParsed) || 0) + '\n' +
+                'Dividends added: ' + ((result.result && result.result.dividendsAdded) || 0) + '\n' +
+                (((result.result && result.result.warnings) || []).length
+                    ? ('Warnings:\n- ' + result.result.warnings.join('\n- '))
+                    : '');
+
+            await syncData();
+
+            if (typeof renderPortfolio === 'function') renderPortfolio();
+            if (typeof renderPerfStats === 'function') renderPerfStats();
+            if (typeof renderGainLoss === 'function') renderGainLoss();
 
             alert(
                 'HSBC PDF import complete. ' +
-                parsed.trades.length + ' trades, ' +
-                parsed.divs.length + ' dividends, ' +
-                parsed.fees.length + ' fee items imported.'
+                (((result.result && result.result.tradesAdded) || 0)) + ' trades added, ' +
+                (((result.result && result.result.dividendsAdded) || 0)) + ' dividends added.'
             );
             return;
         }
@@ -4345,6 +4122,43 @@ async function processUpload() {
         }
     }
 }
+
+async function uploadHsbcPdfToDrive(file) {
+    const base64 = await fileToBase64(file);
+
+    const response = await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: 'uploadHsbcPdfToDrive',
+            fileName: file.name,
+            mimeType: file.type || 'application/pdf',
+            base64Data: base64
+        })
+    });
+
+    const result = await response.json();
+    console.log('uploadHsbcPdfToDrive result:', result);
+
+    if (!result.success || !result.fileId) {
+        throw new Error(result.error || 'Failed to upload PDF to Drive');
+    }
+
+    return result;
+}
+
+function fileToBase64(file) {
+    return new Promise(function(resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function() {
+            const dataUrl = reader.result || '';
+            const base64 = String(dataUrl).split(',')[1] || '';
+            resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
     
 async function processUpload_bkup() {
     const file = $('up-ibkr-file').files[0];
