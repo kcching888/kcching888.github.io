@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.20">
+    <meta name="version" content="4.5.21">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3455,7 +3455,7 @@ function renderPortfolio() {
 
             html += `<tr class="total-row" style="background:#111; font-weight:bold; border-top:2px solid #444">
                 <td>TOTAL (CAD)</td><td colspan="4"></td>
-                <td class="text-right">$${fmt(tDailyPnL)}</td> 
+                <td class="text-right ${tDailyPnL > 0 ? 'pos-gain' : tDailyPnL < 0 ? 'pos-loss' : ''}">$${fmt(tDailyPnL)}</td>
                 <td class="text-right">$${fmt(tMV)}</td>
                 <td style="border-left:2px solid #444"></td>
                 <td class="text-right" style="color:#aaa">$${fmt(tBasis)}</td>
