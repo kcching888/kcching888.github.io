@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="4.5.17">
+    <meta name="version" content="4.5.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2282,20 +2282,40 @@ console.log('Flow sum check', {
   negatives: Object.values(flowMap).filter(v => v < 0).reduce((s, v) => s + v, 0)
 });
     
-  const realizedRows = getRealizedGainRowsFromLedger(ledger) || [];
+const realizedRows = getRealizedGainRowsFromLedger(ledger) || [];
 
-  const realized = realizedRows.reduce((sum, r) => {
-      const acct = String(r.account || '').trim();
-      const rowDate = fmtDate(r.sellDate || r.date);
-      const gain = num(r.gainLoss != null ? r.gainLoss : r.realizedGain, 0);
+const realized = realizedRows.reduce((sum, r) => {
+  const acct = String(
+    r.account ?? r.acct ?? r.accountId ?? ''
+  ).trim();
 
-      if (perfAccount && perfAccount !== 'ALL' && acct !== perfAccount) return sum;
+  const rowDate = fmtDate(
+    r.sellDate ??
+    r.disposalDate ??
+    r.closeDate ??
+    r.tradeDate ??
+    r.date ??
+    ''
+  );
 
-      if (startDate && rowDate && rowDate < startDate) return sum;
-      if (endDate && rowDate && rowDate > endDate) return sum;
+  const gain = num(
+    r.gainLoss ??
+    r.realizedGain ??
+    r.realizedGL ??
+    r.gl ??
+    r.pnl ??
+    r.realized ??
+    0,
+    0
+  );
 
-      return sum + gain;
-    }, 0);
+  if (perfAccount && perfAccount !== 'ALL' && acct !== perfAccount) return sum;
+
+  if (startDate && rowDate && rowDate < startDate) return sum;
+  if (endDate && rowDate && rowDate > endDate) return sum;
+
+  return sum + gain;
+}, 0);
     
   const unrealized = num(totals.unrealizedGain, 0);
   const dividends = num(totals.dividends, 0);
