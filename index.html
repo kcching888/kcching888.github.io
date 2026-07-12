@@ -846,6 +846,28 @@
             alert('DailyHistory generation failed: ' + err.message);
         }
     }
+
+
+async function buildEtfTax() {
+  try {
+    const res = await fetch(WEB_APP_URL + '?action=buildEtfTax');
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'ETF tax build failed');
+    }
+
+    alert('ETF tax build complete. Rows written: ' + data.rowsWritten);
+  } catch (err) {
+    console.error('buildEtfTax error:', err);
+    alert('ETF tax build failed: ' + err.message);
+  }
+}
+
+async function loadEtfTaxData() {
+  const res = await fetch(WEB_APP_URL + '?action=getEtfTaxData');
+  return await res.json();
+}
     
    function openSheetShortcut(e){
         if (e) e.preventDefault();
