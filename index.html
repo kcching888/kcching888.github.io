@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.5">
+    <meta name="version" content="5.0.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -189,7 +189,8 @@
     <div class="nav-tab" onclick="showTab('dividends')" id="tab-dividends">Dividends</div>
     <div class="nav-tab" onclick="showTab('transfers')" id="tab-transfers">Transfer</div>        
     <div class="nav-tab" onclick="triggerDailyHistoryBuild()">Build History</div>
-    <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut(event)">Sheet</a>
+    <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut(event)">Port. Sheet</a>
+    <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut1(event)">ETF Sheet</a>
 </div>
 
 <div class="content">
@@ -566,6 +567,7 @@
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
+    var ETF_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1F3N5OUAENjztwEoewbho1-ExDhH9EntU2jtg9CYhmCo/edit?gid=75153965#gid=75153965';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
     var allFxTrades = JSON.parse(localStorage.getItem('ibkr_fx_trades') || '[]');
@@ -878,6 +880,17 @@ async function loadEtfTaxData() {
         }
 
         window.open(SHEET_URL, '_blank');
+    }
+
+    function openSheetShortcut1(e){
+        if (e) e.preventDefault();
+
+        if (!ETF_SHEET_URL) {
+            alert('No Google Sheet URL configured in Settings.');
+            return;
+        }
+
+        window.open(ETF_SHEET_URL, '_blank');
     }
     
     function saveSettings(){
