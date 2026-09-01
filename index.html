@@ -191,6 +191,7 @@
     <div class="nav-tab" onclick="triggerDailyHistoryBuild()">Build History</div>
     <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut(event)">Port. Sheet</a>
     <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut1(event)">ETF Sheet</a>
+    <a class="nav-tab" href="#" id="tab-sheet" onclick="openSheetShortcut2(event)">Credit Spread (FRED)</a>
 </div>
 
 <div class="content">
@@ -568,6 +569,7 @@
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
     var ETF_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1F3N5OUAENjztwEoewbho1-ExDhH9EntU2jtg9CYhmCo/edit?gid=75153965#gid=75153965';
+    var FRED_CRE_SPRD_URL = 'https://fred.stlouisfed.org/series/BAMLH0A0HYM2';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
     var allFxTrades = JSON.parse(localStorage.getItem('ibkr_fx_trades') || '[]');
@@ -891,6 +893,17 @@ async function loadEtfTaxData() {
         }
 
         window.open(ETF_SHEET_URL, '_blank');
+    }
+
+    function openSheetShortcut2(e){
+        if (e) e.preventDefault();
+
+        if (!FRED_CRE_SPRD_URL) {
+            alert('No FRED Credit Spread URL configured in Settings.');
+            return;
+        }
+
+        window.open(FRED_CRE_SPRD_URL, '_blank');
     }
     
     function saveSettings(){
