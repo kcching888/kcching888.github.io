@@ -254,6 +254,17 @@
                     <label>To</label>
                     <input type="date" id="filter-to" onchange="applyFilters()">
                 </div>
+                <div class="filter-group">
+  <label>Sort</label>
+  <div style="display:flex;gap:10px;align-items:center;height:29px;">
+    <label style="font-size:0.8em;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+      <input type="radio" name="txn-sort" value="desc" checked onchange="setTxnSort('desc')"> Newest
+    </label>
+    <label style="font-size:0.8em;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+      <input type="radio" name="txn-sort" value="asc" onchange="setTxnSort('asc')"> Oldest
+    </label>
+  </div>
+</div>
             </div>
             <div class="filters">
                 <div class="filter-group">
@@ -341,6 +352,17 @@
                     <label>To</label>
                     <input id="df-to" type="date" onchange="applyDivFilters()">
                 </div>
+                <div class="filter-group">
+  <label>Sort</label>
+  <div style="display:flex;gap:10px;align-items:center;height:29px;">
+    <label style="font-size:0.8em;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+      <input type="radio" name="div-sort" value="desc" checked onchange="setDivSort('desc')"> Newest
+    </label>
+    <label style="font-size:0.8em;display:flex;align-items:center;gap:3px;white-space:nowrap;">
+      <input type="radio" name="div-sort" value="asc" onchange="setDivSort('asc')"> Oldest
+    </label>
+  </div>
+</div>
                 <div class="filter-group">
                     <label>Show</label>
                     <select id="df-perpage" onchange="applyDivFilters()">
@@ -581,6 +603,9 @@
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
     var tradeCurrentPage = 1;
     var divCurrentPage = 1;
+    var txnSortOrder = 'desc';
+    var divSortOrder = 'desc';
+    
     // Price feed cache
     var priceCache = {};
     var lastPriceUpdate = null;
@@ -1277,6 +1302,18 @@ function updateFilterOptions_bkup() {
         uniqueYears.map(y => `<option value="${y}">${y}</option>`).join('');
 }
 
+function setTxnSort(order) {
+  txnSortOrder = order;
+  tradeCurrentPage = 1;
+  renderTradesTable();
+}
+
+function setDivSort(order) {
+  divSortOrder = order;
+  divCurrentPage = 1;
+  renderDivTable();
+}
+    
 function applyFilters() {
     const filters = {
         stock: $('filter-stock').value,
@@ -1382,12 +1419,13 @@ function updateTradeCurrencyDropdown() {
 
 
 
-    function renderTradesTable(){
-
-            // --- 1. DYNAMIC CURRENCY FILTER ---
-        updateTradeCurrencyDropdown();
-        
-        const displayData = isTransactionFilterActive ? transactionFilteredTrades : allTrades;
+function renderTradesTable(){
+  updateTradeCurrencyDropdown();
+  const displayData = (isTransactionFilterActive ? transactionFilteredTrades : allTrades).slice().sort(function(a,b){
+    const da = new Date(a.date).getTime() || 0;
+    const db = new Date(b.date).getTime() || 0;
+    return txnSortOrder === 'asc' ? da - db : db - da;
+  });
         var perPageVal = ($('f-perpage')||{}).value||'25';
         var perPage = perPageVal === 'all' ? displayData.length : (parseInt(perPageVal) || 25);
         var total = displayData.length;
@@ -1528,11 +1566,13 @@ function renderDivStats_bkup() {
 }
 
   
-function renderDivTable() {
-    const container = $('div-table-wrap');
-    if (!container) return;
-
-    const data = currentFilteredDivs || [];
+function renderDivTable(){
+  const container = id('div-table-wrap'); if(!container) return;
+  const data = currentFilteredDivs.slice().sort(function(a,b){
+    const da = new Date(a.date).getTime() || 0;
+    const db = new Date(b.date).getTime() || 0;
+    return divSortOrder === 'asc' ? da - db : db - da;
+  });
     const isStockSummary = $('div-summary-stock') && $('div-summary-stock').checked;
     const isYearSummary = $('div-summary-year') && $('div-summary-year').checked;
 
