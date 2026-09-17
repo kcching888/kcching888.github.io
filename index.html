@@ -964,8 +964,8 @@ function syncData() {
     // 1. Download latest data from Sheets
     fetch(`${GAS_URL}?action=getAll`, {
         method: 'GET',
-        mode: 'cors',
-        cache: 'no-cache',
+     //   mode: 'cors',
+   //     cache: 'no-cache',
         redirect: 'follow'
     })
     .then(response => {
