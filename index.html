@@ -1059,7 +1059,7 @@ function attachFilterListeners_bkp() {
             if (id.startsWith('f-gl-')) {
                 renderGainLoss(); // Refresh Gain/Loss
             } else if (id.startsWith('f-div-')) {
-                renderDivTable();  // Refresh Dividends
+                ();  // Refresh Dividends
             }
         };
     });
@@ -1567,7 +1567,7 @@ function renderDivStats_bkup() {
 
   
 function renderDivTable(){
-  const container = id('div-table-wrap'); if(!container) return;
+  const container = document.getElementById('div-table-wrap'); if(!container) return;
   const data = currentFilteredDivs.slice().sort(function(a,b){
     const da = new Date(a.date).getTime() || 0;
     const db = new Date(b.date).getTime() || 0;
