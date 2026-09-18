@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.8">
+    <meta name="version" content="5.0.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4951,9 +4951,6 @@ function buyIntoLedger(ledger, tx) {
   const pos = ensureLedgerPosition(ledger, tx);
   const lotCost = round2(tx.amount + tx.commission);
   const unitCost = tx.quantity ? round2(lotCost / tx.quantity) : 0;
-
- // console.log("buyIntoLedger tx: ", tx);
-    
   pos.fifoLots.push({
     lotId: tx.id,
     date: tx.date,
@@ -4962,11 +4959,12 @@ function buyIntoLedger(ledger, tx) {
     unitCost,
     totalCost: lotCost
   });
+  // ACB tracking (moving average cost basis, matches CRA methodology)
+  pos.acbQty = round6((pos.acbQty || 0) + tx.quantity);
+  pos.acbTotalCost = round2((pos.acbTotalCost || 0) + lotCost);
 
   pos.qty = round2(pos.qty + tx.quantity);
   pos.fees = round2(pos.fees + tx.commission);
-
-    
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 }
 
@@ -5006,41 +5004,44 @@ function sellFromLedgerFIFO(ledger, tx) {
     if (Math.abs(remaining) <= QTY_EPS) remaining = 0;
   }
 
-  if (remaining > QTY_EPS) {
-    console.log('SELL FAIL', tx);
-    console.table((pos.fifoLots || []).map(l => ({
-      lotId: l.lotId,
-      date: l.date,
-      remainingQty: l.remainingQty,
-      unitCost: l.unitCost
-    })));
-    return;
-  }
+if (remaining > QTY_EPS) {
+  console.log('SELL FAIL', tx);
+  console.table(pos.fifoLots.map(l => ({ lotId: l.lotId, date: l.date, remainingQty: l.remainingQty, unitCost: l.unitCost })));
+  return;
+}
 
-  const proceeds = round2(tx.amount - tx.commission);
-  const realizedGain = round2(proceeds - relievedCost);
+const proceeds = round2(tx.amount - tx.commission);
+const realizedGain = round2(proceeds - relievedCost); // FIFO gain (kept for reference)
 
+// ACB (moving-average) realized gain — matches CRA methodology and GainLoss tab
+const acbAvgCost = pos.acbQty ? (pos.acbTotalCost / pos.acbQty) : 0;
+const acbCostOfSold = round2(acbAvgCost * tx.quantity);
+const acbRealizedGain = round2(proceeds - acbCostOfSold);
+
+pos.acbTotalCost = round2((pos.acbTotalCost || 0) - acbCostOfSold);
+pos.acbQty = round6((pos.acbQty || 0) - tx.quantity);
+if (Math.abs(pos.acbQty) <= QTY_EPS) pos.acbQty = 0;
   pos.qty = round6(pos.qty - tx.quantity);
   if (Math.abs(pos.qty) <= QTY_EPS) pos.qty = 0;
 
-  pos.realizedGain = round2(pos.realizedGain + realizedGain);
+  pos.realizedGain = round2(pos.realizedGain + acbRealizedGain);
   pos.fees = round2(pos.fees + tx.commission);
   pos.exchRate = num(tx.exchRate, pos.exchRate || 1);
 
-  ledger.totals.realizedGain = round2(ledger.totals.realizedGain + realizedGain);
-  ledger.realizedEvents.push({
-    symbol: pos.symbol,
-    account: pos.account,
-    currency: pos.currency,
-    date: tx.date,
-    quantity: tx.quantity,
-    proceeds,
-    cost: relievedCost,
-    gain: realizedGain,
-    exchRate: pos.exchRate,
-    gainCAD: round2(realizedGain * num(pos.exchRate, 1)),
-    matches
-  });
+  ledger.totals.realizedGain = round2(ledger.totals.realizedGain + acbRealizedGain);
+ledger.realizedEvents.push({
+  symbol: pos.symbol,
+  account: pos.account,
+  currency: pos.currency,
+  date: tx.date,
+  quantity: tx.quantity,
+  proceeds,
+  cost: acbCostOfSold,
+  gain: acbRealizedGain,
+  exchRate: pos.exchRate,
+  gainCAD: round2(acbRealizedGain * num(pos.exchRate, 1)),
+  matches
+});
 }
 
 function applyTradeToLedger(ledger, trade) {
@@ -5076,14 +5077,13 @@ function updateLedgerMarketValues(ledger, livePrices) {
   Object.keys(ledger.positions).forEach(key => {
     const pos = ledger.positions[key];
     const px = num((livePrices[pos.symbol] || {}).price, 0);
-    const fifoBasis = round2(pos.fifoLots.reduce((s, l) => s + (num(l.remainingQty, 0) * num(l.unitCost, 0)), 0));
-    const mv = round2(pos.qty * px);
-    const ug = round2(mv - fifoBasis);
-
-    pos.marketPrice = px;
-    pos.marketValue = mv;
-    pos.fifoBasis = fifoBasis;
-    pos.unrealizedGain = ug;
+const acbBasis = round2(pos.acbTotalCost || 0);
+const mv = round2(pos.qty * px);
+const ug = round2(mv - acbBasis);
+pos.marketPrice = px;
+pos.marketValue = mv;
+pos.fifoBasis = acbBasis; // kept property name for compatibility with any other code reading pos.fifoBasis
+pos.unrealizedGain = ug;
 
     ledger.totals.unrealizedGain = round2(ledger.totals.unrealizedGain + ug * num(pos.exchRate, 1));
   });
