@@ -2309,7 +2309,7 @@ const unrealizedLedger = buildLedgerFromData({
   baseCurrency: 'CAD',
   livePrices: window.currentPrices
 });
-const unrealizedCorrect = numAlias(unrealizedLedger.totals.unrealizedGain, 0);
+const unrealizedCorrect = num(unrealizedLedger.totals.unrealizedGain, 0);
     
   const rawHistoryRows = getFilteredHistoryRows(perfAccount || 'ALL');
   const historyRows = filterHistoryRowsByPerfRange(rawHistoryRows, perfRange);
@@ -2425,7 +2425,7 @@ const realized = realizedRows.reduce((sum, r) => {
   return sum + gain;
 }, 0);
     
-  const unrealized = num(unrealizedLedger.totals.unrealizedGain, 0);
+  const unrealized = unrealizedCorrect;
   const dividends = num(totals.dividends, 0);
 
 console.log('Realized alignment debug', {
