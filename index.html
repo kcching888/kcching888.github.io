@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.9">
+    <meta name="version" content="5.0.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2419,13 +2419,11 @@ const realizedRows = getRealizedGainRowsFromLedger(unrealizedLedger);
 
 const realized = realizedRows.reduce((sum, r) => {
   const acct = String(r.account || '').trim();
-  const rowDate = fmtDate(r.date || '');
-  const gain = num(r.gain, 0);   // ← matches ledger builder line 4778 and Gain/Loss tab line 3968
-
-  if (perfAccount && perfAccount !== 'ALL' && acct && acct !== perfAccount) return sum;
-  if (startDate && rowDate && rowDate < startDate) return sum;
-  if (endDate && rowDate && rowDate > endDate) return sum;
-
+  const rowDate = fmtDate(r.date);
+  const gain = num(r.gainCAD, r.gain, 0); // use CAD-converted gain, not native currency
+  if (perfAccount && perfAccount !== 'ALL' && acct !== perfAccount) return sum;
+  if (startDate && rowDate < startDate) return sum;
+  if (endDate && rowDate > endDate) return sum;
   return sum + gain;
 }, 0);
     
@@ -3405,7 +3403,7 @@ function renderPortfolio() {
     // 1. DUAL-TRACKING ENGINE
     var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    sortedTrades.forEach(function(t) {
+    (function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
         if (!positions[key]) {
             positions[key] = {
@@ -3997,58 +3995,44 @@ function renderGainLoss() {
     var realized = {};
     var costBasis = {};
 
-    sortedTrades.forEach(function(t) {
-        var symbol = String(t.symbol || '').trim();
-        var currency = String(t.currency || '').trim();
-        var account = String(t.account || '').trim();
-        var key = symbol + '|' + currency + '|' + account;
-
-        if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
-        if (!realized[key]) {
-            realized[key] = {
-                symbol: symbol,
-                currency: currency,
-                account: account,
-                proceeds: 0,
-                cost: 0,
-                gain: 0,
-                type: getAssetType(t)
-            };
-        }
-
-        var q = Math.abs(parseFloat(t.quantity) || 0);
-        var a = Math.abs(parseFloat(t.amount) || 0);
-        var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
-        var act = String(t.action || '').toLowerCase();
-        var txYear = '';
-        try { txYear = new Date(t.date).getFullYear().toString(); } catch(e) {}
-
-        if (act === 'buy') {
-            costBasis[key].qty += q;
-            costBasis[key].totalCost += a + comm;
-            return;
-        }
-
-        if (act === 'sell' && costBasis[key].qty > 0) {
-            var avgCost = costBasis[key].totalCost / costBasis[key].qty;
-            var costOfSold = avgCost * q;
-            var proceeds = a - comm;
-            var gain = proceeds - costOfSold;
-
-            const matchAcct = !fAcct || account === fAcct;
-            const matchYear = !fYear || txYear === fYear;
-            const matchStock = !fStock || symbol.toUpperCase() === fStock;
-
-            if (matchAcct && matchYear && matchStock) {
-                realized[key].proceeds += proceeds;
-                realized[key].cost += costOfSold;
-                realized[key].gain += gain;
-            }
-
-            costBasis[key].qty -= q;
-            costBasis[key].totalCost -= costOfSold;
-        }
-    });
+ sortedTrades.forEach(function(t) {
+  var symbol = String(t.symbol || '').trim();
+  var currency = String(t.currency || '').trim();
+  var account = String(t.account || '').trim();
+  var key = symbol + currency + account;
+  if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
+  if (!realized[key]) realized[key] = { 
+    symbol: symbol, currency: currency, account: account, 
+    proceeds: 0, cost: 0, gain: 0, gainCAD: 0, type: getAssetType(t) 
+  };
+  var q = Math.abs(parseFloat(t.quantity) || 0);
+  var a = Math.abs(parseFloat(t.amount) || 0);
+  var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
+  var act = String(t.action || '').toLowerCase();
+  var rate = num(t.exchRate, 1); // historical exchange rate at time of this trade
+  ...
+  if (act === 'buy') {
+    costBasis[key].qty += q;
+    costBasis[key].totalCost += (a + comm);
+    return;
+  }
+  if (act === 'sell') {
+    if (costBasis[key].qty > 0) {
+      var avgCost = costBasis[key].totalCost / costBasis[key].qty;
+      var costOfSold = avgCost * q;
+      var proceeds = a - comm;
+      var gain = proceeds - costOfSold;
+      var gainCAD = gain * rate; // convert using this specific sell's historical rate
+      ...
+      realized[key].proceeds += proceeds;
+      realized[key].cost += costOfSold;
+      realized[key].gain += gain;
+      realized[key].gainCAD += gainCAD;
+      costBasis[key].qty -= q;
+      costBasis[key].totalCost -= costOfSold;
+    }
+  }
+});
 
     var glArr = Object.values(realized).filter(function(r) {
         return Math.abs(r.gain) > 0.001;
@@ -4057,13 +4041,8 @@ function renderGainLoss() {
     var stockGains = glArr.filter(function(r) { return r.type === 'Stocks'; });
     var fundGains = glArr.filter(function(r) { return r.type === 'Funds'; });
 
-    var totalStockGain = stockGains.reduce(function(s, r) {
-        return s + (r.currency === 'USD' ? r.gain * 1.36 : r.gain);
-    }, 0);
-
-    var totalFundGain = fundGains.reduce(function(s, r) {
-        return s + (r.currency === 'USD' ? r.gain * 1.36 : r.gain);
-    }, 0);
+var totalStockGain = stockGains.reduce((s, r) => s + num(r.gainCAD, r.gain, 0), 0);
+var totalFundGain = fundGains.reduce((s, r) => s + num(r.gainCAD, r.gain, 0), 0);
 
     var totalGain = totalStockGain + totalFundGain;
 
@@ -4078,7 +4057,7 @@ function renderGainLoss() {
         html += '<h4 style="margin-top:15px;color:#e94560;">Stocks Realized Gain/Loss</h4>';
         html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
         stockGains.sort(function(a, b) { return b.gain - a.gain; }).forEach(function(r) {
-            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gain >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
+            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gainCAD >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
         });
         html += '</tbody></table>';
     }
@@ -4087,7 +4066,7 @@ function renderGainLoss() {
         html += '<h4 style="margin-top:20px;color:#e94560;">Funds Realized Gain/Loss</h4>';
         html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
         fundGains.sort(function(a, b) { return b.gain - a.gain; }).forEach(function(r) {
-            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gain >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
+            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gainCAD >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
         });
         html += '</tbody></table>';
     }
