@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.11">
+    <meta name="version" content="5.1.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -637,6 +637,13 @@
     perfChartComponent = val;
     renderPerfAnnualChart(lastAnnualRows);
   }
+
+    var perfChartGranularity = 'annual';
+
+function setPerfChartGranularity(val) {
+  perfChartGranularity = val;
+  renderPerfAnnualChart(lastAnnualRows);
+}
 
     var fundsViewMode = localStorage.getItem('ibkr_funds_view_mode') || 'native';
     var fundsBreakdownByYear = localStorage.getItem('ibkr_funds_breakdown_by_year') === '1';
@@ -2493,22 +2500,61 @@ console.log('Realized alignment debug', {
 
   const latestEquity = historyRows.length ? num(historyRows[historyRows.length - 1].value, 0) : 0;
     
-  const treeHtml = `
-  <div style="font-size:0.85em; line-height:1.9;">
-    <div style="font-weight:bold; color:#e94560;">📊 Latest Equity: ${fmt(latestEquity)}</div>
-    <div style="padding-left:14px; border-left:2px solid #333; margin-left:6px;">
-      <div style="font-weight:bold; color:${totalReturn>=0?'#4caf50':'#f44336'};">└ Total Return: ${fmt(totalReturn)}</div>
-      <div style="padding-left:16px; border-left:2px solid #2a2f45; margin-left:4px;">
-        <div>├ Price Return: <span class="${priceReturn>=0?'pos-gain':'pos-loss'}">${fmt(priceReturn)}</span></div>
-        <div style="padding-left:16px;">├ Realized G/L: <span class="${realized>=0?'pos-gain':'pos-loss'}">${fmt(realized)}</span></div>
-        <div style="padding-left:16px;">└ Unrealized G/L: <span class="${unrealized>=0?'pos-gain':'pos-loss'}">${fmt(unrealized)}</span></div>
-        <div>├ Dividends: <span class="pos-gain">${fmt(dividends)}</span></div>
-        <div>└ Fees: <span class="pos-loss">${fmt(fees)}</span></div>
-      </div>
-      <div>└ Net Contributions: ${fmt(netContributions)}</div>
-    </div>
-  </div>
-`;
+function perfTreeBox(label, value, x, y, w, h, color) {
+  var boxOpen = '<' + 'rect';
+  var textOpen = '<' + 'text';
+  return boxOpen + ' x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="6" fill="#152a52" stroke="' + color + '" stroke-width="1.5"/>' +
+    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 - 6) + '" text-anchor="middle" font-size="10" fill="#c5cae9">' + label + '</' + 'text>' +
+    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 + 12) + '" text-anchor="middle" font-size="13" font-weight="bold" fill="' + color + '">' + value + '</' + 'text>';
+}
+
+function perfTreeConnector(x1, y1, x2, y2) {
+  var pathOpen = '<' + 'path';
+  var midY = (y1 + y2) / 2;
+  var d = 'M' + x1 + ',' + y1 + ' V' + midY + ' H' + x2 + ' V' + y2;
+  return pathOpen + ' d="' + d + '" fill="none" stroke="#3a4266" stroke-width="1.5"/>';
+}
+
+const treeW = 300, treeH = 260;
+const boxW = 92, boxH = 40;
+const gColor = '#4caf50', rColor = '#f44336';
+const posColor = function(v){ return v >= 0 ? gColor : rColor; };
+
+// Layout: Latest Equity (top-center) -> Total Return + Net Contributions (row2) -> children of Total Return (row3)
+const eqX = treeW/2 - boxW/2, eqY = 8;
+const trX = treeW/2 - boxW - 10, trY = 78;
+const ncX = treeW/2 + 10, ncY = 78;
+const childY = 148;
+const childW = 68, childGap = 6;
+const childXs = [10, 10 + childW + childGap, 10 + 2*(childW+childGap), 10 + 3*(childW+childGap)];
+
+let treeSvg = '<svg viewBox="0 0 ' + treeW + ' ' + treeH + '" style="width:100%; height:auto;">';
+
+// Connectors
+treeSvg += perfTreeConnector(eqX + boxW/2, eqY + boxH, trX + boxW/2, trY);
+treeSvg += perfTreeConnector(eqX + boxW/2, eqY + boxH, ncX + boxW/2, ncY);
+childXs.forEach(function(cx) {
+  treeSvg += perfTreeConnector(trX + boxW/2, trY + boxH, cx + childW/2, childY);
+});
+
+// Boxes
+treeSvg += perfTreeBox('Latest Equity', fmt(latestEquity), eqX, eqY, boxW, boxH, '#e94560');
+treeSvg += perfTreeBox('Total Return', fmt(totalReturn), trX, trY, boxW, boxH, posColor(totalReturn));
+treeSvg += perfTreeBox('Net Contrib.', fmt(netContributions), ncX, ncY, boxW, boxH, '#c5cae9');
+
+const childData = [
+  { label: 'Realized', val: realized },
+  { label: 'Unrealized', val: unrealized },
+  { label: 'Dividends', val: dividends },
+  { label: 'Fees', val: -Math.abs(fees) }
+];
+childData.forEach(function(c, i) {
+  treeSvg += perfTreeBox(c.label, fmt(c.val), childXs[i], childY, childW, boxH, posColor(c.val));
+});
+
+treeSvg += '</' + 'svg>';
+
+const treeHtml = '<div style="text-align:center;">' + treeSvg + '</div>';
 
 const remainingCards = [
   { label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' },
@@ -2531,9 +2577,12 @@ document.getElementById('perf-stats').innerHTML = `
 `;
 
     
-const annualRows = computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedRows, startDate, endDate, unrealized);
-lastAnnualRows = annualRows;
-renderPerfAnnualChart(annualRows);
+var lastFullPerfContext = { perfData: perfData, unrealizedLedger: unrealizedLedger, realizedRows: realizedRows, startDate: startDate, endDate: endDate, unrealized: unrealized };
+const rowsForChart = perfChartGranularity === 'monthly'
+  ? computeMonthlyPerformanceBreakdown(perfData, unrealizedLedger, realizedRows, startDate, endDate, unrealized)
+  : computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedRows, startDate, endDate, unrealized);
+lastAnnualRows = rowsForChart;
+renderPerfAnnualChart(rowsForChart);
     
 }
 
@@ -2607,6 +2656,60 @@ function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedR
   });
 }
 
+function computeMonthlyPerformanceBreakdown(perfData, unrealizedLedger, realizedRows, startDate, endDate, unrealizedTotal) {
+  const acctFilter = String(perfAccount || 'ALL').trim();
+  const monthMap = {};
+
+  function ensureMonth(m) {
+    if (!monthMap[m]) monthMap[m] = { realized: 0, dividends: 0, fees: 0, unrealized: 0 };
+    return monthMap[m];
+  }
+
+  realizedRows.forEach(function(r) {
+    const acct = String(r.account || '').trim();
+    const rowDate = fmtDate(r.date);
+    if (acctFilter !== 'ALL' && acct !== acctFilter) return;
+    if (startDate && rowDate < startDate) return;
+    if (endDate && rowDate > endDate) return;
+    const m = rowDate ? rowDate.slice(0, 7) : 'Unknown';
+    ensureMonth(m).realized += num(r.gainCAD, r.gain, 0);
+  });
+
+  (perfData.dividends || []).forEach(function(d) {
+    const acct = String(d.account || '').trim();
+    const rowDate = fmtDate(d.date);
+    if (acctFilter !== 'ALL' && acct !== acctFilter) return;
+    if (startDate && rowDate < startDate) return;
+    if (endDate && rowDate > endDate) return;
+    const m = rowDate ? rowDate.slice(0, 7) : 'Unknown';
+    const cadAmt = num(d.cadAmount, num(d.amount, 0) * num(d.exchRate, 1));
+    const action = String(d.action || '').toLowerCase();
+    if (action.indexOf('withholding') >= 0) ensureMonth(m).dividends -= Math.abs(cadAmt);
+    else ensureMonth(m).dividends += Math.abs(cadAmt);
+  });
+
+  (perfData.trades || []).forEach(function(t) {
+    const acct = String(t.account || '').trim();
+    const rowDate = fmtDate(t.date);
+    if (acctFilter !== 'ALL' && acct !== acctFilter) return;
+    if (startDate && rowDate < startDate) return;
+    if (endDate && rowDate > endDate) return;
+    const m = rowDate ? rowDate.slice(0, 7) : 'Unknown';
+    const comm = Math.abs(num(t.commission, t.comm, 0));
+    const rate = num(t.exchRate, 1);
+    ensureMonth(m).fees += (comm * rate);
+  });
+
+  const months = Object.keys(monthMap).sort();
+  const latestMonth = endDate ? endDate.slice(0, 7) : (months.length ? months[months.length - 1] : '');
+  if (latestMonth) ensureMonth(latestMonth).unrealized = num(unrealizedTotal, 0);
+
+  return Object.keys(monthMap).sort().map(function(m) {
+    const row = monthMap[m];
+    return { year: m, dividends: round2(row.dividends), realized: round2(row.realized), unrealized: round2(row.unrealized), fees: round2(row.fees) };
+  });
+}
+    
 function renderPerfAnnualChart(rows) {
   const wrap = document.getElementById('perf-annual-chart-wrap');
   if (!wrap) return;
@@ -2631,6 +2734,20 @@ function renderPerfAnnualChart(rows) {
     </label>`;
   }).join('');
 
+const granOptions = [
+  { key: 'annual', label: 'Annual' },
+  { key: 'monthly', label: 'Monthly' }
+];
+const openLabel = '<' + 'label';
+const closeLabel = '<' + '/label>';
+const granRadioHtml = granOptions.map(function(o) {
+  const checked = perfChartGranularity === o.key ? 'checked' : '';
+  return openLabel + ' style="font-size:0.8em; display:inline-flex; align-items:center; gap:4px; margin-right:14px; cursor:pointer;">' +
+    '<input type="radio" name="perf-chart-granularity" value="' + o.key + '" ' + checked + ' onchange="setPerfChartGranularity(\'' + o.key + '\')">' +
+    o.label +
+    closeLabel;
+}).join('');
+    
   const filteredRows = rows.map(function(r) {
     if (perfChartComponent === 'ALL') return r;
     const out = { year: r.year, dividends: 0, realized: 0, unrealized: 0, fees: 0 };
@@ -2740,7 +2857,8 @@ function renderPerfAnnualChart(rows) {
     const topY = Math.min(yPos(posStack), yPos(negStack));
     const netY = topY - 8;
     svg += `<text x="${cx}" y="${netY}" text-anchor="middle" font-size="11" font-weight="bold" fill="${net>=0?'#4caf50':'#f44336'}">${fmt(net, 0)}</text>`;
-    svg += `<text x="${cx}" y="${margin.top + innerH + 20}" text-anchor="middle" font-size="12" fill="#e8eaf6">${esc(r.year)}</text>`;
+    const labelFontSize = filteredRows.length > 12 ? 8 : 12;
+    svg += `<text x="${cx}" y="${margin.top + innerH + 20}" text-anchor="middle" font-size="${labelFontSize}" fill="#e8eaf6">${esc(r.year)}</text>`;
   });
 
   svg += `</svg>`;
@@ -2753,13 +2871,18 @@ function renderPerfAnnualChart(rows) {
     </span>`;
   }).join('');
 
-  wrap.innerHTML = `
-    <h3 style="margin-bottom:10px;">Annual Performance Composition</h3>
-    <div style="margin-bottom:8px;">${radioHtml}</div>
-    <div style="margin-bottom:10px;">${legendHtml}</div>
-    ${svg}
-  `;
-}
+const chartTitle = perfChartGranularity === 'monthly' ? 'Monthly Performance Composition' : 'Annual Performance Composition';
+    
+wrap.innerHTML = `
+  <h3 style="margin-bottom:8px;">${chartTitle}</h3>
+  <div style="margin-bottom:8px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+    <div>${radioHtml}</div>
+    <div>${granRadioHtml}</div>
+  </div>
+  <div style="margin-bottom:10px;">${legendHtml}</div>
+  ${svg}
+`;
+
     
 function computeEquityDrawdownSeries(historyRows) {
     if (!historyRows || !historyRows.length) return [];
