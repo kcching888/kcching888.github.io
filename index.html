@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.6">
+    <meta name="version" content="5.1.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2625,7 +2625,7 @@ function renderPerfAnnualChart(rows) {
   ];
   const radioHtml = componentOptions.map(function(o) {
     const checked = perfChartComponent === o.key ? 'checked' : '';
-    return `abel style="font-size:0.8em; display:inline-flex; align-items:center; gap:4px; margin-right:14px; cursor:pointer;">
+    return `<label style="font-size:0.8em; display:inline-flex; align-items:center; gap:4px; margin-right:14px; cursor:pointer;">
       <input type="radio" name="perf-chart-component" value="${o.key}" ${checked} onchange="setPerfChartComponent('${o.key}')">
       ${o.label}
     </label>`;
