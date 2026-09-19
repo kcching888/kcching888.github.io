@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.10">
+    <meta name="version" content="5.1.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4254,6 +4254,8 @@ function renderGainLoss() {
   var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
   var act = String(t.action || '').toLowerCase();
   var rate = num(t.exchRate, 1); // historical exchange rate at time of this trade
+  var txYear = '';
+  try { txYear = new Date(t.date).getFullYear().toString(); } catch(e) {}
 
   if (act === 'buy') {
     costBasis[key].qty += q;
@@ -4267,11 +4269,20 @@ function renderGainLoss() {
       var proceeds = a - comm;
       var gain = proceeds - costOfSold;
       var gainCAD = gain * rate; // convert using this specific sell's historical rate
-    
-      realized[key].proceeds += proceeds;
-      realized[key].cost += costOfSold;
-      realized[key].gain += gain;
-      realized[key].gainCAD += gainCAD;
+
+      // Apply filters ONLY to what gets accumulated into the displayed totals,
+      // but always update running cost basis so subsequent sells stay accurate.
+      var matchAcct = !fAcct || (account === fAcct);
+      var matchYear = !fYear || (txYear === fYear);
+      var matchStock = !fStock || (symbol.toUpperCase() === fStock);
+
+      if (matchAcct && matchYear && matchStock) {
+        realized[key].proceeds += proceeds;
+        realized[key].cost += costOfSold;
+        realized[key].gain += gain;
+        realized[key].gainCAD += gainCAD;
+      }
+
       costBasis[key].qty -= q;
       costBasis[key].totalCost -= costOfSold;
     }
