@@ -4010,7 +4010,7 @@ function renderGainLoss() {
   var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
   var act = String(t.action || '').toLowerCase();
   var rate = num(t.exchRate, 1); // historical exchange rate at time of this trade
-  ...
+
   if (act === 'buy') {
     costBasis[key].qty += q;
     costBasis[key].totalCost += (a + comm);
