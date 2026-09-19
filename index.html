@@ -2461,8 +2461,8 @@ console.log('Realized alignment debug', {
     
   const netContributions = num(totals.netContributions, 0);
   const priceReturn = round2(realized + unrealized);
-  const totalReturn = round2(priceReturn + incomeReturn - fees);
-  const incomeReturn = num(totals.incomeReturn, 0);
+   const incomeReturn = num(totals.incomeReturn, 0);
+     const totalReturn = round2(priceReturn + incomeReturn - fees);
  // const twrPct = twrResult.twr * 100;
 
   const benchmarkLabelMap = {
