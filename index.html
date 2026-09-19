@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.13">
+    <meta name="version" content="5.1.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2762,8 +2762,11 @@ const granRadioHtml = granOptions.map(function(o) {
     fees: '#ef9a9a'
   };
 
-  const width = 640, height = 360;
-  const margin = { top: 30, right: 20, bottom: 40, left: 70 };
+const isMonthly = perfChartGranularity === 'monthly';
+const minBarSpacing = isMonthly ? 55 : 90; // px per bar, wider for annual, tighter but still readable for monthly
+const width = Math.max(640, 70 + 20 + (filteredRows.length * minBarSpacing));
+const height = 360;
+const margin = { top: 30, right: 20, bottom: 40, left: 70 };
   const innerW = width - margin.left - margin.right;
   const innerH = height - margin.top - margin.bottom;
 
@@ -2795,7 +2798,7 @@ const granRadioHtml = granOptions.map(function(o) {
   const bandW = innerW / filteredRows.length;
   const barW = Math.min(60, bandW * 0.55);
 
-  let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; max-height:380px;">`;
+ let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:${width}px; height:auto; max-height:380px; display:block;">`;
 
   svg += `<line x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
   svg += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
@@ -2880,7 +2883,9 @@ wrap.innerHTML = `
     <div>${granRadioHtml}</div>
   </div>
   <div style="margin-bottom:10px;">${legendHtml}</div>
-  ${svg}
+  <div style="overflow-x:auto; overflow-y:hidden; border:1px solid #2a2f45; border-radius:6px;">
+    ${svg}
+  </div>
 `;
 }
 
