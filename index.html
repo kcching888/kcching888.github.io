@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.13">
+    <meta name="version" content="5.0.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2460,8 +2460,8 @@ console.log('Realized alignment debug', {
     }, 0);
     
   const netContributions = num(totals.netContributions, 0);
-  const totalReturn = num(totals.totalReturn, 0);
-  const priceReturn = num(totals.priceReturn, 0);
+  const totalReturn = round2(priceReturn + incomeReturn - fees);
+  const priceReturn = round2(realized + unrealized);
   const incomeReturn = num(totals.incomeReturn, 0);
  // const twrPct = twrResult.twr * 100;
 
