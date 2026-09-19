@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.7">
+    <meta name="version" content="5.1.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2651,14 +2651,13 @@ function renderPerfAnnualChart(rows) {
   const innerH = height - margin.top - margin.bottom;
 
   let maxPos = 0, minNeg = 0;
-  rows.forEach(function(r) {
+  filteredRows.forEach(function(r) {
     const pos = Math.max(0, r.dividends) + Math.max(0, r.realized) + Math.max(0, r.unrealized);
     const neg = Math.min(0, r.realized) + Math.min(0, r.unrealized) - Math.abs(r.fees);
     maxPos = Math.max(maxPos, pos);
     minNeg = Math.min(minNeg, neg);
   });
 
-  // Round axis bounds to "nice" numbers (e.g. nearest 5k/10k/etc based on magnitude)
   function niceCeil(v) {
     if (v <= 0) return 0;
     const mag = Math.pow(10, Math.floor(Math.log10(v)));
@@ -2672,42 +2671,37 @@ function renderPerfAnnualChart(rows) {
   }
   const niceMax = niceCeil(maxPos);
   const niceMin = -niceCeil(Math.abs(minNeg));
-
   const range = (niceMax - niceMin) || 1;
   const zeroY = margin.top + innerH * (niceMax / range);
-
   function yPos(v) { return zeroY - (v / range) * innerH; }
 
-  const bandW = innerW / rows.length;
+  const bandW = innerW / filteredRows.length;
   const barW = Math.min(60, bandW * 0.55);
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; max-height:380px;">`;
 
-  // zero line
- svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
-svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
+  svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
+  svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
-
-  // y-axis gridlines/labels using rounded step size
   const steps = 4;
   const stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
   for (let v = stepSize; v <= niceMax; v += stepSize) {
     const y = yPos(v);
-   svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
-svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
+    svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+    svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
   }
   for (let v = -stepSize; v >= niceMin; v -= stepSize) {
     const y = yPos(v);
- svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
-svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
+    svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+    svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
   }
-  const minSegHeightForLabel = 14; // only show inline value label if segment is tall enough
 
-  rows.forEach(function(r, i) {
+  const minSegHeightForLabel = 14;
+
+  filteredRows.forEach(function(r, i) {
     const cx = margin.left + bandW * i + bandW / 2;
     let posStack = 0, negStack = 0;
 
-    // Stack positive segments: dividends, realized (if +), unrealized (if +)
     const posItems = [
       { key: 'dividends', val: Math.max(0, r.dividends) },
       { key: 'realized', val: Math.max(0, r.realized) },
@@ -2718,16 +2712,13 @@ svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="1
       const y1 = yPos(posStack);
       const y2 = yPos(posStack + item.val);
       const segH = y1 - y2;
-      svg += `<rect x="${cx - barW/2}" y="${y2}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9">
-        <title>${item.key}: ${fmt(item.val)}</title>
-      </rect>`;
+      svg += `<rect x="${cx - barW/2}" y="${y2}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val)}</title></rect>`;
       if (segH >= minSegHeightForLabel) {
         svg += `<text x="${cx}" y="${(y1+y2)/2 + 4}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${fmt(item.val, 0)}</text>`;
       }
       posStack += item.val;
     });
 
-    // Stack negative segments: realized (if -), unrealized (if -), fees (always negative)
     const negItems = [
       { key: 'realized', val: Math.min(0, r.realized) },
       { key: 'unrealized', val: Math.min(0, r.unrealized) },
@@ -2738,28 +2729,22 @@ svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="1
       const y1 = yPos(negStack);
       const y2 = yPos(negStack + item.val);
       const segH = y2 - y1;
-      svg += `<rect x="${cx - barW/2}" y="${y1}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9">
-        <title>${item.key}: ${fmt(item.val)}</title>
-      </rect>`;
+      svg += `<rect x="${cx - barW/2}" y="${y1}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val)}</title></rect>`;
       if (segH >= minSegHeightForLabel) {
         svg += `<text x="${cx}" y="${(y1+y2)/2 + 4}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${fmt(item.val, 0)}</text>`;
       }
       negStack += item.val;
     });
 
-     // Net total label — always placed above the topmost element of this bar (whichever stack reaches highest/lowest)
     const net = r.dividends + r.realized + r.unrealized - Math.abs(r.fees);
-    const topY = Math.min(yPos(posStack), yPos(negStack)); // smaller y = higher on screen
+    const topY = Math.min(yPos(posStack), yPos(negStack));
     const netY = topY - 8;
     svg += `<text x="${cx}" y="${netY}" text-anchor="middle" font-size="11" font-weight="bold" fill="${net>=0?'#4caf50':'#f44336'}">${fmt(net, 0)}</text>`;
-
-    // X-axis year label — always below the chart area, never overlapping bars
     svg += `<text x="${cx}" y="${margin.top + innerH + 20}" text-anchor="middle" font-size="12" fill="#e8eaf6">${esc(r.year)}</text>`;
   });
 
   svg += `</svg>`;
 
-  // Legend
   const legendHtml = Object.keys(colors).map(function(k) {
     const label = k === 'dividends' ? 'Dividends' : k === 'realized' ? 'Realized G/L' : k === 'unrealized' ? 'Unrealized G/L' : 'Fees';
     return `<span style="display:inline-flex; align-items:center; gap:6px; margin-right:16px;">
@@ -2775,7 +2760,6 @@ svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="1
     ${svg}
   `;
 }
-
     
 function computeEquityDrawdownSeries(historyRows) {
     if (!historyRows || !historyRows.length) return [];
