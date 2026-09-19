@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.4">
+    <meta name="version" content="5.1.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2683,8 +2683,8 @@ function renderPerfAnnualChart(rows) {
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; max-height:380px;">`;
 
-  svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
-  svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
+svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
+svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
   const steps = 4;
   const stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
