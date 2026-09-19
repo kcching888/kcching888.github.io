@@ -2632,8 +2632,11 @@ function renderPerfAnnualChart(rows) {
   const radioHtml = componentOptions.map(function(o) {
     const checked = perfChartComponent === o.key ? 'checked' : '';
     return `abel style="font-size:0.8em; display:inline-flex; align-items:center; gap:4px; margin-right:14px; cursor:pointer;">
-      <input type="radio" name="perf-chart-component" value="${o.key}" ${checked} onchange="setPerfChartComponent('${o.key}')"
-  // Filter rows based on selected component
+      <input type="radio" name="perf-chart-component" value="${o.key}" ${checked} onchange="setPerfChartComponent('${o.key}')">
+      ${o.label}
+    </label>`;
+  }).join('');
+
   const filteredRows = rows.map(function(r) {
     if (perfChartComponent === 'ALL') return r;
     const out = { year: r.year, dividends: 0, realized: 0, unrealized: 0, fees: 0 };
@@ -2683,8 +2686,8 @@ function renderPerfAnnualChart(rows) {
 
   let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; max-height:380px;">`;
 
-svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
-svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
+  svg += `e x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
+  svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
   const steps = 4;
   const stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
@@ -2763,14 +2766,6 @@ svg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margi
     ${svg}
   `;
 }
-      
-
-const colors = {
-  dividends: '#81d4fa',   // lighter blue
-  realized: '#ffcc80',    // lighter orange
-  unrealized: '#ce93d8',  // lighter purple
-  fees: '#ef9a9a'         // lighter red
-};
 
   const width = 640, height = 360;
   const margin = { top: 30, right: 20, bottom: 40, left: 70 };
