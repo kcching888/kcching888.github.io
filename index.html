@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.2">
+    <meta name="version" content="5.1.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -67,6 +67,9 @@
         .stat-card{background:#0f3460;border-radius:8px;padding:15px;text-align:center}
         .stat-card .val{font-size:1.5em;font-weight:bold;color:#e94560}
         .stat-card .lbl{font-size:0.8em;color:#aaa;margin-top:4px}
+        #perf-stats .stat-card{background:#152a52;border-radius:6px;padding:8px 6px;text-align:center}
+        #perf-stats .stat-card .val{font-size:1.05em;font-weight:bold;color:#e94560}
+        #perf-stats .stat-card .lbl{font-size:0.68em;color:#aaa;margin-top:2px;line-height:1.2}
         .modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
         .modal-overlay.show{display:flex}
         .modal{background:#16213e;border-radius:8px;padding:25px;min-width:350px;max-width:600px;max-height:80vh;overflow-y:auto;border:1px solid #0f3460}
@@ -208,10 +211,10 @@
     <div id="performance-controls" style="margin-top:0"></div>
    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; align-items:stretch;">
   <div id="perf-annual-chart-wrap" style="flex:2; min-width:420px;"></div>
-  <div style="flex:1; min-width:260px; background:#0f3460; border-radius:8px; padding:15px; display:flex; flex-direction:column;">
-    <h3 style="margin-bottom:10px; color:#e94560;">Summary</h3>
-    <div id="perf-stats" style="display:flex; flex-direction:column; gap:10px; overflow-y:auto;"></div>
-  </div>
+<div style="flex:1; min-width:260px; background:#0f3460; border-radius:8px; padding:12px; display:flex; flex-direction:column;">
+  <h3 style="margin:0 0 8px 0; color:#e94560; font-size:1em;">Summary</h3>
+  <div id="perf-stats" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; overflow-y:auto;"></div>
+</div>
 </div>
     <div id="equity-drawdown-wrap" class="funds-container" style="margin-top:16px"></div>
             <div id="equity-tooltip" style="
@@ -2611,12 +2614,12 @@ function renderPerfAnnualChart(rows) {
     return;
   }
 
-  const colors = {
-    dividends: '#4fc3f7',
-    realized: '#ffb74d',
-    unrealized: '#ab47bc',
-    fees: '#ef5350'
-  };
+const colors = {
+  dividends: '#81d4fa',   // lighter blue
+  realized: '#ffcc80',    // lighter orange
+  unrealized: '#ce93d8',  // lighter purple
+  fees: '#ef9a9a'         // lighter red
+};
 
   const width = 640, height = 360;
   const margin = { top: 30, right: 20, bottom: 40, left: 70 };
@@ -2665,12 +2668,12 @@ function renderPerfAnnualChart(rows) {
   const stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
   for (let v = stepSize; v <= niceMax; v += stepSize) {
     const y = yPos(v);
-    svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#2a2a2a" stroke-width="1"/>`;
+    svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#3a3f55" stroke-width="1" stroke-dasharray="3 3"/>`;
     svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#888">${fmt(v, 0)}</text>`;
   }
   for (let v = -stepSize; v >= niceMin; v -= stepSize) {
     const y = yPos(v);
-    svg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#2a2a2a" stroke-width="1"/>`;
+    ssvg += `e x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#3a3f55" stroke-width="1" stroke-dasharray="3 3"/>`;
     svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#888">${fmt(v, 0)}</text>`;
   }
   const minSegHeightForLabel = 14; // only show inline value label if segment is tall enough
@@ -2719,9 +2722,10 @@ function renderPerfAnnualChart(rows) {
       negStack += item.val;
     });
 
-    // Net total label — placed clear of both the tallest positive and deepest negative bar
+     // Net total label — always placed above the topmost element of this bar (whichever stack reaches highest/lowest)
     const net = r.dividends + r.realized + r.unrealized - Math.abs(r.fees);
-    const netY = net >= 0 ? yPos(posStack) - 8 : yPos(negStack) - 8;
+    const topY = Math.min(yPos(posStack), yPos(negStack)); // smaller y = higher on screen
+    const netY = topY - 8;
     svg += `<text x="${cx}" y="${netY}" text-anchor="middle" font-size="11" font-weight="bold" fill="${net>=0?'#4caf50':'#f44336'}">${fmt(net, 0)}</text>`;
 
     // X-axis year label — always below the chart area, never overlapping bars
