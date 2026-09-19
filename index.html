@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.0.11">
+    <meta name="version" content="5.0.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3506,14 +3506,19 @@ function renderPortfolio() {
 
     var fundsSet = 0;
     
-    var sortOrder = ['Stocks-U10455610', 'Stocks-U9804531', 'Funds-U10455610', 'Funds-U9804531'];
+var groupKeys = Object.keys(grouped);
+var stockKeys = groupKeys.filter(function(k){ return k.indexOf('Stocks-') === 0; }).sort();
+var fundKeys  = groupKeys.filter(function(k){ return k.indexOf('Funds-')  === 0; }).sort();
+var otherKeys = groupKeys.filter(function(k){ return k.indexOf('Stocks-') !== 0 && k.indexOf('Funds-') !== 0; }).sort();
+var sortOrder = stockKeys.concat(fundKeys, otherKeys);
 
-    sortOrder.forEach(function(key) {
-        if (!grouped[key]) return;
+sortOrder.forEach(function(key) {
+  if (!grouped[key]) return;
 
-        var type = key.split('-')[0];
-        var acct = key.split('-')[1];
-
+var dashIdx = key.indexOf('-');
+var type = key.substring(0, dashIdx);
+var acct = key.substring(dashIdx + 1);
+    
         html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
 
         if (type === 'Stocks') {
