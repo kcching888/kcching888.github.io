@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.12">
+    <meta name="version" content="5.1.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -642,7 +642,7 @@
 
 function setPerfChartGranularity(val) {
   perfChartGranularity = val;
-  renderPerfAnnualChart(lastAnnualRows);
+  renderPerfStats();
 }
 
     var fundsViewMode = localStorage.getItem('ibkr_funds_view_mode') || 'native';
