@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.0">
+    <meta name="version" content="5.1.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2600,7 +2600,7 @@ function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedR
 }
 
 function renderPerfAnnualChart(rows) {
-  const wrap = id('perf-annual-chart-wrap');
+  const wrap = document.getElementById('perf-annual-chart-wrap');
   if (!wrap) return;
 
   if (!rows || !rows.length) {
