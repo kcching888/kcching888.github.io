@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.0">
+    <meta name="version" content="5.2.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -201,7 +201,7 @@
     
   <div id="page-portfolio">
   <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
-    abel style="font-size:0.85em; color:#aaa;">View:</label>
+    <label style="font-size:0.85em; color:#aaa;">View:</label>
     <select id="port-subfilter" onchange="setSubPortfolioFilter(this.value)" style="background:#0f3460; color:#e0e0e0; border:1px solid #1a4a8a; border-radius:4px; padding:5px 8px;">
       <option value="ALL">All Holdings</option>
     </select>
@@ -472,11 +472,11 @@
   <div class="modal" style="max-width:500px;">
     <h3>Manage Sub-Portfolios</h3>
     <div class="form-group">
-      abel>Sub-Portfolio Name</label>
+      <label>Sub-Portfolio Name</label>
       <input id="sp-name-input" placeholder="e.g. Tech Growth">
     </div>
     <div class="form-group">
-      abel>Select Stocks</label>
+      <label>Select Stocks</label>
       <div id="sp-stock-checklist" style="max-height:250px; overflow-y:auto; background:#0f3460; border-radius:4px; padding:8px;"></div>
     </div>
     <div id="sp-existing-list" style="margin:10px 0; font-size:0.85em; color:#aaa;"></div>
@@ -1500,7 +1500,7 @@ function getSubPortfolioSymbols(name) {
 function openSubPortfolioManager() {
   var symbols = getAllKnownSymbols();
   document.getElementById('sp-stock-checklist').innerHTML = symbols.map(function(s) {
-    return 'abel style="display:block; padding:3px 0; cursor:pointer;">' +
+    return '<label style="display:block; padding:3px 0; cursor:pointer;">' +
       '<input type="checkbox" class="sp-stock-cb" value="' + esc(s) + '" style="margin-right:6px;">' + esc(s) +
       '</label>';
   }).join('');
