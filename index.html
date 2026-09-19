@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.5">
+    <meta name="version" content="5.1.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2535,12 +2535,6 @@ const annualRows = computeAnnualPerformanceBreakdown(perfData, unrealizedLedger,
 lastAnnualRows = annualRows;
 renderPerfAnnualChart(annualRows);
     
-  $('perf-stats').innerHTML = cards.map(c =>
-    '<div class="stat-card">' +
-      '<div class="val ' + (c.cls || '') + '">' + c.value + '</div>' +
-      '<div class="lbl">' + c.label + '</div>' +
-    '</div>'
-  ).join('');
 }
 
 
@@ -2776,6 +2770,7 @@ svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="1
 
   wrap.innerHTML = `
     <h3 style="margin-bottom:10px;">Annual Performance Composition</h3>
+    <div style="margin-bottom:8px;">${radioHtml}</div>
     <div style="margin-bottom:10px;">${legendHtml}</div>
     ${svg}
   `;
