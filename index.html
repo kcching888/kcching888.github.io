@@ -2460,8 +2460,8 @@ console.log('Realized alignment debug', {
     }, 0);
     
   const netContributions = num(totals.netContributions, 0);
-  const totalReturn = round2(priceReturn + incomeReturn - fees);
   const priceReturn = round2(realized + unrealized);
+  const totalReturn = round2(priceReturn + incomeReturn - fees);
   const incomeReturn = num(totals.incomeReturn, 0);
  // const twrPct = twrResult.twr * 100;
 
