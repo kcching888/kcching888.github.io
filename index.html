@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.1.14">
+    <meta name="version" content="5.2.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -199,8 +199,15 @@
 
 <div class="content">
     
-    <div id="page-portfolio">
-        <div id="port-stats" class="stat-grid"></div>
+  <div id="page-portfolio">
+  <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+    abel style="font-size:0.85em; color:#aaa;">View:</label>
+    <select id="port-subfilter" onchange="setSubPortfolioFilter(this.value)" style="background:#0f3460; color:#e0e0e0; border:1px solid #1a4a8a; border-radius:4px; padding:5px 8px;">
+      <option value="ALL">All Holdings</option>
+    </select>
+    <button class="btn btn-primary" onclick="openSubPortfolioManager()" style="padding:5px 10px; font-size:0.8em;">Manage Sub-Portfolios</button>
+  </div>
+  <div id="port-stats" class="stat-grid"></div>
         <div class="card">
             <div id="port-table-wrap"></div>
          </div>
@@ -208,6 +215,13 @@
 
 <div id="page-performance" style="display:none">
   <div class="card">
+    <div style="display:flex; gap:10px; align-items:center; margin-bottom:8px;">
+      <label style="font-size:0.85em; color:#aaa;">View:</label>
+      <select id="perf-subfilter" onchange="setSubPortfolioFilter(this.value)" style="background:#0f3460; color:#e0e0e0; border:1px solid #1a4a8a; border-radius:4px; padding:5px 8px;">
+        <option value="ALL">All Holdings</option>
+      </select>
+      <button class="btn btn-primary" onclick="openSubPortfolioManager()" style="padding:5px 10px; font-size:0.8em;">Manage Sub-Portfolios</button>
+    </div>
     <div id="performance-controls" style="margin-top:0"></div>
    <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; align-items:stretch;">
   <div id="perf-annual-chart-wrap" style="flex:2; min-width:420px;"></div>
@@ -454,6 +468,26 @@
     </div>
 </div>
 
+<div id="modal-subportfolio" class="modal-overlay">
+  <div class="modal" style="max-width:500px;">
+    <h3>Manage Sub-Portfolios</h3>
+    <div class="form-group">
+      abel>Sub-Portfolio Name</label>
+      <input id="sp-name-input" placeholder="e.g. Tech Growth">
+    </div>
+    <div class="form-group">
+      abel>Select Stocks</label>
+      <div id="sp-stock-checklist" style="max-height:250px; overflow-y:auto; background:#0f3460; border-radius:4px; padding:8px;"></div>
+    </div>
+    <div id="sp-existing-list" style="margin:10px 0; font-size:0.85em; color:#aaa;"></div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-subportfolio')">Close</button>
+      <button class="btn btn-danger" onclick="deleteCurrentSubPortfolio()">Delete</button>
+      <button class="btn btn-primary" onclick="saveSubPortfolio()">Save</button>
+    </div>
+  </div>
+</div>
+    
 <div id="modal-add-trade" class="modal-overlay">
     <div class="modal">
         <h3>Add Trade</h3>
@@ -749,34 +783,40 @@ function setPerfChartGranularity(val) {
     }
 
    function getPerformanceFilteredData() {
-      const rangeKey = String(perfRange || 'ALL').trim().toUpperCase();
-      const acctFilter = String(perfAccount || 'ALL').trim();
+  const rangeKey = String(perfRange || 'ALL').trim().toUpperCase();
+  const acctFilter = String(perfAccount || 'ALL').trim();
+  const useDateFilter = !(rangeKey === 'ALL' || rangeKey === 'MAX');
+  const range = useDateFilter ? getPerfDateRange(rangeKey) : { from: '', to: '' };
+  const spSymbols = (subPortfolioFilter !== 'ALL' && subPortfolios[subPortfolioFilter])
+    ? getSubPortfolioSymbols(subPortfolioFilter)
+    : null;
 
-      const useDateFilter = !(rangeKey === 'ALL' || rangeKey === 'MAX');
-      const range = useDateFilter ? getPerfDateRange(rangeKey) : { from: '', to: '' };
+  function inScope(row) {
+    const acct = String(row.account || '').trim();
+    const date = fmtDate(row.date);
+    const symbol = String(row.symbol || '').trim().toUpperCase();
 
-      function inScope(row) {
-        const acct = String(row.account || '').trim();
-        const date = fmtDate(row.date);
-
-        if (acctFilter !== 'ALL' && acct !== acctFilter) return false;
-
-        if (useDateFilter) {
-          if (date && range.from && date < range.from) return false;
-          if (date && range.to && date > range.to) return false;
-        }
-
-        return true;
-      }
-
-      return {
-        trades: (allTrades || []).filter(inScope),
-        dividends: (allDivs || []).filter(inScope),
-        transfers: (allTransfers || []).filter(inScope),
-        fxTrades: (allFxTrades || []).filter(inScope),
-        interest: (allInterest || []).filter(inScope)
-      };
+    if (acctFilter !== 'ALL' && acct !== acctFilter) return false;
+    if (useDateFilter) {
+      if (range.from && date < range.from) return false;
+      if (range.to && date > range.to) return false;
     }
+    // Sub-portfolio filter: only applies to rows that have a symbol (trades, dividends).
+    // Transfers/interest have no symbol, so they pass through unfiltered (cash-level activity).
+    if (spSymbols && row.symbol) {
+      if (spSymbols.indexOf(symbol) < 0) return false;
+    }
+    return true;
+  }
+
+  return {
+    trades: (allTrades || []).filter(inScope),
+    dividends: (allDivs || []).filter(inScope),
+    transfers: (allTransfers || []).filter(inScope),
+    fxTrades: (allFxTrades || []).filter(inScope),
+    interest: (allInterest || []).filter(inScope)
+  };
+}
     
     function getAssetType(t) {
         if (!t.symbol) return 'Stocks';
@@ -1440,8 +1480,94 @@ function updateTradeCurrencyDropdown() {
     dropdown.value = currentVal; // Maintain selection
 }
 
+var subPortfolios = JSON.parse(localStorage.getItem('ibkr_subportfolios') || '{}');
+var subPortfolioFilter = 'ALL'; // 'ALL' or a sub-portfolio name
 
+function saveSubPortfolios() {
+  localStorage.setItem('ibkr_subportfolios', JSON.stringify(subPortfolios));
+}
 
+function getAllKnownSymbols() {
+  var syms = new Set();
+  (allTrades || []).forEach(function(t) { if (t.symbol) syms.add(String(t.symbol).trim().toUpperCase()); });
+  return Array.from(syms).sort();
+}
+
+function getSubPortfolioSymbols(name) {
+  return (subPortfolios[name] || []).map(function(s) { return s.toUpperCase(); });
+}
+
+function openSubPortfolioManager() {
+  var symbols = getAllKnownSymbols();
+  document.getElementById('sp-stock-checklist').innerHTML = symbols.map(function(s) {
+    return 'abel style="display:block; padding:3px 0; cursor:pointer;">' +
+      '<input type="checkbox" class="sp-stock-cb" value="' + esc(s) + '" style="margin-right:6px;">' + esc(s) +
+      '</label>';
+  }).join('');
+  document.getElementById('sp-name-input').value = '';
+  renderSubPortfolioExistingList();
+  openModal('modal-subportfolio');
+}
+
+function renderSubPortfolioExistingList() {
+  var names = Object.keys(subPortfolios).sort();
+  var listEl = document.getElementById('sp-existing-list');
+  listEl.innerHTML = names.length
+    ? '<strong>Existing:</strong> ' + names.map(function(n) {
+        return '<a href="#" onclick="loadSubPortfolioIntoEditor(\'' + esc(n).replace(/'/g,"\\'") + '\'); return false;" style="color:#64b5f6; margin-right:10px;">' + esc(n) + '</a>';
+      }).join('')
+    : 'No sub-portfolios created yet.';
+}
+
+function loadSubPortfolioIntoEditor(name) {
+  document.getElementById('sp-name-input').value = name;
+  var symbols = subPortfolios[name] || [];
+  document.querySelectorAll('.sp-stock-cb').forEach(function(cb) { cb.checked = symbols.indexOf(cb.value) >= 0; });
+}
+
+function saveSubPortfolio() {
+  var name = document.getElementById('sp-name-input').value.trim();
+  if (!name) return alert('Please enter a sub-portfolio name.');
+  var selected = Array.from(document.querySelectorAll('.sp-stock-cb:checked')).map(function(cb) { return cb.value; });
+  if (!selected.length) return alert('Please select at least one stock.');
+  subPortfolios[name] = selected;
+  saveSubPortfolios();
+  updateSubPortfolioSelectors();
+  closeModal('modal-subportfolio');
+}
+
+function deleteCurrentSubPortfolio() {
+  var name = document.getElementById('sp-name-input').value.trim();
+  if (!name || !subPortfolios[name]) return alert('No matching sub-portfolio to delete.');
+  if (!confirm('Delete sub-portfolio "' + name + '"?')) return;
+  delete subPortfolios[name];
+  saveSubPortfolios();
+  updateSubPortfolioSelectors();
+  closeModal('modal-subportfolio');
+}
+
+function updateSubPortfolioSelectors() {
+  var names = Object.keys(subPortfolios).sort();
+  var opts = '<option value="ALL">All Holdings</option>' +
+    names.map(function(n) { return '<option value="' + esc(n) + '">' + esc(n) + '</option>'; }).join('');
+  ['port-subfilter', 'perf-subfilter'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var current = el.value;
+    el.innerHTML = opts;
+    if (names.indexOf(current) >= 0 || current === 'ALL') el.value = current;
+  });
+}
+
+function setSubPortfolioFilter(val) {
+  subPortfolioFilter = val;
+  var pf = document.getElementById('port-subfilter');
+  var xf = document.getElementById('perf-subfilter');
+  if (pf) pf.value = val;
+  if (xf) xf.value = val;
+  if (document.getElementById('tab-portfolio').classList.contains('active')) renderPortfolio();
+  if (document.getElementById('tab-performance').classList.contains('active')) renderPerfStats();
+}
 
 function renderTradesTable(){
   updateTradeCurrencyDropdown();
@@ -2320,9 +2446,13 @@ async function renderPerfStats() {
 // otherwise FIFO cost basis for positions opened before the selected Performance range is lost,
 // causing unrealized gain to be wildly overstated for older holdings.
 const acctFilterForUnrealized = String(perfAccount || 'ALL').trim();
+const spSymbolsForUnrealized = (subPortfolioFilter !== 'ALL' && subPortfolios[subPortfolioFilter])
+  ? getSubPortfolioSymbols(subPortfolioFilter)
+  : null;
 const fullTradesForUnrealized = (allTrades || []).filter(function(t){
-  if (acctFilterForUnrealized === 'ALL') return true;
-  return String(t.account || '').trim() === acctFilterForUnrealized;
+  if (acctFilterForUnrealized !== 'ALL' && String(t.account || '').trim() !== acctFilterForUnrealized) return false;
+  if (spSymbolsForUnrealized && spSymbolsForUnrealized.indexOf(String(t.symbol||'').trim().toUpperCase()) < 0) return false;
+  return true;
 });
 const unrealizedLedger = buildLedgerFromData({
   trades: fullTradesForUnrealized,
@@ -3769,7 +3899,12 @@ function renderPortfolio() {
     var livePrices = window.currentPrices || {};
 
     // 1. DUAL-TRACKING ENGINE
-var sortedTrades = [...allTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
+var scopedTrades = allTrades;
+if (subPortfolioFilter !== 'ALL' && subPortfolios[subPortfolioFilter]) {
+  var spSymbols = getSubPortfolioSymbols(subPortfolioFilter);
+  scopedTrades = allTrades.filter(function(t) { return spSymbols.indexOf(String(t.symbol||'').trim().toUpperCase()) >= 0; });
+}
+var sortedTrades = [...scopedTrades].sort((a, b) => new Date(a.date) - new Date(b.date));
 
 sortedTrades.forEach(function(t) {
         var key = esc(t.symbol) + '|' + esc(t.currency) + '|' + esc(t.account);
@@ -5121,6 +5256,7 @@ window.addEventListener('load', function() {
     // 1. Initial UI Setup
     updateAccountFilter();
     applyFilters();
+    updateSubPortfolioSelectors();
 
     // 2. Load sync time UI
     const syncTime = localStorage.getItem('ibkr_sync_time');
