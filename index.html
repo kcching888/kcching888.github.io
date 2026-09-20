@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.8">
+    <meta name="version" content="5.2.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3011,7 +3011,7 @@ const granRadioHtml = granOptions.map(function(o) {
 
   const colors = {
     dividends: '#81d4fa',
-    interest: '#81d4fa',
+    interest: '#a5d6a7',
     realized: '#ffcc80',
     unrealized: '#ce93d8',
     fees: '#ef9a9a'
@@ -3027,7 +3027,7 @@ const margin = { top: 30, right: 20, bottom: 40, left: 70 };
 
   let maxPos = 0, minNeg = 0;
   filteredRows.forEach(function(r) {
-    const pos = Math.max(0, r.dividends) + Math.max(0, r.realized) + Math.max(0, r.unrealized);
+    const pos = Math.max(0, r.dividends) + Math.max(0, r.interest) + Math.max(0, r.realized) + Math.max(0, r.unrealized);
     const neg = Math.min(0, r.realized) + Math.min(0, r.unrealized) - Math.abs(r.fees);
     maxPos = Math.max(maxPos, pos);
     minNeg = Math.min(minNeg, neg);
