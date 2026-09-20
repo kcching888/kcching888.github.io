@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.9">
+    <meta name="version" content="5.2.10">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3027,7 +3027,7 @@ const margin = { top: 30, right: 20, bottom: 40, left: 70 };
 
   let maxPos = 0, minNeg = 0;
   filteredRows.forEach(function(r) {
-    const pos = Math.max(0, r.dividends) + Math.max(0, r.interest) + Math.max(0, r.realized) + Math.max(0, r.unrealized);
+    const pos = Math.max(0, r.dividends) + Math.max(0, r.interest || 0) + Math.max(0, r.realized) + Math.max(0, r.unrealized);
     const neg = Math.min(0, r.realized) + Math.min(0, r.unrealized) - Math.abs(r.fees);
     maxPos = Math.max(maxPos, pos);
     minNeg = Math.min(minNeg, neg);
@@ -3083,7 +3083,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
 
     const posItems = [
       { key: 'dividends', val: Math.max(0, r.dividends) },
-      { key: 'interest', val: Math.max(0, r.interest) },
+      { key: 'interest', val: Math.max(0, r.interest || 0) },
       { key: 'realized', val: Math.max(0, r.realized) },
       { key: 'unrealized', val: Math.max(0, r.unrealized) }
     ];
@@ -3116,7 +3116,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
       negStack += item.val;
     });
 
-    const net = r.dividends + r.realized + r.unrealized - Math.abs(r.fees);
+    const net = r.dividends + (r.interest || 0) + r.realized + r.unrealized - Math.abs(r.fees);
     const topY = Math.min(yPos(posStack), yPos(negStack));
     const netY = topY - 8;
     svg += `<text x="${cx}" y="${netY}" text-anchor="middle" font-size="11" font-weight="bold" fill="${net>=0?'#4caf50':'#f44336'}">${fmt(net, 0)}</text>`;
