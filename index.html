@@ -965,8 +965,8 @@ function setPerfChartGranularity(val) {
 
     function showTab(tab){
         ['transactions','portfolio','performance','gainloss','dividends','transfers'].forEach(function(t){
-            $('page-'+t).style.display = t===tab ? '' : 'none';
-            $('tab-'+t).classList.toggle('active', t === tab);
+           id('page-' + t).style.display = (t === tab) ? '' : 'none';
+           id('tab-' + t).classList.toggle('active', t === tab);
         });
         console.log("tab: ", tab);
 
