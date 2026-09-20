@@ -4549,8 +4549,8 @@ sortedTrades.forEach(function(t) {
             positions[key].fifoLots.push({ q: q, c: cost });
             positions[key].acbTotalCost += cost;
             positions[key].qty += q;
-        } else if (act.includes('sell')) {
-            else if (act.includes('sell')) {
+        }
+        else if (act.includes('sell')) {
   const sellQty = q;
   const pos = positions[key];
 
