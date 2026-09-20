@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.14">
+    <meta name="version" content="5.2.15">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3059,15 +3059,11 @@ const margin = { top: 30, right: 20, bottom: 40, left: 70 };
   const zeroY = margin.top + innerH * (niceMax / range);
   function yPos(v) { return zeroY - (v / range) * innerH; }
 
-  const scrollInnerW = scrollableW - margin.right - scrollMarginLeft;
-const bandW = scrollInnerW / filteredRows.length;
-const barW = Math.min(60, bandW * 0.55);
 
-const axisW = margin.left + 10;
 const scrollableW = width - margin.left;
 
 let axisSvg = `<svg viewBox="0 0 ${axisW} ${height}" style="width:${axisW}px; height:auto; max-height:380px; display:block; flex-shrink:0;">`;
-axisSvg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
+axisSvg += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
 const steps = 4;
 let stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
@@ -3092,17 +3088,17 @@ const barW = Math.min(60, bandW * 0.55);
 
 let svg = `<svg viewBox="0 0 ${scrollableW} ${height}" style="width:${scrollableW}px; height:auto; max-height:380px; display:block;">`;
 
-svg += `e x1="0" y1="${zeroY}" x2="${scrollableW - margin.right}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
+svg += `<line x1="0" y1="${zeroY}" x2="${scrollableW - margin.right}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
 let iterGuard1b = 0;
 for (let v = stepSize; v <= niceMax && iterGuard1b < 1000; v += stepSize, iterGuard1b++) {
     const y = yPos(v);
-    svg += `e x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+    svg += `<line x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
 }
 let iterGuard2b = 0;
 for (let v = -stepSize; v >= niceMin && iterGuard2b < 1000; v -= stepSize, iterGuard2b++) {
     const y = yPos(v);
-    svg += `e x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+    svg += `<line x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
 }
 
   const minSegHeightForLabel = 14;
