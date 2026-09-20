@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.10">
+    <meta name="version" content="5.2.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2914,7 +2914,7 @@ function computeMonthlyPerformanceBreakdown(perfData, unrealizedLedger, realized
   const monthMap = {};
 
   function ensureMonth(m) {
-    if (!monthMap[m]) monthMap[m] = { realized: 0, dividends: 0, fees: 0, unrealized: 0 };
+    if (!monthMap[m]) monthMap[m] = { realized: 0, dividends: 0, interest: 0, fees: 0, unrealized: 0 };
     return monthMap[m];
   }
 
@@ -2940,7 +2940,18 @@ function computeMonthlyPerformanceBreakdown(perfData, unrealizedLedger, realized
     if (action.indexOf('withholding') >= 0) ensureMonth(m).dividends -= Math.abs(cadAmt);
     else ensureMonth(m).dividends += Math.abs(cadAmt);
   });
-
+    
+(perfData.interest || []).forEach(function(r) {
+  const acct = String(r.account || '').trim();
+  const rowDate = fmtDate(r.date);
+  if (acctFilter !== 'ALL' && acct !== acctFilter) return;
+  if (startDate && rowDate < startDate) return;
+  if (endDate && rowDate > endDate) return;
+  const m = rowDate ? rowDate.slice(0, 7) : 'Unknown';
+  const cadAmt = num(r.cadAmount, num(r.amount, 0) * num(r.exchRate, 1));
+  ensureMonth(m).interest += cadAmt;
+});
+    
   (perfData.trades || []).forEach(function(t) {
     const acct = String(t.account || '').trim();
     const rowDate = fmtDate(t.date);
@@ -2959,7 +2970,7 @@ function computeMonthlyPerformanceBreakdown(perfData, unrealizedLedger, realized
 
   return Object.keys(monthMap).sort().map(function(m) {
     const row = monthMap[m];
-    return { year: m, dividends: round2(row.dividends), realized: round2(row.realized), unrealized: round2(row.unrealized), fees: round2(row.fees) };
+    return { year: m, dividends: round2(row.dividends), interest: round2(row.interest), realized: round2(row.realized), unrealized: round2(row.unrealized), fees: round2(row.fees) };
   });
 }
     
