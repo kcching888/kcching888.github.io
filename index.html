@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.3.0">
+    <meta name="version" content="5.3.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -166,6 +166,54 @@
     .perf-table-scroll tbody tr:nth-child(even) {
         background: rgba(255,255,255,0.02);
     }
+    .lot-gap-banner {
+  background: #4a3410;
+  border: 1px solid #7a5a00;
+  color: #ffd54f;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.lot-gap-banner h4 {
+  margin: 0 0 8px 0;
+  color: #ffd54f;
+  font-size: 0.95em;
+}
+
+.lot-gap-banner p {
+  margin: 0 0 8px 0;
+  font-size: 0.85em;
+  color: #ffe082;
+}
+
+.lot-gap-list {
+  margin: 8px 0 0 18px;
+  padding: 0;
+}
+
+.lot-gap-list li {
+  margin: 6px 0;
+  font-size: 0.82em;
+  color: #fff3cd;
+}
+
+.portfolio-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.portfolio-toolbar-left,
+.portfolio-toolbar-right {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
     </style>
 </head>
 <body>
@@ -180,6 +228,7 @@
         <button class="btn btn-success" onclick="openUploadModal()">Upload CSV</button>
         <button class="btn btn-primary" onclick="openAddTradeModal()">+ Trade</button>
         <button class="btn btn-primary" onclick="openAddDivModal()">+ Dividends</button>
+        <button class="btn btn-warning" onclick="openOpeningPositionModal()">Opening Lot</button>
         
     </div>
 </div>
@@ -627,6 +676,79 @@
         </div>
     </div>
 </div>
+
+<div id="modal-opening-position" class="modal-overlay">
+  <div class="modal">
+    <h3>Add Opening Position</h3>
+
+    <div id="op-hint" style="margin-bottom:12px;font-size:0.82em;color:#ffd54f;"></div>
+
+    <div class="form-group">
+      <label for="op-date">Date</label>
+      <input id="op-date" type="date">
+    </div>
+
+    <div class="form-group">
+      <label for="op-account">Account</label>
+      <input id="op-account" type="text" placeholder="e.g. HSBC-HK">
+    </div>
+
+    <div class="form-group">
+      <label for="op-symbol">Symbol</label>
+      <input id="op-symbol" type="text" placeholder="e.g. 00700.HK">
+    </div>
+
+    <div class="form-group">
+      <label for="op-type">Type</label>
+      <select id="op-type">
+        <option value="Stocks">Stocks</option>
+        <option value="Funds">Funds</option>
+        <option value="Fixed Income">Fixed Income</option>
+        <option value="Options">Options</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label for="op-qty">Quantity</label>
+      <input id="op-qty" type="number" step="any">
+    </div>
+
+    <div class="form-group">
+      <label for="op-price">Price</label>
+      <input id="op-price" type="number" step="any">
+    </div>
+
+    <div class="form-group">
+      <label for="op-amount">Native Amount</label>
+      <input id="op-amount" type="number" step="any">
+    </div>
+
+    <div class="form-group">
+      <label for="op-currency">Currency</label>
+      <input id="op-currency" type="text" value="CAD">
+    </div>
+
+    <div class="form-group">
+      <label for="op-cad-amount">CAD Amount</label>
+      <input id="op-cad-amount" type="number" step="any">
+    </div>
+
+    <div class="form-group">
+      <label for="op-comm">Commission</label>
+      <input id="op-comm" type="number" step="any" value="0">
+    </div>
+
+    <div class="form-group">
+      <label for="op-description">Description</label>
+      <input id="op-description" type="text" value="OPENING POSITION">
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal('modal-opening-position')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveOpeningPositionFromModal()">Save</button>
+    </div>
+  </div>
+</div>    
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -4060,6 +4182,329 @@ function renderFundsControls() {
         </div>
     `;
 }
+
+function toNum(v) {
+  var s = String(v == null ? '' : v).replace(/,/g, '').trim();
+  var n = parseFloat(s);
+  return isFinite(n) ? n : 0;
+}
+
+function isBuyTrade(t) {
+  return String((t && t.action) || '').trim().toLowerCase().includes('buy');
+}
+
+function isSellTrade(t) {
+  return String((t && t.action) || '').trim().toLowerCase().includes('sell');
+}
+
+function getTradesForAccountSymbol(account, symbol) {
+  var acct = String(account || '').trim();
+  var sym = String(symbol || '').trim().toUpperCase();
+
+  return (allTrades || [])
+    .filter(function(t) {
+      return String(t.account || '').trim() === acct &&
+             String(t.symbol || '').trim().toUpperCase() === sym;
+    })
+    .slice()
+    .sort(function(a, b) {
+      return new Date(a.date) - new Date(b.date);
+    });
+}
+
+function getOpeningPositionSuggestion(account, symbol) {
+  var trades = getTradesForAccountSymbol(account, symbol);
+  if (!trades.length) return null;
+
+  var runningQty = 0;
+  var firstProblemSell = null;
+  var firstSeenTrade = trades[0];
+  var lastKnownBuyPrice = 0;
+  var lastKnownCurrency = '';
+  var lastKnownType = '';
+  var lastKnownDescription = '';
+
+  for (var i = 0; i < trades.length; i++) {
+    var t = trades[i];
+    var qty = Math.abs(toNum(t.quantity));
+
+    if (isBuyTrade(t)) {
+      runningQty += qty;
+      if (toNum(t.price) > 0) lastKnownBuyPrice = toNum(t.price);
+      if (t.currency) lastKnownCurrency = String(t.currency).trim().toUpperCase();
+      if (t.type) lastKnownType = t.type;
+      if (t.description) lastKnownDescription = t.description;
+    } else if (isSellTrade(t)) {
+      if (runningQty + 1e-8 < qty) {
+        firstProblemSell = t;
+        break;
+      }
+      runningQty -= qty;
+    }
+  }
+
+  if (!firstProblemSell) return null;
+
+  var sellQty = Math.abs(toNum(firstProblemSell.quantity));
+  var missingQty = Math.max(0, sellQty - Math.max(0, runningQty));
+
+  var suggestionDate = firstSeenTrade && firstSeenTrade.date
+    ? firstSeenTrade.date
+    : firstProblemSell.date;
+
+  var fallbackPrice = toNum(firstProblemSell.price);
+  var usePrice = lastKnownBuyPrice > 0 ? lastKnownBuyPrice : fallbackPrice;
+
+  return {
+    account: String(account || '').trim(),
+    symbol: String(symbol || '').trim().toUpperCase(),
+    date: suggestionDate,
+    quantity: missingQty > 0 ? missingQty : sellQty,
+    price: usePrice > 0 ? usePrice : '',
+    amount: (missingQty > 0 && usePrice > 0) ? (missingQty * usePrice) : '',
+    currency: lastKnownCurrency || String(firstProblemSell.currency || 'CAD').trim().toUpperCase(),
+    type: lastKnownType || firstProblemSell.type || 'Stocks',
+    description: lastKnownDescription || 'OPENING POSITION',
+    basedOnSellDate: firstProblemSell.date || '',
+    basedOnSellQty: sellQty
+  };
+}
+
+function getOpeningPositionFx(currency, cadAmount, amount) {
+  var curr = String(currency || 'CAD').trim().toUpperCase();
+  if (curr === 'CAD') return 1;
+
+  var cad = parseFloat(cadAmount || 0);
+  var amt = parseFloat(amount || 0);
+
+  if (amt && cad) return Math.abs(cad / amt);
+  return 1;
+}
+
+function addOpeningPosition(row) {
+  var q = Math.abs(parseFloat(row.quantity || 0));
+  var p = parseFloat(row.price || 0);
+  var amt = parseFloat(row.amount || (q * p) || 0);
+  var fx = getOpeningPositionFx(row.currency, row.cadAmount, amt);
+  var cadAmt = parseFloat(row.cadAmount || (amt * fx) || 0);
+
+  if (!row.date) throw new Error('Date is required');
+  if (!row.account) throw new Error('Account is required');
+  if (!row.symbol) throw new Error('Symbol is required');
+  if (!(q > 0)) throw new Error('Quantity must be greater than 0');
+  if (!(p >= 0)) throw new Error('Price must be 0 or greater');
+
+  var trade = {
+    date: row.date,
+    account: String(row.account).trim(),
+    action: 'Buy',
+    symbol: String(row.symbol).trim().toUpperCase(),
+    quantity: q,
+    price: p,
+    amount: amt,
+    currency: String(row.currency || 'CAD').trim().toUpperCase(),
+    cadAmount: cadAmt,
+    exchRate: fx,
+    comm: Math.abs(parseFloat(row.comm || 0)),
+    type: row.type || 'Stocks',
+    description: row.description || 'OPENING POSITION',
+    source: 'OPENING_LOT'
+  };
+
+  var duplicate = (allTrades || []).some(function(t) {
+    return String(t.account || '').trim() === trade.account &&
+           String(t.symbol || '').trim().toUpperCase() === trade.symbol &&
+           fmtDate(t.date) === trade.date &&
+           String(t.action || '').trim().toLowerCase() === 'buy' &&
+           Math.abs(toNum(t.quantity) - trade.quantity) < 0.00000001 &&
+           Math.abs(toNum(t.price) - trade.price) < 0.00000001 &&
+           String(t.source || '').trim() === 'OPENING_LOT';
+  });
+
+  if (duplicate) {
+    throw new Error('A matching opening position already exists for this account, symbol, date, quantity, and price.');
+  }
+
+  allTrades.push(trade);
+  allTrades.sort(function(a, b) {
+    return new Date(a.date) - new Date(b.date);
+  });
+
+  saveLocal();
+  updateFilterOptions();
+  updateFilterDropdowns();
+  renderPortfolio();
+  renderTradesTable();
+}
+
+function saveOpeningPositionFromModal() {
+  try {
+    addOpeningPosition({
+      date: id('op-date').value,
+      account: id('op-account').value,
+      symbol: id('op-symbol').value,
+      quantity: id('op-qty').value,
+      price: id('op-price').value,
+      amount: id('op-amount').value,
+      currency: id('op-currency').value,
+      cadAmount: id('op-cad-amount').value,
+      comm: id('op-comm').value,
+      type: id('op-type').value,
+      description: id('op-description').value
+    });
+
+    closeModal('modal-opening-position');
+    alert('Opening position added.');
+  } catch (err) {
+    console.error('saveOpeningPositionFromModal error', err);
+    alert(err.message || 'Failed to add opening position.');
+  }
+}
+
+function openOpeningPositionModal(account, symbol) {
+  var today = new Date().toISOString().slice(0, 10);
+  var suggestion = null;
+
+  if (account && symbol) {
+    suggestion = getOpeningPositionSuggestion(account, symbol);
+  }
+
+  if (id('op-date')) id('op-date').value = (suggestion && suggestion.date) || today;
+  if (id('op-account')) id('op-account').value = (suggestion && suggestion.account) || account || '';
+  if (id('op-symbol')) id('op-symbol').value = (suggestion && suggestion.symbol) || symbol || '';
+  if (id('op-qty')) id('op-qty').value = (suggestion && suggestion.quantity) || '';
+  if (id('op-price')) id('op-price').value = (suggestion && suggestion.price) || '';
+  if (id('op-amount')) id('op-amount').value = (suggestion && suggestion.amount) || '';
+  if (id('op-currency')) id('op-currency').value = (suggestion && suggestion.currency) || 'CAD';
+  if (id('op-cad-amount')) id('op-cad-amount').value = '';
+  if (id('op-comm')) id('op-comm').value = '0';
+  if (id('op-type')) id('op-type').value = (suggestion && suggestion.type) || 'Stocks';
+  if (id('op-description')) id('op-description').value = (suggestion && suggestion.description) || 'OPENING POSITION';
+
+  if (id('op-hint')) {
+    if (suggestion) {
+      id('op-hint').innerHTML =
+        'Suggested from first unmatched sell: <strong>' + esc(suggestion.symbol) + '</strong> in ' +
+        esc(suggestion.account) + ' on ' + esc(suggestion.basedOnSellDate) +
+        ' for qty ' + esc(fmt(suggestion.basedOnSellQty || 0, 4)) + '. Review before saving.';
+    } else if (account && symbol) {
+      id('op-hint').textContent =
+        'No automatic suggestion found for this symbol. Enter the opening lot manually.';
+    } else {
+      id('op-hint').textContent =
+        'Enter an opening lot when earlier buy history is missing.';
+    }
+  }
+
+  openModal('modal-opening-position');
+}
+
+function createSuggestedOpeningPosition(account, symbol) {
+  try {
+    var suggestion = getOpeningPositionSuggestion(account, symbol);
+
+    if (!suggestion) {
+      alert('No opening-position suggestion could be created for ' + symbol + ' in ' + account + '.');
+      return;
+    }
+
+    addOpeningPosition({
+      date: suggestion.date,
+      account: suggestion.account,
+      symbol: suggestion.symbol,
+      quantity: suggestion.quantity,
+      price: suggestion.price || 0,
+      amount: suggestion.amount || 0,
+      currency: suggestion.currency || 'CAD',
+      cadAmount: '',
+      comm: 0,
+      type: suggestion.type || 'Stocks',
+      description: (suggestion.description || 'OPENING POSITION') + ' [AUTO]'
+    });
+
+    alert(
+      'Suggested opening position created for ' +
+      suggestion.symbol + ' in ' + suggestion.account +
+      ' with qty ' + fmt(suggestion.quantity || 0, 4) + '.'
+    );
+  } catch (err) {
+    console.error('createSuggestedOpeningPosition error', err);
+    alert(err.message || 'Failed to create suggested opening position.');
+  }
+}
+
+function buildLotGapBannerHtml(positions) {
+  var rows = [];
+
+  Object.keys(positions || {}).forEach(function(key) {
+    var pos = positions[key];
+    if (!pos || !pos.hasLotGap || !pos.lotGapWarnings || !pos.lotGapWarnings.length) return;
+
+    pos.lotGapWarnings.forEach(function(w) {
+      rows.push({
+        symbol: pos.symbol || w.symbol || '',
+        account: pos.account || w.account || '',
+        date: w.date || '',
+        type: w.type || 'MISSING_OPENING_LOTS',
+        missingQty: parseFloat(w.missingQty || 0),
+        sellQty: parseFloat(w.sellQty || 0),
+        currentQty: parseFloat(w.currentQty || 0)
+      });
+    });
+  });
+
+  if (!rows.length) return '';
+
+  var seen = {};
+  rows = rows.filter(function(r) {
+    var k = [r.account, r.symbol, r.date, r.type, r.missingQty, r.sellQty, r.currentQty].join('|');
+    if (seen[k]) return false;
+    seen[k] = true;
+    return true;
+  });
+
+  rows.sort(function(a, b) {
+    if (a.account !== b.account) return String(a.account).localeCompare(String(b.account));
+    if (a.symbol !== b.symbol) return String(a.symbol).localeCompare(String(b.symbol));
+    return String(a.date).localeCompare(String(b.date));
+  });
+
+  var listHtml = rows.map(function(r) {
+    var detail = '';
+    if (r.type === 'MISSING_OPENING_LOTS') {
+      detail = 'missing qty ' + fmt(r.missingQty || 0, 4) + ' on sell ' + fmt(r.sellQty || 0, 4);
+    } else if (r.type === 'INSUFFICIENT_POSITION_QTY') {
+      detail = 'position qty ' + fmt(r.currentQty || 0, 4) + ', attempted sell ' + fmt(r.sellQty || 0, 4);
+    } else {
+      detail = r.type;
+    }
+
+    return '<li style="display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;">' +
+      '<span><strong>' + esc(r.symbol) + '</strong> — ' +
+      esc(r.account) + ' — ' +
+      esc(r.date) + ' — ' +
+      esc(detail) + '</span>' +
+      '<span style="display:flex;gap:8px;flex-wrap:wrap;">' +
+        '<button class="btn btn-warning" onclick="createSuggestedOpeningPosition(' +
+          JSON.stringify(r.account) + ',' + JSON.stringify(r.symbol) +
+        ')">Auto Create</button>' +
+        '<button class="btn btn-secondary" onclick="openOpeningPositionModal(' +
+          JSON.stringify(r.account) + ',' + JSON.stringify(r.symbol) +
+        ')">Review</button>' +
+      '</span>' +
+    '</li>';
+  }).join('');
+
+  return '' +
+    '<div class="lot-gap-banner">' +
+      '<h4>Opening lots required</h4>' +
+      '<p>Some sells could not be matched to prior buys. Add opening positions or import earlier history before relying on portfolio cost basis and realized gain/loss.</p>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">' +
+        '<button class="btn btn-warning" onclick="openOpeningPositionModal()">Add Opening Position Manually</button>' +
+      '</div>' +
+      '<ul class="lot-gap-list">' + listHtml + '</ul>' +
+    '</div>';
+}
     
 function renderPortfolio() {
     const container = document.getElementById('port-table-wrap');
@@ -4105,33 +4550,79 @@ sortedTrades.forEach(function(t) {
             positions[key].acbTotalCost += cost;
             positions[key].qty += q;
         } else if (act.includes('sell')) {
-            if (positions[key].qty > 0) {
-                var rem = q;
-                while (rem > 0 && positions[key].fifoLots.length > 0) {
-                    var oldest = positions[key].fifoLots[0];
-                    if (oldest.q <= rem) {
-                        rem -= oldest.q;
-                        positions[key].fifoLots.shift();
-                    } else {
-                        oldest.c -= (oldest.c * (rem / oldest.q));
-                        oldest.q -= rem;
-                        rem = 0;
-                    }
-                }
-                var currentAvg = positions[key].acbTotalCost / positions[key].qty;
-                positions[key].acbTotalCost -= (currentAvg * q);
-                positions[key].qty -= q;
-            }
-        }
+            else if (act.includes('sell')) {
+  const sellQty = q;
+  const pos = positions[key];
 
-        if (Math.abs(positions[key].qty) < 0.0001) {
-            positions[key].qty = 0;
-            positions[key].fifoLots = [];
-            positions[key].acbTotalCost = 0;
-        }
-
-        positions[key].exchRate = t.exchRate || positions[key].exchRate;
+  if ((pos.qty || 0) + 1e-8 < sellQty) {
+    console.warn('SELL WARN: quantity exceeds current position', {
+      trade: t,
+      currentQty: pos.qty || 0,
+      sellQty: sellQty
     });
+    pos.hasLotGap = true;
+    pos.lotGapWarnings = pos.lotGapWarnings || [];
+    pos.lotGapWarnings.push({
+      type: 'INSUFFICIENT_POSITION_QTY',
+      date: t.date,
+      symbol: t.symbol,
+      account: t.account,
+      currentQty: pos.qty || 0,
+      sellQty: sellQty
+    });
+    continue;
+  }
+
+  let rem = sellQty;
+  let fifoCostMatched = 0;
+  const lotsSnapshot = (pos.fifoLots || []).map(l => ({ q: l.q, c: l.c }));
+
+  while (rem > 1e-8 && lotsSnapshot.length > 0) {
+    const oldest = lotsSnapshot[0];
+    const takeQty = Math.min(oldest.q, rem);
+    const unitCost = oldest.q ? (oldest.c / oldest.q) : 0;
+
+    fifoCostMatched += takeQty * unitCost;
+    oldest.q -= takeQty;
+    oldest.c -= takeQty * unitCost;
+    rem -= takeQty;
+
+    if (oldest.q <= 1e-8) lotsSnapshot.shift();
+  }
+
+  if (rem > 1e-8) {
+    console.warn('SELL WARN: missing opening lots', {
+      trade: t,
+      symbol: t.symbol,
+      account: t.account,
+      missingQty: rem
+    });
+
+    pos.hasLotGap = true;
+    pos.lotGapWarnings = pos.lotGapWarnings || [];
+    pos.lotGapWarnings.push({
+      type: 'MISSING_OPENING_LOTS',
+      date: t.date,
+      symbol: t.symbol,
+      account: t.account,
+      missingQty: rem,
+      sellQty: sellQty
+    });
+    continue;
+  }
+
+  pos.fifoLots = lotsSnapshot;
+
+  const currentAvg = pos.qty > 0 ? (pos.acbTotalCost / pos.qty) : 0;
+  pos.acbTotalCost -= currentAvg * sellQty;
+  pos.qty -= sellQty;
+
+  if (Math.abs(pos.qty) < 0.0001) {
+    pos.qty = 0;
+    pos.fifoLots = [];
+    pos.acbTotalCost = 0;
+  }
+});
 
     // 2. CASH BALANCE ROWS FOR FUNDS SECTION
     buildCashLedger().forEach(function(t) {
@@ -4175,7 +4666,22 @@ sortedTrades.forEach(function(t) {
     });
 
     document.getElementById('port-table-wrap').innerHTML = '';
-    let html = '';
+     var lotGapBannerHtml = buildLotGapBannerHtml(positions);
+
+var html = '';
+
+html += '<div class="portfolio-toolbar">';
+html += '  <div class="portfolio-toolbar-left">';
+html += '    <button class="btn btn-warning" onclick="openOpeningPositionModal()">Add Opening Position</button>';
+html += '  </div>';
+html += '  <div class="portfolio-toolbar-right"></div>';
+html += '</div>';
+
+html += lotGapBannerHtml;
+
+/* then continue with your existing portfolio table/cards HTML */
+    
+    // let html = '';
 
     var fundsSet = 0;
     
