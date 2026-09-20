@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.4">
+    <meta name="version" content="5.2.5">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1050,6 +1050,7 @@ function syncData() {
         allInterest = cloudData.interest || cloudData.Interest || [];
         
         saveLocal();
+        loadSubPortfolios();
         updateFilterOptions();
         updateFilterDropdowns();
         attachFilterListeners();
@@ -1480,11 +1481,39 @@ function updateTradeCurrencyDropdown() {
     dropdown.value = currentVal; // Maintain selection
 }
 
-var subPortfolios = JSON.parse(localStorage.getItem('ibkr_subportfolios') || '{}');
-var subPortfolioFilter = 'ALL'; // 'ALL' or a sub-portfolio name
+var subPortfolios = {}; // loaded from Google Sheets on sync
+var subPortfolioFilter = 'ALL';
 
-function saveSubPortfolios() {
-  localStorage.setItem('ibkr_subportfolios', JSON.stringify(subPortfolios));
+async function saveSubPortfolios() {
+  if (!GAS_URL) {
+    alert('Please configure Google Sheets URL in Settings first.');
+    return;
+  }
+  try {
+    const response = await fetch(GAS_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'saveSubPortfolios', subPortfolios: subPortfolios })
+    });
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error || 'Save failed');
+    console.log('Sub-portfolios saved to Sheets:', result);
+  } catch (err) {
+    console.error('saveSubPortfolios error:', err);
+    alert('Failed to save sub-portfolios to Google Sheets. Check console for details.');
+  }
+}
+
+async function loadSubPortfolios() {
+  if (!GAS_URL) return;
+  try {
+    const response = await fetch(GAS_URL + '?action=getSubPortfolios', { method: 'GET' });
+    const result = await response.json();
+    subPortfolios = result || {};
+    updateSubPortfolioSelectors();
+    console.log('Sub-portfolios loaded from Sheets:', subPortfolios);
+  } catch (err) {
+    console.error('loadSubPortfolios error:', err);
+  }
 }
 
 function getAllKnownSymbols() {
@@ -1525,23 +1554,23 @@ function loadSubPortfolioIntoEditor(name) {
   document.querySelectorAll('.sp-stock-cb').forEach(function(cb) { cb.checked = symbols.indexOf(cb.value) >= 0; });
 }
 
-function saveSubPortfolio() {
+async function saveSubPortfolio() {
   var name = document.getElementById('sp-name-input').value.trim();
   if (!name) return alert('Please enter a sub-portfolio name.');
   var selected = Array.from(document.querySelectorAll('.sp-stock-cb:checked')).map(function(cb) { return cb.value; });
   if (!selected.length) return alert('Please select at least one stock.');
   subPortfolios[name] = selected;
-  saveSubPortfolios();
+  await saveSubPortfolios();
   updateSubPortfolioSelectors();
   closeModal('modal-subportfolio');
 }
 
-function deleteCurrentSubPortfolio() {
+async function deleteCurrentSubPortfolio() {
   var name = document.getElementById('sp-name-input').value.trim();
   if (!name || !subPortfolios[name]) return alert('No matching sub-portfolio to delete.');
   if (!confirm('Delete sub-portfolio "' + name + '"?')) return;
   delete subPortfolios[name];
-  saveSubPortfolios();
+  await saveSubPortfolios();
   updateSubPortfolioSelectors();
   closeModal('modal-subportfolio');
 }
@@ -5362,6 +5391,7 @@ window.addEventListener('load', function() {
         if (autoSync) {
             syncData();
         }
+        loadSubPortfolios();
     }
 
     // Load prices from cache immediately for instant UI populating
