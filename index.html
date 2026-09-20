@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.5">
+    <meta name="version" content="5.2.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2612,6 +2612,7 @@ const realized = realizedRows.reduce((sum, r) => {
     
   const unrealized = unrealizedCorrect;
   const dividends = num(totals.dividends, 0);
+  const interestIncome = num(totals.interest, 0);
 
 console.log('Realized alignment debug', {
   perfAccount,
@@ -2692,7 +2693,7 @@ const unusedCashForACB = (subPortfolioFilter === 'ALL')
   : 0;
     
   const priceReturn = round2(realized + unrealized);
-   const incomeReturn = num(totals.incomeReturn, 0);
+   const incomeReturn = round2(dividends + interestIncome);
      const totalReturn = round2(priceReturn + incomeReturn - fees);
  // const twrPct = twrResult.twr * 100;
 
@@ -2741,10 +2742,10 @@ const childY = 164;
 const childW = 68, childGap = 8;
 
 // Total Return's 4 children, centered under leftCenter
-const trChildTotalW = 4 * childW + 3 * childGap;
+const trChildTotalW = trChildData.length * childW + (trChildData.length - 1) * childGap;
 const trChildStartX = leftCenter - trChildTotalW / 2;
-const trChildXs = [0, 1, 2, 3].map(function(i) { return trChildStartX + i * (childW + childGap); });
-
+const trChildXs = trChildData.map(function(_, i) { return trChildStartX + i * (childW + childGap); });
+    
 // Net Contributions' 2 children, centered under rightCenter
 const ncChildTotalW = 2 * childW + childGap;
 const ncChildStartX = rightCenter - ncChildTotalW / 2;
@@ -2775,6 +2776,7 @@ const trChildData = [
   { label: 'Realized', val: realized },
   { label: 'Unrealized', val: unrealized },
   { label: 'Dividends', val: dividends },
+  { label: 'Interest', val: interestIncome },
   { label: 'Fees', val: -Math.abs(fees) }
 ];
 trChildData.forEach(function(c, i) {
@@ -2828,10 +2830,10 @@ function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedR
   const acctFilter = String(perfAccount || 'ALL').trim();
   const yearMap = {}; // year -> { realized, dividends, fees, unrealized }
 
-  function ensureYear(y) {
-    if (!yearMap[y]) yearMap[y] = { realized: 0, dividends: 0, fees: 0, unrealized: 0 };
-    return yearMap[y];
-  }
+function ensureYear(y) {
+  if (!yearMap[y]) yearMap[y] = { realized: 0, dividends: 0, interest: 0, fees: 0, unrealized: 0 };
+  return yearMap[y];
+}
 
   // Realized G/L by year (already account/date filtered upstream, but re-check bounds here)
   realizedRows.forEach(function(r) {
@@ -2862,6 +2864,17 @@ function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedR
     }
   });
 
+(perfData.interest || []).forEach(function(r) {
+  const acct = String(r.account || '').trim();
+  const rowDate = fmtDate(r.date);
+  if (acctFilter !== 'ALL' && acct !== acctFilter) return;
+  if (startDate && rowDate < startDate) return;
+  if (endDate && rowDate > endDate) return;
+  const y = rowDate ? rowDate.slice(0, 4) : 'Unknown'; // or .slice(0,7) for monthly
+  const cadAmt = num(r.cadAmount, num(r.amount, 0) * num(r.exchRate, 1));
+  ensureYear(y).interest += cadAmt;
+});
+
   // Fees by year (trade commissions, CAD-converted)
   (perfData.trades || []).forEach(function(t) {
     const acct = String(t.account || '').trim();
@@ -2886,6 +2899,7 @@ function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedR
     return {
       year: y,
       dividends: round2(row.dividends),
+      interest: round2(row.interest),
       realized: round2(row.realized),
       unrealized: round2(row.unrealized),
       fees: round2(row.fees)
@@ -2959,6 +2973,7 @@ function renderPerfAnnualChart(rows) {
   const componentOptions = [
     { key: 'ALL', label: 'All' },
     { key: 'dividends', label: 'Dividends' },
+    { key: 'interest', label: 'Interest' },
     { key: 'realized', label: 'Realized G/L' },
     { key: 'unrealized', label: 'Unrealized G/L' },
     { key: 'fees', label: 'Fees' }
@@ -2987,13 +3002,14 @@ const granRadioHtml = granOptions.map(function(o) {
     
   const filteredRows = rows.map(function(r) {
     if (perfChartComponent === 'ALL') return r;
-    const out = { year: r.year, dividends: 0, realized: 0, unrealized: 0, fees: 0 };
+    const out = { year: r.year, dividends: 0, interest: 0, realized: 0, unrealized: 0, fees: 0 };
     out[perfChartComponent] = r[perfChartComponent];
     return out;
   });
 
   const colors = {
     dividends: '#81d4fa',
+    interest: '#81d4fa',
     realized: '#ffcc80',
     unrealized: '#ce93d8',
     fees: '#ef9a9a'
@@ -3065,6 +3081,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
 
     const posItems = [
       { key: 'dividends', val: Math.max(0, r.dividends) },
+      { key: 'interest', val: Math.max(0, r.interest) },
       { key: 'realized', val: Math.max(0, r.realized) },
       { key: 'unrealized', val: Math.max(0, r.unrealized) }
     ];
@@ -5460,6 +5477,7 @@ function makeEmptyLedger(baseCurrency = 'CAD') {
       realizedGain: 0,
       unrealizedGain: 0,
       dividends: 0,
+      interest: 0,
       fees: 0,
       deposits: 0,
       withdrawals: 0,
@@ -5692,6 +5710,24 @@ function applyTransferToLedger(ledger, tx) {
   ledger.totals.netContributions = round2(ledger.totals.deposits - ledger.totals.withdrawals);
 }
 
+function normalizeInterestRecord(r) {
+  const gross = num(r.amount, 0);
+  const cadAmount = num(r.cadAmount, gross * num(r.exchRate, 1));
+  return {
+    id: String(r.id || [r.date, r.account, 'INTEREST', r.amount].join('|')),
+    date: normalizeDate(r.date),
+    account: String(r.account || '').trim(),
+    currency: String(r.currency || '').trim().toUpperCase(),
+    exchRate: num(r.exchRate, 1),
+    amount: gross,
+    cadAmount
+  };
+}
+
+function applyInterestToLedger(ledger, ix) {
+  ledger.totals.interest = round2(num(ledger.totals.interest, 0) + ix.cadAmount);
+}
+    
 function updateLedgerMarketValues(ledger, livePrices) {
   Object.keys(ledger.positions).forEach(key => {
     const pos = ledger.positions[key];
@@ -5708,7 +5744,7 @@ pos.unrealizedGain = ug;
   });
 
   ledger.totals.priceReturn = round2(ledger.totals.realizedGain + ledger.totals.unrealizedGain);
-  ledger.totals.incomeReturn = round2(ledger.totals.dividends);
+  ledger.totals.incomeReturn = round2(num(ledger.totals.dividends, 0) + num(ledger.totals.interest, 0));
   ledger.totals.totalReturn = round2(
     ledger.totals.priceReturn +
     ledger.totals.incomeReturn -
@@ -5750,13 +5786,14 @@ function buildLedgerFromCurrentAppData(opts = {}) {
   const trades = sortByDateThenId((window.allTrades || []).map(normalizeTradeRecord).filter(t => t.type));
   const divs = sortByDateThenId((window.allDivs || []).map(normalizeDividendRecord));
   const transfers = sortByDateThenId((window.allTransfers || []).map(normalizeTransferRecord));
+  const interest = sortByDateThenId((window.allInterest || []).map(normalizeInterestRecord));
 
   trades.forEach(t => applyTradeToLedger(ledger, t));
   divs.forEach(d => applyDividendToLedger(ledger, d));
   transfers.forEach(t => applyTransferToLedger(ledger, t));
+  interest.forEach(ix => applyInterestToLedger(ledger, ix));
 
   updateLedgerMarketValues(ledger, livePrices);
-
   return ledger;
 }
 
