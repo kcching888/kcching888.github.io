@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.3.1">
+    <meta name="version" content="5.3.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -976,6 +976,11 @@ function setPerfChartGranularity(val) {
         if (tab === 'gainloss') renderGainLoss();
         if (tab === 'dividends') applyDivFilters();
         if (tab === 'transfers') renderTransfersTable();
+    }
+
+    function id(id) {
+       if (id.startsWith('#')) id = id.substring(1);
+       return document.getElementById(id);
     }
 
     async function loadPerformanceTab() {
