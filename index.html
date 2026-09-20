@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.18">
+    <meta name="version" content="5.2.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -19,7 +19,7 @@
         .btn-primary{background:#0f3460;color:#fff}
         .btn-primary:hover{background:#1a4a8a}
         .btn-success{background:#1a5c2a;color:#fff}
-        .btn-danger{background:#7a1a1a;color:#fff}
+        .btn-danger{background:#7a1a1a;color:#fff}const boxW = 110, boxH = 50;
         .btn-warning{background:#7a5a00;color:#fff}
         .btn-secondary.active {
             background: var(--accent, #4f98a3);
@@ -2725,13 +2725,14 @@ function perfTreeConnector(x1, y1, x2, y2) {
 
 const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
 const boxW = 110, boxH = 50;
-const treeLeftPad = 20; // extra padding so leftmost content isn't clipped
-const treeW = 760 + treeLeftPad, treeH = 260;
+const treeLeftPad = 50; // extra padding so leftmost content isn't clipped
+const treeRightPad = 20;
+const treeW = 760 + treeLeftPad + treeRightPad, treeH = 260;
 
 // Row 1: Latest Equity (top-center)
-const eqX = treeLeftPad + (treeW - treeLeftPad)/2 - boxW/2, eqY = 8;
+const eqX = treeLeftPad + (treeW - treeLeftPad - treeRightPad)/2 - boxW/2, eqY = 8;
 
-const halfW = (treeW - treeLeftPad) / 2;
+const halfW = (treeW - treeLeftPad - treeRightPad) / 2;
 const leftCenter = treeLeftPad + halfW / 2;
 const rightCenter = treeLeftPad + halfW + halfW / 2;
     
