@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.16">
+    <meta name="version" content="5.2.17">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2725,14 +2725,17 @@ function perfTreeConnector(x1, y1, x2, y2) {
 
 const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
 const boxW = 110, boxH = 50;
-const treeW = 760, treeH = 260;
+const treeLeftPad = 20; // extra padding so leftmost content isn't clipped
+const treeW = 760 + treeLeftPad, treeH = 260;
 const halfW = treeW / 2; // left half = Total Return branch, right half = Net Contributions branch
 
 // Row 1: Latest Equity (top-center)
-const eqX = treeW/2 - boxW/2, eqY = 8;
+const eqX = treeLeftPad + (treeW - treeLeftPad)/2 - boxW/2, eqY = 8;
 
-const leftCenter = halfW / 2;
-const rightCenter = halfW + halfW / 2;
+const halfW = (treeW - treeLeftPad) / 2;
+const leftCenter = treeLeftPad + halfW / 2;
+const rightCenter = treeLeftPad + halfW + halfW / 2;
+    
 const trX = leftCenter - boxW/2, trY = 100;
 const ncX = rightCenter - boxW/2, ncY = 100;
 
