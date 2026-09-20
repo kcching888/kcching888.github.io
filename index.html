@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.3">
+    <meta name="version" content="5.2.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -657,7 +657,7 @@
     var equityTableVisible = true;
     var equityTableRows = 60;
 
-    var perfRange = '1Y';
+    var perfRange = 'ALL';
     var perfTableVisible = true;
 
     var perfAccount = 'ALL';
@@ -3095,10 +3095,18 @@ wrap.innerHTML = `
     <div>${granRadioHtml}</div>
   </div>
   <div style="margin-bottom:10px;">${legendHtml}</div>
-  <div style="overflow-x:auto; overflow-y:hidden; border:1px solid #2a2f45; border-radius:6px;">
+  <div id="perf-chart-scroll" style="overflow-x:auto; overflow-y:hidden; border:1px solid #2a2f45; border-radius:6px;">
     ${svg}
   </div>
 `;
+
+// Scroll to rightmost (most recent period) after rendering
+const scrollWrap = document.getElementById('perf-chart-scroll');
+if (scrollWrap) {
+  requestAnimationFrame(function() {
+    scrollWrap.scrollLeft = scrollWrap.scrollWidth;
+  });
+}
 }
 
     
