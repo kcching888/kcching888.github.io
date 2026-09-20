@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.12">
+    <meta name="version" content="5.2.13">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -227,7 +227,7 @@
   <div id="perf-annual-chart-wrap" style="flex:6; min-width:420px;"></div>
    <div style="flex:4; min-width:320px; background:#0f3460; border-radius:8px; padding:14px; display:flex; flex-direction:column;">
   <h3 style="margin:0 0 10px 0; color:#e94560; font-size:1.05em;">Summary</h3>
-  <div id="perf-stats" style="display:flex; flex-direction:column; overflow-y:auto;"></div>
+  <div id="perf-stats" style="display:flex; flex-direction:column; overflow-y:auto; width:100%;"></div>
 </div>
 </div>
     <div id="equity-drawdown-wrap" class="funds-container" style="margin-top:16px"></div>
@@ -2725,7 +2725,7 @@ function perfTreeConnector(x1, y1, x2, y2) {
 
 const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
 const boxW = 110, boxH = 50;
-const treeW = 680, treeH = 260;
+const treeW = 760, treeH = 260;
 const halfW = treeW / 2; // left half = Total Return branch, right half = Net Contributions branch
 
 // Row 1: Latest Equity (top-center)
@@ -2757,7 +2757,7 @@ const ncChildTotalW = 2 * childW + childGap;
 const ncChildStartX = rightCenter - ncChildTotalW / 2;
 const ncChildXs = [0, 1].map(function(i) { return ncChildStartX + i * (childW + childGap); });
 
-let treeSvg = '<svg viewBox="0 0 ' + treeW + ' ' + treeH + '" style="width:100%; height:auto;">';
+let treeSvg = '<svg viewBox="0 0 ' + treeW + ' ' + treeH + '" preserveAspectRatio="xMidYMid meet" style="width:100%; height:auto; display:block;">';
 
 // Connectors: Equity -> Total Return, Equity -> Net Contributions
 treeSvg += perfTreeConnector(eqX + boxW/2, eqY + boxH, trX + boxW/2, trY);
@@ -2794,7 +2794,7 @@ ncChildData.forEach(function(c, i) {
 
 treeSvg += '</' + 'svg>';
 
-const treeHtml = '<div style="text-align:center;">' + treeSvg + '</div>';
+const treeHtml = '<div style="text-align:center; overflow:visible; width:100%;">' + treeSvg + '</div>';
 const remainingCards = [
   { label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' },
   { label: 'Benchmark Return', value: perfBenchmark === 'NONE' ? 'N/A' : fmt(benchmarkPct, 2) + '%', cls: perfBenchmark === 'NONE' ? '' : (benchmarkPct >= 0 ? 'pos-gain' : 'pos-loss') },
@@ -2807,10 +2807,10 @@ const remainingHtml = remainingCards.map(function(c) {
 }).join('');
 
 document.getElementById('perf-stats').innerHTML = `
-  <div style="background:#0f1720; border-radius:6px; padding:10px; margin-bottom:10px;">
+  <div style="background:#0f1720; border-radius:6px; padding:10px; margin-bottom:10px; width:100%; box-sizing:border-box;">
     ${treeHtml}
   </div>
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; width:100%; box-sizing:border-box;">
     ${remainingHtml}
   </div>
 `;
@@ -3059,35 +3059,54 @@ const margin = { top: 30, right: 20, bottom: 40, left: 70 };
   const zeroY = margin.top + innerH * (niceMax / range);
   function yPos(v) { return zeroY - (v / range) * innerH; }
 
-  const bandW = innerW / filteredRows.length;
-  const barW = Math.min(60, bandW * 0.55);
+  const scrollInnerW = scrollableW - margin.right - scrollMarginLeft;
+const bandW = scrollInnerW / filteredRows.length;
+const barW = Math.min(60, bandW * 0.55);
 
- let svg = `<svg viewBox="0 0 ${width} ${height}" style="width:${width}px; height:auto; max-height:380px; display:block;">`;
+ const axisW = margin.left + 10; // fixed axis panel width
+const scrollableW = width - margin.left; // scrollable panel width (bars + right margin)
 
-  svg += `<line x1="${margin.left}" y1="${zeroY}" x2="${margin.left + innerW}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
-  svg += `<line x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
+// Fixed Y-axis panel (never scrolls)
+let axisSvg = `<svg viewBox="0 0 ${axisW} ${height}" style="width:${axisW}px; height:auto; max-height:380px; display:block; flex-shrink:0;">`;
+axisSvg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
 const steps = 4;
 let stepSize = niceCeil(Math.max(niceMax, Math.abs(niceMin)) / steps);
-if (!stepSize || stepSize <= 0) stepSize = 1; // guard against infinite loop when all values are zero
+if (!stepSize || stepSize <= 0) stepSize = 1;
 let iterGuard1 = 0;
 for (let v = stepSize; v <= niceMax && iterGuard1 < 1000; v += stepSize, iterGuard1++) {
     const y = yPos(v);
-    svg += `<line x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
-    svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
-  }
-
+    axisSvg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#c5cae9">${fmt(v, 0)}</text>`;
+}
 let iterGuard2 = 0;
 for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGuard2++) {
     const y = yPos(v);
-    svg += `<line x1="${margin.left}" y1="${y}" x2="${margin.left + innerW}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
-    svg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="10" fill="#c5cae9">${fmt(v, 0)}</text>`;
-  }
+    axisSvg += `<text x="${margin.left - 8}" y="${y + 4}" text-anchor="end" font-size="12" fill="#c5cae9">${fmt(v, 0)}</text>`;
+}
+axisSvg += `<text x="${margin.left - 8}" y="${zeroY + 4}" text-anchor="end" font-size="12" fill="#c5cae9">0</text>`;
+axisSvg += `</svg>`;
+
+// Scrollable panel: bars, gridlines, zero line, x-axis labels (margin.left shifted to 10 within this panel)
+const scrollMarginLeft = 10;
+let svg = `<svg viewBox="0 0 ${scrollableW} ${height}" style="width:${scrollableW}px; height:auto; max-height:380px; display:block;">`;
+
+svg += `e x1="0" y1="${zeroY}" x2="${scrollableW - margin.right}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
+
+let iterGuard1b = 0;
+for (let v = stepSize; v <= niceMax && iterGuard1b < 1000; v += stepSize, iterGuard1b++) {
+    const y = yPos(v);
+    svg += `e x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+}
+let iterGuard2b = 0;
+for (let v = -stepSize; v >= niceMin && iterGuard2b < 1000; v -= stepSize, iterGuard2b++) {
+    const y = yPos(v);
+    svg += `e x1="0" y1="${y}" x2="${scrollableW - margin.right}" y2="${y}" stroke="#4d5670" stroke-width="1" stroke-dasharray="3 3"/>`;
+}
 
   const minSegHeightForLabel = 14;
 
   filteredRows.forEach(function(r, i) {
-    const cx = margin.left + bandW * i + bandW / 2;
+    const cx = scrollMarginLeft + bandW * i + bandW / 2;
     let posStack = 0, negStack = 0;
 
     const posItems = [
@@ -3129,8 +3148,8 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
     const topY = Math.min(yPos(posStack), yPos(negStack));
     const netY = topY - 8;
     svg += `<text x="${cx}" y="${netY}" text-anchor="middle" font-size="11" font-weight="bold" fill="${net>=0?'#4caf50':'#f44336'}">${fmt(net, 0)}</text>`;
-    const labelFontSize = filteredRows.length > 12 ? 8 : 12;
-    svg += `<text x="${cx}" y="${margin.top + innerH + 20}" text-anchor="middle" font-size="${labelFontSize}" fill="#e8eaf6">${esc(r.year)}</text>`;
+    const labelFontSize = filteredRows.length > 12 ? 11 : 14;
+    svg += `<text x="${cx}" y="${margin.top + innerH + 22}" text-anchor="middle" font-size="${labelFontSize}" fill="#e8eaf6">${esc(r.year)}</text>`;
   });
 
   svg += `</svg>`;
@@ -3152,12 +3171,14 @@ wrap.innerHTML = `
     <div>${granRadioHtml}</div>
   </div>
   <div style="margin-bottom:10px;">${legendHtml}</div>
-  <div id="perf-chart-scroll" style="overflow-x:auto; overflow-y:hidden; border:1px solid #2a2f45; border-radius:6px;">
-    ${svg}
+  <div style="display:flex; border:1px solid #2a2f45; border-radius:6px; overflow:hidden;">
+    ${axisSvg}
+    <div id="perf-chart-scroll" style="overflow-x:auto; overflow-y:hidden;">
+      ${svg}
+    </div>
   </div>
 `;
 
-// Scroll to rightmost (most recent period) after rendering
 const scrollWrap = document.getElementById('perf-chart-scroll');
 if (scrollWrap) {
   requestAnimationFrame(function() {
