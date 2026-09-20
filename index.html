@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.7">
+    <meta name="version" content="5.2.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3127,7 +3127,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
   svg += `</svg>`;
 
   const legendHtml = Object.keys(colors).map(function(k) {
-    const label = k === 'dividends' ? 'Dividends' : k === 'realized' ? 'Realized G/L' : k === 'unrealized' ? 'Unrealized G/L' : 'Fees';
+    const label = k === 'dividends' ? 'Dividends' : k === 'interest' ? 'Interest' : k === 'realized' ? 'Realized G/L' : k === 'unrealized' ? 'Unrealized G/L' : 'Fees';
     return `<span style="display:inline-flex; align-items:center; gap:6px; margin-right:16px;">
       <span style="display:inline-block; width:12px; height:12px; background:${colors[k]}; border-radius:2px;"></span>
       <span style="font-size:12px; color:#ccc;">${label}</span>
