@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.19">
+    <meta name="version" content="5.2.20">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2901,11 +2901,11 @@ function ensureYear(y) {
     const row = yearMap[y];
     return {
       year: y,
-      dividends: round2(row.dividends),
-      interest: round2(row.interest),
-      realized: round2(row.realized),
-      unrealized: round2(row.unrealized),
-      fees: round2(row.fees)
+      dividends: Math.round(row.dividends),
+    interest: Math.round(row.interest),
+    realized: Math.round(row.realized),
+    unrealized: Math.round(row.unrealized),
+    fees: Math.round(row.fees)
     };
   });
 }
@@ -3122,7 +3122,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2b < 1000; v -= stepSize, iterG
       const y1 = yPos(posStack);
       const y2 = yPos(posStack + item.val);
       const segH = y1 - y2;
-      svg += `<rect x="${cx - barW/2}" y="${y2}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val)}</title></rect>`;
+      svg += `<rect x="${cx - barW/2}" y="${y2}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val, 0)}</title></rect>`;
       if (segH >= minSegHeightForLabel) {
         svg += `<text x="${cx}" y="${(y1+y2)/2 + 4}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${fmt(item.val, 0)}</text>`;
       }
@@ -3139,7 +3139,7 @@ for (let v = -stepSize; v >= niceMin && iterGuard2b < 1000; v -= stepSize, iterG
       const y1 = yPos(negStack);
       const y2 = yPos(negStack + item.val);
       const segH = y2 - y1;
-      svg += `<rect x="${cx - barW/2}" y="${y1}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val)}</title></rect>`;
+      svg += `<rect x="${cx - barW/2}" y="${y1}" width="${barW}" height="${segH}" fill="${colors[item.key]}" opacity="0.9"><title>${item.key}: ${fmt(item.val, 0)}</title></rect>`;
       if (segH >= minSegHeightForLabel) {
         svg += `<text x="${cx}" y="${(y1+y2)/2 + 4}" text-anchor="middle" font-size="9" fill="#111" font-weight="600">${fmt(item.val, 0)}</text>`;
       }
