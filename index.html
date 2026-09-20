@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.13">
+    <meta name="version" content="5.2.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3063,10 +3063,9 @@ const margin = { top: 30, right: 20, bottom: 40, left: 70 };
 const bandW = scrollInnerW / filteredRows.length;
 const barW = Math.min(60, bandW * 0.55);
 
- const axisW = margin.left + 10; // fixed axis panel width
-const scrollableW = width - margin.left; // scrollable panel width (bars + right margin)
+const axisW = margin.left + 10;
+const scrollableW = width - margin.left;
 
-// Fixed Y-axis panel (never scrolls)
 let axisSvg = `<svg viewBox="0 0 ${axisW} ${height}" style="width:${axisW}px; height:auto; max-height:380px; display:block; flex-shrink:0;">`;
 axisSvg += `e x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${margin.top + innerH}" stroke="#8a93b0" stroke-width="1.5"/>`;
 
@@ -3086,8 +3085,11 @@ for (let v = -stepSize; v >= niceMin && iterGuard2 < 1000; v -= stepSize, iterGu
 axisSvg += `<text x="${margin.left - 8}" y="${zeroY + 4}" text-anchor="end" font-size="12" fill="#c5cae9">0</text>`;
 axisSvg += `</svg>`;
 
-// Scrollable panel: bars, gridlines, zero line, x-axis labels (margin.left shifted to 10 within this panel)
 const scrollMarginLeft = 10;
+const scrollInnerW = scrollableW - margin.right - scrollMarginLeft;
+const bandW = scrollInnerW / filteredRows.length;
+const barW = Math.min(60, bandW * 0.55);
+
 let svg = `<svg viewBox="0 0 ${scrollableW} ${height}" style="width:${scrollableW}px; height:auto; max-height:380px; display:block;">`;
 
 svg += `e x1="0" y1="${zeroY}" x2="${scrollableW - margin.right}" y2="${zeroY}" stroke="#8a93b0" stroke-width="1.5"/>`;
