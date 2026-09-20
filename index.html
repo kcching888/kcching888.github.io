@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.17">
+    <meta name="version" content="5.2.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2727,7 +2727,6 @@ const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
 const boxW = 110, boxH = 50;
 const treeLeftPad = 20; // extra padding so leftmost content isn't clipped
 const treeW = 760 + treeLeftPad, treeH = 260;
-const halfW = treeW / 2; // left half = Total Return branch, right half = Net Contributions branch
 
 // Row 1: Latest Equity (top-center)
 const eqX = treeLeftPad + (treeW - treeLeftPad)/2 - boxW/2, eqY = 8;
