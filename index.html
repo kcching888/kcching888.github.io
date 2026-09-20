@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.6">
+    <meta name="version" content="5.2.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2741,6 +2741,14 @@ const ncX = rightCenter - boxW/2, ncY = 84;
 const childY = 164;
 const childW = 68, childGap = 8;
 
+const trChildData = [
+  { label: 'Realized', val: realized },
+  { label: 'Unrealized', val: unrealized },
+  { label: 'Dividends', val: dividends },
+  { label: 'Interest', val: interestIncome },
+  { label: 'Fees', val: -Math.abs(fees) }
+];
+    
 // Total Return's 4 children, centered under leftCenter
 const trChildTotalW = trChildData.length * childW + (trChildData.length - 1) * childGap;
 const trChildStartX = leftCenter - trChildTotalW / 2;
@@ -2772,13 +2780,7 @@ treeSvg += perfTreeBox('Latest Equity', fmt(latestEquity), eqX, eqY, boxW, boxH,
 treeSvg += perfTreeBox('Total Return', fmt(totalReturn), trX, trY, boxW, boxH, posColor(totalReturn));
 treeSvg += perfTreeBox('Net Contrib.', fmt(netContributions), ncX, ncY, boxW, boxH, '#c5cae9');
 
-const trChildData = [
-  { label: 'Realized', val: realized },
-  { label: 'Unrealized', val: unrealized },
-  { label: 'Dividends', val: dividends },
-  { label: 'Interest', val: interestIncome },
-  { label: 'Fees', val: -Math.abs(fees) }
-];
+
 trChildData.forEach(function(c, i) {
   treeSvg += perfTreeBox(c.label, fmt(c.val), trChildXs[i], childY, childW, boxH, posColor(c.val));
 });
