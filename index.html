@@ -4570,7 +4570,7 @@ sortedTrades.forEach(function(t) {
       currentQty: pos.qty || 0,
       sellQty: sellQty
     });
-    continue;
+    return;
   }
 
   let rem = sellQty;
@@ -4608,7 +4608,7 @@ sortedTrades.forEach(function(t) {
       missingQty: rem,
       sellQty: sellQty
     });
-    continue;
+    return;
   }
 
   pos.fifoLots = lotsSnapshot;
