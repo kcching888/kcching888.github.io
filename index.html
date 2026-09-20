@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.20">
+    <meta name="version" content="5.3.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4845,28 +4845,25 @@ async function processUpload() {
             const warnings = result.warnings || [];
             
             preview.textContent =
-                'Imported successfully\n' +
-                  'Trades parsed: ' + tradesParsed + '\n' +
-                  'Trades added: ' + tradesAdded + '\n' +
-                  'Dividends parsed: ' + dividendsParsed + '\n' +
-                  'Dividends added: ' + dividendsAdded + '\n' +
-              (warnings.length
-                    ? ('Warnings:\n- ' + warnings.join('\n- '))
-                    : '');
+  'Staged successfully (NOT yet in live portfolio)\n' +
+  'Trades parsed: ' + tradesParsed + '\n' +
+  'Trades staged: ' + tradesAdded + '\n' +
+  'Dividends parsed: ' + dividendsParsed + '\n' +
+  'Dividends staged: ' + dividendsAdded + '\n' +
+  'Staged to sheets: HSBC_Staging_Trades / HSBC_Staging_Dividends\n' +
+  (warnings.length ? ('Warnings:\n- ' + warnings.join('\n- ')) : '');
 
-            
-            await syncData();
+// Do NOT call syncData()/renderPortfolio()/renderPerfStats() here —
+// staged HSBC data should not affect the live dashboard until you
+// explicitly review and promote it later.
 
-            if (typeof renderPortfolio === 'function') renderPortfolio();
-            if (typeof renderPerfStats === 'function') renderPerfStats();
-            if (typeof renderGainLoss === 'function') renderGainLoss();
-
-            alert(
-              'HSBC PDF import complete. ' +
-              tradesAdded + ' trades added, ' +
-              dividendsAdded + ' dividends added.'
-            );
-            return;
+alert(
+  'HSBC PDF staged for review. ' +
+  tradesAdded + ' trades and ' +
+  dividendsAdded + ' dividends written to HSBC_Staging_* sheets.\n\n' +
+  'Your live Portfolio/Performance tabs are unaffected.'
+);
+return;
         }
 
         const file = $('up-ibkr-file').files[0];
