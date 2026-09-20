@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.11">
+    <meta name="version" content="5.2.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -223,10 +223,10 @@
       <button class="btn btn-primary" onclick="openSubPortfolioManager()" style="padding:5px 10px; font-size:0.8em;">Manage Sub-Portfolios</button>
     </div>
     <div id="performance-controls" style="margin-top:0"></div>
-   <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; align-items:stretch;">
-  <div id="perf-annual-chart-wrap" style="flex:2; min-width:420px;"></div>
-<div style="flex:1; min-width:260px; background:#0f3460; border-radius:8px; padding:12px; display:flex; flex-direction:column;">
-  <h3 style="margin:0 0 8px 0; color:#e94560; font-size:1em;">Summary</h3>
+  <div style="display:flex; gap:20px; flex-wrap:wrap; margin-top:16px; align-items:stretch;">
+  <div id="perf-annual-chart-wrap" style="flex:6; min-width:420px;"></div>
+   <div style="flex:4; min-width:320px; background:#0f3460; border-radius:8px; padding:14px; display:flex; flex-direction:column;">
+  <h3 style="margin:0 0 10px 0; color:#e94560; font-size:1.05em;">Summary</h3>
   <div id="perf-stats" style="display:flex; flex-direction:column; overflow-y:auto;"></div>
 </div>
 </div>
@@ -2711,9 +2711,9 @@ const unusedCashForACB = (subPortfolioFilter === 'ALL')
 function perfTreeBox(label, value, x, y, w, h, color) {
   var rectOpen = '<' + 'rect';
   var textOpen = '<' + 'text';
-  return rectOpen + ' x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="6" fill="#152a52" stroke="' + color + '" stroke-width="1.5"/>' +
-    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 - 6) + '" text-anchor="middle" font-size="10" fill="#c5cae9">' + label + '</' + 'text>' +
-    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 + 12) + '" text-anchor="middle" font-size="13" font-weight="bold" fill="' + color + '">' + value + '</' + 'text>';
+  return rectOpen + ' x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="7" fill="#152a52" stroke="' + color + '" stroke-width="2"/>' +
+    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 - 7) + '" text-anchor="middle" font-size="12" fill="#c5cae9">' + label + '</' + 'text>' +
+    textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 + 14) + '" text-anchor="middle" font-size="15" font-weight="bold" fill="' + color + '">' + value + '</' + 'text>';
 }
 
 function perfTreeConnector(x1, y1, x2, y2) {
@@ -2724,22 +2724,20 @@ function perfTreeConnector(x1, y1, x2, y2) {
 }
 
 const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
-const boxW = 92, boxH = 40;
-const treeW = 600, treeH = 230;
+const boxW = 110, boxH = 50;
+const treeW = 680, treeH = 260;
 const halfW = treeW / 2; // left half = Total Return branch, right half = Net Contributions branch
 
 // Row 1: Latest Equity (top-center)
-const eqX = treeW/2 - boxW/2, eqY = 6;
+const eqX = treeW/2 - boxW/2, eqY = 8;
 
-// Row 2: Total Return (left-center) + Net Contributions (right-center)
 const leftCenter = halfW / 2;
 const rightCenter = halfW + halfW / 2;
-const trX = leftCenter - boxW/2, trY = 84;
-const ncX = rightCenter - boxW/2, ncY = 84;
+const trX = leftCenter - boxW/2, trY = 100;
+const ncX = rightCenter - boxW/2, ncY = 100;
 
-// Row 3: children
-const childY = 164;
-const childW = 68, childGap = 8;
+const childY = 195;
+const childW = 82, childGap = 10;
 
 const trChildData = [
   { label: 'Realized', val: realized },
