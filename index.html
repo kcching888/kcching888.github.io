@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.2.2">
+    <meta name="version" content="5.2.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -2614,6 +2614,54 @@ console.log('Realized alignment debug', {
     }, 0);
     
   const netContributions = num(totals.netContributions, 0);
+
+  // Break down net contributions into: currently-invested (ACB) vs currently-in-cash
+const acctFilterForACB = String(perfAccount || 'ALL').trim();
+const spSymbolsForACB = (subPortfolioFilter !== 'ALL' && subPortfolios[subPortfolioFilter])
+  ? getSubPortfolioSymbols(subPortfolioFilter)
+  : null;
+
+// Reuse the same FIFO/ACB position logic as Portfolio tab, scoped to current filters
+var acbPositions = {};
+var acbSortedTrades = [...allTrades]
+  .filter(function(t) {
+    if (acctFilterForACB !== 'ALL' && String(t.account||'').trim() !== acctFilterForACB) return false;
+    if (spSymbolsForACB && spSymbolsForACB.indexOf(String(t.symbol||'').trim().toUpperCase()) < 0) return false;
+    return true;
+  })
+  .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+acbSortedTrades.forEach(function(t) {
+  var key = String(t.symbol||'').trim() + '|' + String(t.currency||'').trim() + '|' + String(t.account||'').trim();
+  if (!acbPositions[key]) acbPositions[key] = { acbTotalCost: 0, qty: 0, exchRate: t.exchRate || 1 };
+  var q = Math.abs(parseFloat(t.quantity)) || 0;
+  var p = parseFloat(t.price) || 0;
+  var comm = Math.abs(parseFloat(t.commission != null && t.commission !== '' ? t.commission : (t.comm != null ? t.comm : 0))) || 0;
+  var act = (t.action || '').toLowerCase();
+  if (act.includes('buy')) {
+    acbPositions[key].acbTotalCost += (q * p) + comm;
+    acbPositions[key].qty += q;
+  } else if (act.includes('sell') && acbPositions[key].qty > 0) {
+    var avgCost = acbPositions[key].acbTotalCost / acbPositions[key].qty;
+    acbPositions[key].acbTotalCost -= (avgCost * q);
+    acbPositions[key].qty -= q;
+  }
+  acbPositions[key].exchRate = t.exchRate || acbPositions[key].exchRate;
+});
+
+const investedACB = Object.values(acbPositions).reduce(function(sum, p) {
+  if (Math.abs(p.qty) < 0.001) return sum;
+  return sum + (p.acbTotalCost * (p.exchRate || 1));
+}, 0);
+
+// Unused cash — only meaningful for "All Holdings" view; sub-portfolios don't own cash separately
+const unusedCashForACB = (subPortfolioFilter === 'ALL')
+  ? Object.values(buildFundsBreakdownMap(true, false)).reduce(function(sum, r) {
+      if (acctFilterForACB !== 'ALL' && r.account !== acctFilterForACB) return sum;
+      return sum + (parseFloat(r.unusedCash) || 0);
+    }, 0)
+  : 0;
+    
   const priceReturn = round2(realized + unrealized);
    const incomeReturn = num(totals.incomeReturn, 0);
      const totalReturn = round2(priceReturn + incomeReturn - fees);
@@ -2631,9 +2679,9 @@ console.log('Realized alignment debug', {
   const latestEquity = historyRows.length ? num(historyRows[historyRows.length - 1].value, 0) : 0;
     
 function perfTreeBox(label, value, x, y, w, h, color) {
-  var boxOpen = '<' + 'rect';
+  var rectOpen = '<' + 'rect';
   var textOpen = '<' + 'text';
-  return boxOpen + ' x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="6" fill="#152a52" stroke="' + color + '" stroke-width="1.5"/>' +
+  return rectOpen + ' x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="6" fill="#152a52" stroke="' + color + '" stroke-width="1.5"/>' +
     textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 - 6) + '" text-anchor="middle" font-size="10" fill="#c5cae9">' + label + '</' + 'text>' +
     textOpen + ' x="' + (x + w/2) + '" y="' + (y + h/2 + 12) + '" text-anchor="middle" font-size="13" font-weight="bold" fill="' + color + '">' + value + '</' + 'text>';
 }
@@ -2645,26 +2693,48 @@ function perfTreeConnector(x1, y1, x2, y2) {
   return pathOpen + ' d="' + d + '" fill="none" stroke="#3a4266" stroke-width="1.5"/>';
 }
 
-const treeW = 300, treeH = 260;
+const posColor = function(v){ return v >= 0 ? '#4caf50' : '#f44336'; };
 const boxW = 92, boxH = 40;
-const gColor = '#4caf50', rColor = '#f44336';
-const posColor = function(v){ return v >= 0 ? gColor : rColor; };
+const treeW = 600, treeH = 230;
+const halfW = treeW / 2; // left half = Total Return branch, right half = Net Contributions branch
 
-// Layout: Latest Equity (top-center) -> Total Return + Net Contributions (row2) -> children of Total Return (row3)
-const eqX = treeW/2 - boxW/2, eqY = 8;
-const trX = treeW/2 - boxW - 10, trY = 78;
-const ncX = treeW/2 + 10, ncY = 78;
-const childY = 148;
-const childW = 68, childGap = 6;
-const childXs = [10, 10 + childW + childGap, 10 + 2*(childW+childGap), 10 + 3*(childW+childGap)];
+// Row 1: Latest Equity (top-center)
+const eqX = treeW/2 - boxW/2, eqY = 6;
+
+// Row 2: Total Return (left-center) + Net Contributions (right-center)
+const leftCenter = halfW / 2;
+const rightCenter = halfW + halfW / 2;
+const trX = leftCenter - boxW/2, trY = 84;
+const ncX = rightCenter - boxW/2, ncY = 84;
+
+// Row 3: children
+const childY = 164;
+const childW = 68, childGap = 8;
+
+// Total Return's 4 children, centered under leftCenter
+const trChildTotalW = 4 * childW + 3 * childGap;
+const trChildStartX = leftCenter - trChildTotalW / 2;
+const trChildXs = [0, 1, 2, 3].map(function(i) { return trChildStartX + i * (childW + childGap); });
+
+// Net Contributions' 2 children, centered under rightCenter
+const ncChildTotalW = 2 * childW + childGap;
+const ncChildStartX = rightCenter - ncChildTotalW / 2;
+const ncChildXs = [0, 1].map(function(i) { return ncChildStartX + i * (childW + childGap); });
 
 let treeSvg = '<svg viewBox="0 0 ' + treeW + ' ' + treeH + '" style="width:100%; height:auto;">';
 
-// Connectors
+// Connectors: Equity -> Total Return, Equity -> Net Contributions
 treeSvg += perfTreeConnector(eqX + boxW/2, eqY + boxH, trX + boxW/2, trY);
 treeSvg += perfTreeConnector(eqX + boxW/2, eqY + boxH, ncX + boxW/2, ncY);
-childXs.forEach(function(cx) {
+
+// Connectors: Total Return -> its 4 children
+trChildXs.forEach(function(cx) {
   treeSvg += perfTreeConnector(trX + boxW/2, trY + boxH, cx + childW/2, childY);
+});
+
+// Connectors: Net Contributions -> its 2 children
+ncChildXs.forEach(function(cx) {
+  treeSvg += perfTreeConnector(ncX + boxW/2, ncY + boxH, cx + childW/2, childY);
 });
 
 // Boxes
@@ -2672,20 +2742,28 @@ treeSvg += perfTreeBox('Latest Equity', fmt(latestEquity), eqX, eqY, boxW, boxH,
 treeSvg += perfTreeBox('Total Return', fmt(totalReturn), trX, trY, boxW, boxH, posColor(totalReturn));
 treeSvg += perfTreeBox('Net Contrib.', fmt(netContributions), ncX, ncY, boxW, boxH, '#c5cae9');
 
-const childData = [
+const trChildData = [
   { label: 'Realized', val: realized },
   { label: 'Unrealized', val: unrealized },
   { label: 'Dividends', val: dividends },
   { label: 'Fees', val: -Math.abs(fees) }
 ];
-childData.forEach(function(c, i) {
-  treeSvg += perfTreeBox(c.label, fmt(c.val), childXs[i], childY, childW, boxH, posColor(c.val));
+trChildData.forEach(function(c, i) {
+  treeSvg += perfTreeBox(c.label, fmt(c.val), trChildXs[i], childY, childW, boxH, posColor(c.val));
+});
+
+const ncChildData = [
+  { label: 'In Stocks (ACB)', val: investedACB, color: '#4caf50' },
+  { label: 'Unused Cash', val: unusedCashForACB, color: '#c5cae9' }
+];
+ncChildData.forEach(function(c, i) {
+  if (subPortfolioFilter !== 'ALL' && c.label === 'Unused Cash') return; // skip cash box for sub-portfolio view
+  treeSvg += perfTreeBox(c.label, fmt(c.val), ncChildXs[i], childY, childW, boxH, c.color);
 });
 
 treeSvg += '</' + 'svg>';
 
 const treeHtml = '<div style="text-align:center;">' + treeSvg + '</div>';
-
 const remainingCards = [
   { label: 'TWR', value: fmt(twrPct, 2) + '%', cls: twrPct >= 0 ? 'pos-gain' : 'pos-loss' },
   { label: 'Benchmark Return', value: perfBenchmark === 'NONE' ? 'N/A' : fmt(benchmarkPct, 2) + '%', cls: perfBenchmark === 'NONE' ? '' : (benchmarkPct >= 0 ? 'pos-gain' : 'pos-loss') },
