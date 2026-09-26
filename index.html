@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.3.3">
+    <meta name="version" content="5.3.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5355,6 +5355,8 @@ async function processUpload() {
             const tradesAdded = result.tradesAdded ?? result.tradesWritten ?? 0;
             const dividendsParsed = result.dividendsParsed || 0;
             const dividendsAdded = result.dividendsAdded ?? result.dividendsWritten ?? 0;
+            const interestParsed = result.interestParsed || 0;
+            const interestAdded = result.interestAdded ?? result.interestWritten ?? 0;
             const warnings = result.warnings || [];
             
             preview.textContent =
@@ -5365,6 +5367,8 @@ async function processUpload() {
   'Trades staged: ' + tradesAdded + '\n' +
   'Dividends parsed: ' + dividendsParsed + '\n' +
   'Dividends staged: ' + dividendsAdded + '\n' +
+  'Interest parsed: ' + interestParsed + '\n' +
+  'Interest staged: ' + interestAdded + '\n' +
   'Staged to sheets: HSBC_Staging_Trades / HSBC_Staging_Dividends\n' +
   (warnings.length ? ('Warnings:\n- ' + warnings.join('\n- ')) : '');
 
@@ -5374,7 +5378,9 @@ async function processUpload() {
 
 alert(
   'HSBC PDF staged for review. ' +
+  holdingsAdded + ' holdings and ' +
   tradesAdded + ' trades and ' +
+  interestAdded + ' interest and ' +
   dividendsAdded + ' dividends written to HSBC_Staging_* sheets.\n\n' +
   'Your live Portfolio/Performance tabs are unaffected.'
 );
