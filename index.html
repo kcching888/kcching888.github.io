@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.3.4">
+    <meta name="version" content="5.5.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -19,7 +19,7 @@
         .btn-primary{background:#0f3460;color:#fff}
         .btn-primary:hover{background:#1a4a8a}
         .btn-success{background:#1a5c2a;color:#fff}
-        .btn-danger{background:#7a1a1a;color:#fff}const boxW = 110, boxH = 50;
+        .btn-danger{background:#7a1a1a;color:#fff}
         .btn-warning{background:#7a5a00;color:#fff}
         .btn-secondary.active {
             background: var(--accent, #4f98a3);
@@ -250,6 +250,14 @@
     
   <div id="page-portfolio">
   <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
+    <label style="font-size:0.85em; color:#aaa;">Source:</label>
+    <select id="portfolio-source" onchange="setPortfolioSource(this.value)" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;">
+      <option value="IBKR">IBKR portfolio</option>
+      <option value="HSBC">HSBC approved snapshot</option>
+    </select>
+    <label id="hsbc-account-label" for="hsbc-account" style="display:none;font-size:0.85em;color:#aaa;">HSBC account:</label>
+    <select id="hsbc-account" onchange="setHsbcAccount(this.value)" style="display:none;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;"></select>
+    <span id="hsbc-snapshot-label" style="font-size:0.82em;color:#aaa;"></span>
     <label style="font-size:0.85em; color:#aaa;">View:</label>
     <select id="port-subfilter" onchange="setSubPortfolioFilter(this.value)" style="background:#0f3460; color:#e0e0e0; border:1px solid #1a4a8a; border-radius:4px; padding:5px 8px;">
       <option value="ALL">All Holdings</option>
@@ -766,6 +774,9 @@
     let isTransactionFilterActive = false;
     let isFilterActive = false; // This helps the UI know when to override the full list
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
+    var hsbcPortfolio = { accounts: [], loaded: false, error: '' };
+    var portfolioSource = 'IBKR';
+    var hsbcSelectedAccount = '';
     var tradeCurrentPage = 1;
     var divCurrentPage = 1;
     var txnSortOrder = 'desc';
@@ -970,7 +981,11 @@ function setPerfChartGranularity(val) {
         });
         console.log("tab: ", tab);
 
-        if (tab === 'portfolio') renderPortfolio();
+        if (tab === 'portfolio') {
+            if (portfolioSource === 'HSBC') {
+                loadHsbcPortfolio().catch(function(err) { console.error('HSBC load failed:', err); });
+            } else renderPortfolio();
+        }
         if (tab === 'performance') loadPerformanceTab();
 
         if (tab === 'gainloss') renderGainLoss();
@@ -1184,6 +1199,7 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
+        loadHsbcPortfolio().catch(function(err) { console.error('HSBC snapshot load failed:', err); });
 
         if ($('tab-performance') && $('tab-performance').classList.contains('active')) {
             renderPerformanceControls();
@@ -4511,7 +4527,143 @@ function buildLotGapBannerHtml(positions) {
     '</div>';
 }
     
+
+// Approved HSBC snapshots are read-only and never enter IBKR calculation arrays.
+async function loadHsbcPortfolio() {
+    if (!GAS_URL) {
+        hsbcPortfolio = { accounts: [], loaded: false, error: 'Configure the Google Sheets Web App URL first.' };
+        if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+        return hsbcPortfolio;
+    }
+    try {
+        const url = new URL(GAS_URL);
+        url.searchParams.set('action', 'getHsbcPortfolio');
+        const response = await fetch(url.toString(), {
+            method: 'GET', cache: 'no-store', redirect: 'follow'
+        });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        if (!data || !Array.isArray(data.accounts)) {
+            throw new Error(data && data.error ? data.error : 'Invalid HSBC response');
+        }
+        hsbcPortfolio = { accounts: data.accounts, loaded: true, error: '' };
+        const accounts = data.accounts.map(a => String(a.account || ''));
+        if (!accounts.includes(hsbcSelectedAccount)) hsbcSelectedAccount = accounts[0] || '';
+        updateHsbcAccountOptions();
+    } catch (err) {
+        hsbcPortfolio = { accounts: [], loaded: false, error: err.message || String(err) };
+        updateHsbcAccountOptions();
+        if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+        throw err;
+    }
+    if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+    return hsbcPortfolio;
+}
+
+function updateHsbcAccountOptions() {
+    const select = document.getElementById('hsbc-account');
+    if (!select) return;
+    select.replaceChildren();
+    (hsbcPortfolio.accounts || []).forEach(function(a) {
+        const option = document.createElement('option');
+        option.value = String(a.account || '');
+        option.textContent = String(a.account || '');
+        select.appendChild(option);
+    });
+    select.value = hsbcSelectedAccount;
+}
+
+function setHsbcAccount(value) {
+    hsbcSelectedAccount = String(value || '');
+    if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+}
+
+function setPortfolioSource(value) {
+    portfolioSource = value === 'HSBC' ? 'HSBC' : 'IBKR';
+    const accountSelect = document.getElementById('hsbc-account');
+    const accountLabel = document.getElementById('hsbc-account-label');
+    const subfilter = document.getElementById('port-subfilter');
+    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC' ? '' : 'none';
+    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC' ? '' : 'none';
+    if (subfilter) subfilter.disabled = portfolioSource === 'HSBC';
+    if (portfolioSource === 'IBKR') {
+        const label = document.getElementById('hsbc-snapshot-label');
+        if (label) label.textContent = '';
+        renderPortfolio();
+        return;
+    }
+    if (hsbcPortfolio.loaded) renderHsbcPortfolio();
+    else {
+        const wrap = document.getElementById('port-table-wrap');
+        if (wrap) wrap.innerHTML = '<div class="loading">Loading approved HSBC snapshots...</div>';
+        loadHsbcPortfolio().catch(function(err) { console.error('HSBC snapshot load failed:', err); });
+    }
+}
+
+function renderHsbcPortfolio() {
+    const wrap = document.getElementById('port-table-wrap');
+    const stats = document.getElementById('port-stats');
+    const label = document.getElementById('hsbc-snapshot-label');
+    if (!wrap || !stats) return;
+    const accounts = hsbcPortfolio.accounts || [];
+    const snapshot = accounts.find(function(a) {
+        return String(a.account || '') === hsbcSelectedAccount;
+    });
+    if (!snapshot) {
+        stats.innerHTML = '';
+        if (label) label.textContent = '';
+        wrap.innerHTML = '<div class="loading">' + esc(hsbcPortfolio.error ||
+            'No approved HSBC snapshots available.') + '</div>';
+        return;
+    }
+    const date = String(snapshot.statementDate || '').slice(0, 10);
+    const holdings = Array.isArray(snapshot.holdings) ? snapshot.holdings : [];
+    if (label) label.textContent = 'Snapshot as of ' + date + ' (not live prices)';
+    const byCurrency = {};
+    const bySection = {};
+    holdings.forEach(function(h) {
+        const ccy = String(h.currency || 'Unknown').toUpperCase();
+        const section = String(h.section || 'OTHER');
+        const value = Number(h.marketValue);
+        if (Number.isFinite(value)) byCurrency[ccy] = (byCurrency[ccy] || 0) + value;
+        if (!bySection[section]) bySection[section] = [];
+        bySection[section].push(h);
+    });
+    const money = (v, digits) => Number(v).toLocaleString('en-CA', {
+        minimumFractionDigits: digits, maximumFractionDigits: digits
+    });
+    stats.innerHTML = Object.keys(byCurrency).sort().map(function(ccy) {
+        return '<div class="stat-card"><div class="val">' +
+            money(byCurrency[ccy], 2) + '</div><div class="lbl">HSBC ' +
+            esc(ccy) + ' market value as of ' + esc(date) + '</div></div>';
+    }).join('') + '<div class="stat-card"><div class="val">' + holdings.length +
+        '</div><div class="lbl">HSBC holdings</div></div>';
+    let html = '<p style="color:#aaa;font-size:0.85em">Approved HSBC statement: ' +
+        esc(snapshot.sourceFileName || '') + '. Historical snapshot only; ' +
+        'not included in IBKR cash, cost basis or performance.</p>';
+    Object.keys(bySection).sort().forEach(function(section) {
+        html += '<h3 style="margin-top:20px;border-bottom:1px solid #333">' +
+            esc(section) + '</h3><div style="overflow-x:auto"><table class="portfolio-table">' +
+            '<thead><tr><th>Symbol</th><th>Description</th>' +
+            '<th class="text-right">Quantity</th><th class="text-right">Statement unit price</th>' +
+            '<th class="text-right">Statement market value</th><th>CCY</th></tr></thead><tbody>';
+        bySection[section].slice().sort(function(a,b) {
+            return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+        }).forEach(function(h) {
+            const q = Number(h.quantity), p = Number(h.unitPrice), v = Number(h.marketValue);
+            html += '<tr><td>' + esc(h.symbol) + '</td><td>' + esc(h.description) +
+                '</td><td class="text-right">' + (Number.isFinite(q) ? money(q, 6) : '—') +
+                '</td><td class="text-right">' + (Number.isFinite(p) ? money(p, 5) : '—') +
+                '</td><td class="text-right">' + (Number.isFinite(v) ? money(v, 2) : '—') +
+                '</td><td>' + esc(h.currency) + '</td></tr>';
+        });
+        html += '</tbody></table></div>';
+    });
+    wrap.innerHTML = html;
+}
+
 function renderPortfolio() {
+    if (portfolioSource === 'HSBC') return renderHsbcPortfolio();
     const container = document.getElementById('port-table-wrap');
     if (container) container.innerHTML = '<div class="loading">Updating view...</div>';
 
@@ -6296,3 +6448,4 @@ syncVersion();
 </body>
 </html>
  
+
