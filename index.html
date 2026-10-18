@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.5.0">
+    <meta name="version" content="5.6.0">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -19,7 +19,7 @@
         .btn-primary{background:#0f3460;color:#fff}
         .btn-primary:hover{background:#1a4a8a}
         .btn-success{background:#1a5c2a;color:#fff}
-        .btn-danger{background:#7a1a1a;color:#fff}
+        .btn-danger{background:#7a1a1a;color:#fff}const boxW = 110, boxH = 50;
         .btn-warning{background:#7a5a00;color:#fff}
         .btn-secondary.active {
             background: var(--accent, #4f98a3);
@@ -253,7 +253,8 @@
     <label style="font-size:0.85em; color:#aaa;">Source:</label>
     <select id="portfolio-source" onchange="setPortfolioSource(this.value)" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;">
       <option value="IBKR">IBKR portfolio</option>
-      <option value="HSBC">HSBC approved snapshot</option>
+      <option value="HSBC_REVIEW">HSBC staged — review &amp; approve</option>
+      <option value="HSBC_APPROVED">HSBC approved snapshot</option>
     </select>
     <label id="hsbc-account-label" for="hsbc-account" style="display:none;font-size:0.85em;color:#aaa;">HSBC account:</label>
     <select id="hsbc-account" onchange="setHsbcAccount(this.value)" style="display:none;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;"></select>
@@ -774,6 +775,7 @@
     let isTransactionFilterActive = false;
     let isFilterActive = false; // This helps the UI know when to override the full list
     var allDivs = JSON.parse(localStorage.getItem('ibkr_divs') || '[]');
+    var hsbcReview = { statements: [], loaded: false, error: '' };
     var hsbcPortfolio = { accounts: [], loaded: false, error: '' };
     var portfolioSource = 'IBKR';
     var hsbcSelectedAccount = '';
@@ -982,9 +984,9 @@ function setPerfChartGranularity(val) {
         console.log("tab: ", tab);
 
         if (tab === 'portfolio') {
-            if (portfolioSource === 'HSBC') {
-                loadHsbcPortfolio().catch(function(err) { console.error('HSBC load failed:', err); });
-            } else renderPortfolio();
+            if (portfolioSource === 'HSBC_REVIEW') loadHsbcReviewQueue().catch(function(err) { console.error('HSBC review load failed:', err); });
+            else if (portfolioSource === 'HSBC_APPROVED') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
+            else renderPortfolio();
         }
         if (tab === 'performance') loadPerformanceTab();
 
@@ -1199,7 +1201,8 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
-        loadHsbcPortfolio().catch(function(err) { console.error('HSBC snapshot load failed:', err); });
+        if (portfolioSource === 'HSBC_REVIEW') loadHsbcReviewQueue().catch(function(err) { console.error('HSBC review load failed:', err); });
+        else if (portfolioSource === 'HSBC_APPROVED') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
 
         if ($('tab-performance') && $('tab-performance').classList.contains('active')) {
             renderPerformanceControls();
@@ -4528,35 +4531,57 @@ function buildLotGapBannerHtml(positions) {
 }
     
 
-// Approved HSBC snapshots are read-only and never enter IBKR calculation arrays.
+// ---------------------------------------------------------------------------
+// HSBC staged review and approved snapshots
+// ---------------------------------------------------------------------------
+
+async function loadHsbcReviewQueue() {
+    if (!GAS_URL) {
+        hsbcReview = { statements: [], loaded: false, error: 'Configure the Google Sheets Web App URL first.' };
+        renderHsbcReviewQueue();
+        return hsbcReview;
+    }
+    try {
+        const url = new URL(GAS_URL);
+        url.searchParams.set('action', 'getHsbcReviewQueue');
+        const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+        if (!data || !Array.isArray(data.statements)) {
+            throw new Error(data && data.error ? data.error : 'Invalid HSBC review response');
+        }
+        hsbcReview = { statements: data.statements, loaded: true, error: '' };
+    } catch (err) {
+        hsbcReview = { statements: [], loaded: false, error: err.message || String(err) };
+    }
+    renderHsbcReviewQueue();
+    return hsbcReview;
+}
+
 async function loadHsbcPortfolio() {
     if (!GAS_URL) {
         hsbcPortfolio = { accounts: [], loaded: false, error: 'Configure the Google Sheets Web App URL first.' };
-        if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+        renderHsbcPortfolio();
         return hsbcPortfolio;
     }
     try {
         const url = new URL(GAS_URL);
         url.searchParams.set('action', 'getHsbcPortfolio');
-        const response = await fetch(url.toString(), {
-            method: 'GET', cache: 'no-store', redirect: 'follow'
-        });
+        const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
         if (!data || !Array.isArray(data.accounts)) {
-            throw new Error(data && data.error ? data.error : 'Invalid HSBC response');
+            throw new Error(data && data.error ? data.error : 'Invalid HSBC portfolio response');
         }
         hsbcPortfolio = { accounts: data.accounts, loaded: true, error: '' };
-        const accounts = data.accounts.map(a => String(a.account || ''));
-        if (!accounts.includes(hsbcSelectedAccount)) hsbcSelectedAccount = accounts[0] || '';
+        const accounts = data.accounts.map(function(a) { return String(a.account || ''); });
+        if (accounts.indexOf(hsbcSelectedAccount) < 0) hsbcSelectedAccount = accounts[0] || '';
         updateHsbcAccountOptions();
     } catch (err) {
         hsbcPortfolio = { accounts: [], loaded: false, error: err.message || String(err) };
         updateHsbcAccountOptions();
-        if (portfolioSource === 'HSBC') renderHsbcPortfolio();
-        throw err;
     }
-    if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+    renderHsbcPortfolio();
     return hsbcPortfolio;
 }
 
@@ -4564,10 +4589,10 @@ function updateHsbcAccountOptions() {
     const select = document.getElementById('hsbc-account');
     if (!select) return;
     select.replaceChildren();
-    (hsbcPortfolio.accounts || []).forEach(function(a) {
+    (hsbcPortfolio.accounts || []).forEach(function(account) {
         const option = document.createElement('option');
-        option.value = String(a.account || '');
-        option.textContent = String(a.account || '');
+        option.value = String(account.account || '');
+        option.textContent = String(account.account || '');
         select.appendChild(option);
     });
     select.value = hsbcSelectedAccount;
@@ -4575,28 +4600,372 @@ function updateHsbcAccountOptions() {
 
 function setHsbcAccount(value) {
     hsbcSelectedAccount = String(value || '');
-    if (portfolioSource === 'HSBC') renderHsbcPortfolio();
+    renderHsbcPortfolio();
 }
 
 function setPortfolioSource(value) {
-    portfolioSource = value === 'HSBC' ? 'HSBC' : 'IBKR';
+    portfolioSource = value === 'HSBC_REVIEW' ? 'HSBC_REVIEW' :
+        value === 'HSBC_APPROVED' ? 'HSBC_APPROVED' : 'IBKR';
+
     const accountSelect = document.getElementById('hsbc-account');
     const accountLabel = document.getElementById('hsbc-account-label');
     const subfilter = document.getElementById('port-subfilter');
-    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC' ? '' : 'none';
-    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC' ? '' : 'none';
-    if (subfilter) subfilter.disabled = portfolioSource === 'HSBC';
+    const snapshotLabel = document.getElementById('hsbc-snapshot-label');
+
+    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC_APPROVED' ? '' : 'none';
+    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC_APPROVED' ? '' : 'none';
+    if (subfilter) subfilter.disabled = portfolioSource !== 'IBKR';
+    if (snapshotLabel) snapshotLabel.textContent = '';
+
     if (portfolioSource === 'IBKR') {
-        const label = document.getElementById('hsbc-snapshot-label');
-        if (label) label.textContent = '';
         renderPortfolio();
+        return;
+    }
+    if (portfolioSource === 'HSBC_REVIEW') {
+        if (hsbcReview.loaded) renderHsbcReviewQueue();
+        else {
+            const wrap = document.getElementById('port-table-wrap');
+            if (wrap) wrap.innerHTML = '<div class="loading">Loading staged HSBC statements...</div>';
+            loadHsbcReviewQueue().catch(function(err) { console.error(err); });
+        }
         return;
     }
     if (hsbcPortfolio.loaded) renderHsbcPortfolio();
     else {
         const wrap = document.getElementById('port-table-wrap');
         if (wrap) wrap.innerHTML = '<div class="loading">Loading approved HSBC snapshots...</div>';
-        loadHsbcPortfolio().catch(function(err) { console.error('HSBC snapshot load failed:', err); });
+        loadHsbcPortfolio().catch(function(err) { console.error(err); });
+    }
+}
+
+function hsbcReviewBadge(status, reviewStatus) {
+    const statusText = String(status || '').toUpperCase();
+    const reviewText = String(reviewStatus || '').toUpperCase();
+    if (statusText === 'APPROVED') return '<span class="badge badge-buy">APPROVED</span>';
+    if (reviewText === 'READY') return '<span class="badge badge-div">READY TO APPROVE</span>';
+    if (statusText === 'STAGED') return '<span class="badge badge-sell">PENDING REVIEW</span>';
+    return '<span class="badge">' + esc(statusText || reviewText || 'UNKNOWN') + '</span>';
+}
+
+function renderHsbcReviewQueue() {
+    const wrap = document.getElementById('port-table-wrap');
+    const stats = document.getElementById('port-stats');
+    const label = document.getElementById('hsbc-snapshot-label');
+
+    if (!wrap || !stats) return;
+
+    const statements = hsbcReview.statements || [];
+
+    const pending = statements.filter(function(r) {
+        return String(r.status || '').toUpperCase() === 'STAGED' &&
+               String(r.reviewStatus || '').toUpperCase() !== 'READY';
+    });
+
+    const ready = statements.filter(function(r) {
+        return String(r.status || '').toUpperCase() === 'STAGED' &&
+               String(r.reviewStatus || '').toUpperCase() === 'READY';
+    });
+
+    const approved = statements.filter(function(r) {
+        return String(r.status || '').toUpperCase() === 'APPROVED';
+    });
+
+    if (label) {
+        label.textContent = 'Staged HSBC statements — review before approval';
+    }
+
+    stats.innerHTML =
+        '<div class="stat-card"><div class="val">' + pending.length + '</div><div class="lbl">Pending review</div></div>' +
+        '<div class="stat-card"><div class="val">' + ready.length + '</div><div class="lbl">Ready to approve</div></div>' +
+        '<div class="stat-card"><div class="val">' + approved.length + '</div><div class="lbl">Approved statements</div></div>';
+
+    if (!statements.length) {
+        wrap.innerHTML = '<div class="loading">' +
+            esc(hsbcReview.error || 'No staged HSBC statements found.') +
+            '</div>';
+        return;
+    }
+
+    const sorted = statements.slice().sort(function(a, b) {
+        const da = String(a.statementDate || '');
+        const db = String(b.statementDate || '');
+
+        if (da !== db) return db.localeCompare(da);
+
+        return String(a.account || '').localeCompare(String(b.account || ''));
+    });
+
+    let html =
+        '<div class="lot-gap-banner" style="background:#152a52;border-color:#1a4a8a;">' +
+          '<h4>HSBC review and approval</h4>' +
+          '<p>Review the staged holdings, trades, dividends, and interest before marking a statement READY. ' +
+          'Approval writes only to the separate HSBC approved sheets and does not affect IBKR cash, cost basis, or performance.</p>' +
+        '</div>' +
+        '<div style="overflow-x:auto;">' +
+          '<table class="portfolio-table">' +
+            '<thead>' +
+              '<tr>' +
+                '<th>Account</th>' +
+                '<th>Statement date</th>' +
+                '<th>File</th>' +
+                '<th>Status</th>' +
+                '<th>Warnings</th>' +
+                '<th style="width:320px;">Actions</th>' +
+              '</tr>' +
+            '</thead>' +
+            '<tbody>';
+
+    sorted.forEach(function(row) {
+        const key = String(row.statementKey || '');
+        const safeKey = key.replace(/[^A-Za-z0-9_-]/g, '_');
+        const status = String(row.status || '').toUpperCase();
+        const review = String(row.reviewStatus || '').toUpperCase();
+        const isStaged = status === 'STAGED';
+        const isReady = isStaged && review === 'READY';
+        const warnings = String(row.warnings || '').trim();
+        const escapedKey = esc(key).replace(/'/g, "\\'");
+
+        html +=
+            '<tr>' +
+              '<td>' + esc(row.account) + '</td>' +
+              '<td>' + esc(row.statementDate) + '</td>' +
+              '<td>' + esc(row.fileName) + '</td>' +
+              '<td>' + hsbcReviewBadge(row.status, row.reviewStatus) + '</td>' +
+              '<td style="max-width:360px;white-space:normal;">' +
+                (warnings
+                  ? esc(warnings)
+                  : '<span style="color:#4caf50;">No warnings</span>') +
+              '</td>' +
+              '<td>' +
+                '<div style="display:flex;gap:6px;flex-wrap:wrap;">' +
+                  '<button class="btn btn-secondary" onclick="toggleHsbcStagedRecords(\'' +
+                    escapedKey + '\')">Review records</button>' +
+
+                  (isStaged && !isReady
+                    ? '<button class="btn btn-primary" onclick="setHsbcReviewStatus(\'' +
+                      escapedKey + '\', \'READY\')">Mark READY</button>'
+                    : '') +
+
+                  (isStaged && isReady
+                    ? '<button class="btn btn-success" onclick="approveHsbcStatement(\'' +
+                      escapedKey + '\')">Approve</button>'
+                    : '') +
+
+                  (isStaged
+                    ? '<button class="btn btn-secondary" onclick="setHsbcReviewStatus(\'' +
+                      escapedKey + '\', \'PENDING\')">Reset review</button>'
+                    : '') +
+
+                  (status === 'APPROVED'
+                    ? '<span style="color:#4caf50;font-size:0.8em;">Approved ' +
+                      esc(row.approvedAt || '') + '</span>'
+                    : '') +
+                '</div>' +
+              '</td>' +
+            '</tr>' +
+
+            '<tr id="hsbc-detail-' + safeKey + '" style="display:none;">' +
+              '<td colspan="6" style="background:#0d1524;">' +
+                '<div id="hsbc-detail-content-' + safeKey + '">' +
+                  '<div class="loading">Loading staged records...</div>' +
+                '</div>' +
+              '</td>' +
+            '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+
+    wrap.innerHTML = html;
+}
+async function toggleHsbcStagedRecords(statementKey) {
+  const safeKey = String(statementKey).replace(/[^A-Za-z0-9_-]/g, '_');
+  const row = document.getElementById('hsbc-detail-' + safeKey);
+  const content = document.getElementById('hsbc-detail-content-' + safeKey);
+
+  if (!row || !content) return;
+
+  if (row.style.display !== 'none') {
+    row.style.display = 'none';
+    return;
+  }
+
+  row.style.display = '';
+  content.innerHTML = '<div class="loading">Loading staged records...</div>';
+
+  try {
+    const url = new URL(GAS_URL);
+    url.searchParams.set('action', 'getHsbcStagedStatement');
+    url.searchParams.set('statementKey', statementKey);
+
+    const response = await fetch(url.toString(), {
+      cache: 'no-store',
+      redirect: 'follow'
+    });
+
+    const result = await response.json();
+
+    if (!result || !result.success) {
+      throw new Error(result && result.error ? result.error : 'Could not load staged records');
+    }
+
+    content.innerHTML = renderHsbcStagedStatement(result);
+  } catch (error) {
+    content.innerHTML =
+      '<div class="loading" style="color:#f44336;">' +
+      esc(error.message || String(error)) +
+      '</div>';
+  }
+}
+
+function renderHsbcStagedStatement(data) {
+  const money = function(value, digits) {
+    return Number(value || 0).toLocaleString('en-CA', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    });
+  };
+
+  const table = function(title, rows, columns) {
+    if (!rows || !rows.length) {
+      return '<h4>' + esc(title) + '</h4>' +
+        '<p style="color:#aaa;">No staged records.</p>';
+    }
+
+    let html =
+      '<h4>' + esc(title) + ' (' + rows.length + ')</h4>' +
+      '<div style="overflow-x:auto;margin-bottom:18px;">' +
+      '<table class="portfolio-table"><thead><tr>';
+
+    columns.forEach(function(column) {
+      html += '<th>' + esc(column.label) + '</th>';
+    });
+
+    html += '</tr></thead><tbody>';
+
+    rows.forEach(function(row) {
+      html += '<tr>';
+
+      columns.forEach(function(column) {
+        const value = row[column.key];
+
+        if (column.type === 'number') {
+          html += '<td class="text-right">' + money(value, column.digits || 2) + '</td>';
+        } else {
+          html += '<td>' + esc(value) + '</td>';
+        }
+      });
+
+      html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    return html;
+  };
+
+  return '<h3>Staged records for review</h3>' +
+    '<p style="color:#aaa;">These records remain in the HSBC staging sheets until you approve the statement.</p>' +
+    table('Holdings', data.holdings, [
+      { key: 'date', label: 'Statement date' },
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'description', label: 'Description' },
+      { key: 'quantity', label: 'Quantity', type: 'number', digits: 6 },
+      { key: 'unitPrice', label: 'Unit price', type: 'number', digits: 5 },
+      { key: 'marketValue', label: 'Market value', type: 'number', digits: 2 },
+      { key: 'currency', label: 'CCY' },
+      { key: 'section', label: 'Section' }
+    ]) +
+    table('Trades', data.trades, [
+      { key: 'date', label: 'Date' },
+      { key: 'action', label: 'Action' },
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'description', label: 'Description' },
+      { key: 'quantity', label: 'Quantity', type: 'number', digits: 6 },
+      { key: 'price', label: 'Price', type: 'number', digits: 5 },
+      { key: 'amount', label: 'Amount', type: 'number', digits: 2 },
+      { key: 'currency', label: 'CCY' }
+    ]) +
+    table('Dividends and fees', data.dividends, [
+      { key: 'date', label: 'Date' },
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'description', label: 'Description' },
+      { key: 'amount', label: 'Amount', type: 'number', digits: 2 },
+      { key: 'fees', label: 'Fees', type: 'number', digits: 2 },
+      { key: 'currency', label: 'CCY' }
+    ]) +
+    table('Interest', data.interest, [
+      { key: 'date', label: 'Date' },
+      { key: 'symbol', label: 'Symbol' },
+      { key: 'description', label: 'Description' },
+      { key: 'amount', label: 'Amount', type: 'number', digits: 2 },
+      { key: 'currency', label: 'CCY' }
+    ]);
+}
+
+
+async function setHsbcReviewStatus(statementKey, reviewStatus) {
+    if (!GAS_URL) {
+        alert('Configure the Google Sheets Web App URL first.');
+        return;
+    }
+    const normalized = String(reviewStatus || '').toUpperCase();
+    if (['READY', 'PENDING'].indexOf(normalized) < 0) {
+        alert('Invalid review status.');
+        return;
+    }
+    if (normalized === 'READY' &&
+        !confirm('Mark this HSBC statement READY for approval?')) return;
+
+    try {
+        const url = new URL(GAS_URL);
+        url.searchParams.set('action', 'setHsbcReviewStatus');
+        url.searchParams.set('statementKey', statementKey);
+        url.searchParams.set('reviewStatus', normalized);
+        const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
+        const result = await response.json();
+        if (!result || !result.success) {
+            throw new Error(result && result.error ? result.error : 'Review status update failed');
+        }
+        await loadHsbcReviewQueue();
+    } catch (err) {
+        alert('Could not update HSBC review status: ' + err.message);
+    }
+}
+
+async function approveHsbcStatement(statementKey) {
+    if (!GAS_URL) {
+        alert('Configure the Google Sheets Web App URL first.');
+        return;
+    }
+    if (!confirm('Approve this HSBC statement and promote its staged records to the approved HSBC sheets?\n\n' +
+        'IBKR Portfolio, cash, ACB, and Performance data will not be changed.')) return;
+
+    const buttons = Array.from(document.querySelectorAll('button'))
+      .filter(function(button) {
+        return button.getAttribute('onclick') &&
+          button.getAttribute('onclick').indexOf('approveHsbcStatement') >= 0;
+      });
+    buttons.forEach(function(button) { button.disabled = true; });
+
+    try {
+        const url = new URL(GAS_URL);
+        url.searchParams.set('action', 'approveHsbcStatement');
+        url.searchParams.set('statementKey', statementKey);
+        const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
+        const result = await response.json();
+        if (!result || !result.success) {
+            throw new Error(result && result.error ? result.error : 'HSBC approval failed');
+        }
+        const counts = result.counts || {};
+        alert('HSBC statement approved.\n' +
+          'Holdings: ' + (counts.holdings || 0) + '\n' +
+          'Trades: ' + (counts.trades || 0) + '\n' +
+          'Dividends: ' + (counts.dividends || 0) + '\n' +
+          'Interest: ' + (counts.interest || 0));
+        await loadHsbcReviewQueue();
+    } catch (err) {
+        alert('HSBC approval failed: ' + err.message);
+    } finally {
+        buttons.forEach(function(button) { button.disabled = false; });
     }
 }
 
@@ -4605,65 +4974,97 @@ function renderHsbcPortfolio() {
     const stats = document.getElementById('port-stats');
     const label = document.getElementById('hsbc-snapshot-label');
     if (!wrap || !stats) return;
+
     const accounts = hsbcPortfolio.accounts || [];
-    const snapshot = accounts.find(function(a) {
-        return String(a.account || '') === hsbcSelectedAccount;
+    const snapshot = accounts.find(function(account) {
+        return String(account.account || '') === hsbcSelectedAccount;
     });
+
     if (!snapshot) {
         stats.innerHTML = '';
         if (label) label.textContent = '';
         wrap.innerHTML = '<div class="loading">' + esc(hsbcPortfolio.error ||
-            'No approved HSBC snapshots available.') + '</div>';
+          'No approved HSBC snapshots available.') + '</div>';
         return;
     }
+
     const date = String(snapshot.statementDate || '').slice(0, 10);
     const holdings = Array.isArray(snapshot.holdings) ? snapshot.holdings : [];
-    if (label) label.textContent = 'Snapshot as of ' + date + ' (not live prices)';
+
+    if (label) {
+        label.textContent = 'Approved snapshot as of ' + date + ' (statement values, not live prices)';
+    }
+
     const byCurrency = {};
     const bySection = {};
-    holdings.forEach(function(h) {
-        const ccy = String(h.currency || 'Unknown').toUpperCase();
-        const section = String(h.section || 'OTHER');
-        const value = Number(h.marketValue);
-        if (Number.isFinite(value)) byCurrency[ccy] = (byCurrency[ccy] || 0) + value;
+    holdings.forEach(function(holding) {
+        const currency = String(holding.currency || 'Unknown').toUpperCase();
+        const section = String(holding.section || 'OTHER').toUpperCase();
+        const value = Number(holding.marketValue);
+        if (Number.isFinite(value)) {
+            byCurrency[currency] = (byCurrency[currency] || 0) + value;
+        }
         if (!bySection[section]) bySection[section] = [];
-        bySection[section].push(h);
+        bySection[section].push(holding);
     });
-    const money = (v, digits) => Number(v).toLocaleString('en-CA', {
-        minimumFractionDigits: digits, maximumFractionDigits: digits
-    });
-    stats.innerHTML = Object.keys(byCurrency).sort().map(function(ccy) {
+
+    const money = function(value, digits) {
+        return Number(value).toLocaleString('en-CA', {
+            minimumFractionDigits: digits,
+            maximumFractionDigits: digits
+        });
+    };
+
+    stats.innerHTML = Object.keys(byCurrency).sort().map(function(currency) {
         return '<div class="stat-card"><div class="val">' +
-            money(byCurrency[ccy], 2) + '</div><div class="lbl">HSBC ' +
-            esc(ccy) + ' market value as of ' + esc(date) + '</div></div>';
-    }).join('') + '<div class="stat-card"><div class="val">' + holdings.length +
-        '</div><div class="lbl">HSBC holdings</div></div>';
-    let html = '<p style="color:#aaa;font-size:0.85em">Approved HSBC statement: ' +
-        esc(snapshot.sourceFileName || '') + '. Historical snapshot only; ' +
-        'not included in IBKR cash, cost basis or performance.</p>';
+          money(byCurrency[currency], 2) + '</div><div class="lbl">HSBC ' +
+          esc(currency) + ' market value as of ' + esc(date) + '</div></div>';
+    }).join('') +
+    '<div class="stat-card"><div class="val">' + holdings.length +
+      '</div><div class="lbl">HSBC holdings</div></div>';
+
+    let html =
+      '<p style="color:#aaa;font-size:0.85em">Approved HSBC statement: ' +
+      esc(snapshot.sourceFileName || '') +
+      '. Historical snapshot only; not included in IBKR cash, cost basis or performance.</p>';
+
     Object.keys(bySection).sort().forEach(function(section) {
         html += '<h3 style="margin-top:20px;border-bottom:1px solid #333">' +
-            esc(section) + '</h3><div style="overflow-x:auto"><table class="portfolio-table">' +
-            '<thead><tr><th>Symbol</th><th>Description</th>' +
-            '<th class="text-right">Quantity</th><th class="text-right">Statement unit price</th>' +
-            '<th class="text-right">Statement market value</th><th>CCY</th></tr></thead><tbody>';
-        bySection[section].slice().sort(function(a,b) {
-            return String(a.symbol || '').localeCompare(String(b.symbol || ''));
-        }).forEach(function(h) {
-            const q = Number(h.quantity), p = Number(h.unitPrice), v = Number(h.marketValue);
-            html += '<tr><td>' + esc(h.symbol) + '</td><td>' + esc(h.description) +
-                '</td><td class="text-right">' + (Number.isFinite(q) ? money(q, 6) : '—') +
-                '</td><td class="text-right">' + (Number.isFinite(p) ? money(p, 5) : '—') +
-                '</td><td class="text-right">' + (Number.isFinite(v) ? money(v, 2) : '—') +
-                '</td><td>' + esc(h.currency) + '</td></tr>';
+          esc(section) + '</h3>' +
+          '<div style="overflow-x:auto"><table class="portfolio-table">' +
+          '<thead><tr><th>Symbol</th><th>Description</th>' +
+          '<th class="text-right">Quantity</th>' +
+          '<th class="text-right">Statement unit price</th>' +
+          '<th class="text-right">Statement market value</th>' +
+          '<th>CCY</th></tr></thead><tbody>';
+
+        bySection[section].slice().sort(function(a, b) {
+          return String(a.symbol || '').localeCompare(String(b.symbol || ''));
+        }).forEach(function(holding) {
+          const quantity = Number(holding.quantity);
+          const unitPrice = Number(holding.unitPrice);
+          const marketValue = Number(holding.marketValue);
+
+          html += '<tr><td>' + esc(holding.symbol) + '</td>' +
+            '<td>' + esc(holding.description) + '</td>' +
+            '<td class="text-right">' +
+              (Number.isFinite(quantity) ? money(quantity, 6) : '—') + '</td>' +
+            '<td class="text-right">' +
+              (Number.isFinite(unitPrice) ? money(unitPrice, 5) : '—') + '</td>' +
+            '<td class="text-right">' +
+              (Number.isFinite(marketValue) ? money(marketValue, 2) : '—') + '</td>' +
+            '<td>' + esc(holding.currency) + '</td></tr>';
         });
+
         html += '</tbody></table></div>';
     });
+
     wrap.innerHTML = html;
 }
 
 function renderPortfolio() {
-    if (portfolioSource === 'HSBC') return renderHsbcPortfolio();
+    if (portfolioSource === 'HSBC_REVIEW') return renderHsbcReviewQueue();
+    if (portfolioSource === 'HSBC_APPROVED') return renderHsbcPortfolio();
     const container = document.getElementById('port-table-wrap');
     if (container) container.innerHTML = '<div class="loading">Updating view...</div>';
 
@@ -6448,4 +6849,3 @@ syncVersion();
 </body>
 </html>
  
-
