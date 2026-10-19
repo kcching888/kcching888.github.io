@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.0">
+    <meta name="version" content="5.6.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -779,6 +779,9 @@
     var hsbcReview = { statements: [], loaded: false, error: '' };
     var hsbcPortfolio = { accounts: [], loaded: false, error: '' };
     var portfolioSource = 'IBKR';
+    function isHsbcAccount_(account) {
+       return /^\d{3}-\d{3}-\d{3}-\d{3}$/.test(String(account || '').trim());
+    }
     var hsbcSelectedAccount = '';
     var tradeCurrentPage = 1;
     var divCurrentPage = 1;
@@ -4650,41 +4653,18 @@ function setPortfolioSource(value) {
     
 
 function renderAllPortfolios() {
-  renderPortfolio();
+  portfolioSource = 'ALL';
 
-  const wrap = document.getElementById('port-table-wrap');
+  const ibkrTrades = allTrades.filter(function(trade) {
+    return !isHsbcAccount_(trade.account);
+  });
 
-  if (!wrap) return;
+  const hsbcTrades = allTrades.filter(function(trade) {
+    return isHsbcAccount_(trade.account);
+  });
 
-  const hsbcSection = document.createElement('div');
-  hsbcSection.id = 'all-portfolio-hsbc-section';
-  hsbcSection.innerHTML =
-    '<div class="loading">Loading approved HSBC portfolio...</div>';
-
-  wrap.appendChild(hsbcSection);
-
-  const renderHsbc = function() {
-    const accounts = hsbcPortfolio.accounts || [];
-    const snapshot = accounts.find(function(account) {
-      return String(account.account) === String(hsbcSelectedAccount);
-    });
-
-    hsbcSection.innerHTML = snapshot
-      ? buildHsbcPortfolioHtml_(snapshot)
-      : '<div class="loading">No approved HSBC portfolio available.</div>';
-  };
-
-  if (hsbcPortfolio.loaded) {
-    renderHsbc();
-  } else {
-    loadHsbcPortfolio()
-      .then(renderHsbc)
-      .catch(function(err) {
-        console.error('HSBC approved load failed:', err);
-        hsbcSection.innerHTML =
-          '<div class="loading">Unable to load approved HSBC portfolio.</div>';
-      });
-  }
+  renderPortfolioFromTrades_(ibkrTrades, 'IBKR portfolio');
+  appendHsbcPortfolioSection_();
 }
 
 function buildHsbcPortfolioHtml_(snapshot) {
@@ -5184,7 +5164,12 @@ function renderPortfolio() {
     var livePrices = window.currentPrices || {};
 
     // 1. DUAL-TRACKING ENGINE
-var scopedTrades = allTrades;
+var scopedTrades = portfolioSource === 'IBKR'
+  ? allTrades.filter(function(trade) {
+      return !isHsbcAccount_(trade.account);
+    })
+  : allTrades;
+    
 if (subPortfolioFilter !== 'ALL' && subPortfolios[subPortfolioFilter]) {
   var spSymbols = getSubPortfolioSymbols(subPortfolioFilter);
   scopedTrades = allTrades.filter(function(t) { return spSymbols.indexOf(String(t.symbol||'').trim().toUpperCase()) >= 0; });
