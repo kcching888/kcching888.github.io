@@ -252,9 +252,10 @@
   <div style="display:flex; gap:10px; align-items:center; margin-bottom:12px;">
     <label style="font-size:0.85em; color:#aaa;">Source:</label>
     <select id="portfolio-source" onchange="setPortfolioSource(this.value)" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;">
-      <option value="IBKR">IBKR portfolio</option>
-      <option value="HSBC_REVIEW">HSBC staged — review &amp; approve</option>
-      <option value="HSBC_APPROVED">HSBC approved snapshot</option>
+        <option value="IBKR">IBKR portfolio</option>
+        <option value="HSBC">HSBC portfolio</option>
+        <option value="HSBCREVIEW">HSBC staged review &amp; approve</option>
+        <option value="ALL">ALL</option>
     </select>
     <label id="hsbc-account-label" for="hsbc-account" style="display:none;font-size:0.85em;color:#aaa;">HSBC account:</label>
     <select id="hsbc-account" onchange="setHsbcAccount(this.value)" style="display:none;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;"></select>
@@ -985,7 +986,8 @@ function setPerfChartGranularity(val) {
 
         if (tab === 'portfolio') {
             if (portfolioSource === 'HSBC_REVIEW') loadHsbcReviewQueue().catch(function(err) { console.error('HSBC review load failed:', err); });
-            else if (portfolioSource === 'HSBC_APPROVED') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
+            else if (portfolioSource === 'HSBC') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
+            else if (portfolioSource === 'ALL') renderAllPortfolios();
             else renderPortfolio();
         }
         if (tab === 'performance') loadPerformanceTab();
@@ -1202,7 +1204,8 @@ function syncData() {
         updateAccountFilter();
         renderPortfolio();
         if (portfolioSource === 'HSBC_REVIEW') loadHsbcReviewQueue().catch(function(err) { console.error('HSBC review load failed:', err); });
-        else if (portfolioSource === 'HSBC_APPROVED') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
+        else if (portfolioSource === 'HSBC') loadHsbcPortfolio().catch(function(err) { console.error('HSBC approved load failed:', err); });
+        else if (portfolioSource === 'ALL') renderAllPortfolios();
 
         if ($('tab-performance') && $('tab-performance').classList.contains('active')) {
             renderPerformanceControls();
@@ -4605,15 +4608,16 @@ function setHsbcAccount(value) {
 
 function setPortfolioSource(value) {
     portfolioSource = value === 'HSBC_REVIEW' ? 'HSBC_REVIEW' :
-        value === 'HSBC_APPROVED' ? 'HSBC_APPROVED' : 'IBKR';
+        value === 'HSBC' ? 'HSBC' : 
+        value === 'ALL' ? 'ALL' : 'IBKR';
 
     const accountSelect = document.getElementById('hsbc-account');
     const accountLabel = document.getElementById('hsbc-account-label');
     const subfilter = document.getElementById('port-subfilter');
     const snapshotLabel = document.getElementById('hsbc-snapshot-label');
 
-    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC_APPROVED' ? '' : 'none';
-    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC_APPROVED' ? '' : 'none';
+    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC' ? '' : 'none';
+    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC' ? '' : 'none';
     if (subfilter) subfilter.disabled = portfolioSource !== 'IBKR';
     if (snapshotLabel) snapshotLabel.textContent = '';
 
@@ -4630,13 +4634,121 @@ function setPortfolioSource(value) {
         }
         return;
     }
-    if (hsbcPortfolio.loaded) renderHsbcPortfolio();
-    else {
-        const wrap = document.getElementById('port-table-wrap');
-        if (wrap) wrap.innerHTML = '<div class="loading">Loading approved HSBC snapshots...</div>';
-        loadHsbcPortfolio().catch(function(err) { console.error(err); });
+    if (portfolioSource === 'HSBC') {
+        if (hsbcPortfolio.loaded) renderHsbcPortfolio();
+        else {
+            const wrap = document.getElementById('port-table-wrap');
+            if (wrap) {
+                wrap.innerHTML = '<div class="loading">Loading approved HSBC snapshots...</div>';
+            }
+            loadHsbcPortfolio().catch(function(err) { console.error(err); });
+        }
+        return;
     }
+    renderAllPortfolios();
 }
+    
+
+function renderAllPortfolios() {
+  renderPortfolio();
+
+  const wrap = document.getElementById('port-table-wrap');
+
+  if (!wrap) return;
+
+  const hsbcSection = document.createElement('div');
+  hsbcSection.id = 'all-portfolio-hsbc-section';
+  hsbcSection.innerHTML =
+    '<div class="loading">Loading approved HSBC portfolio...</div>';
+
+  wrap.appendChild(hsbcSection);
+
+  const renderHsbc = function() {
+    const accounts = hsbcPortfolio.accounts || [];
+    const snapshot = accounts.find(function(account) {
+      return String(account.account) === String(hsbcSelectedAccount);
+    });
+
+    hsbcSection.innerHTML = snapshot
+      ? buildHsbcPortfolioHtml_(snapshot)
+      : '<div class="loading">No approved HSBC portfolio available.</div>';
+  };
+
+  if (hsbcPortfolio.loaded) {
+    renderHsbc();
+  } else {
+    loadHsbcPortfolio()
+      .then(renderHsbc)
+      .catch(function(err) {
+        console.error('HSBC approved load failed:', err);
+        hsbcSection.innerHTML =
+          '<div class="loading">Unable to load approved HSBC portfolio.</div>';
+      });
+  }
+}
+
+function buildHsbcPortfolioHtml_(snapshot) {
+  const holdings = Array.isArray(snapshot.holdings)
+    ? snapshot.holdings
+    : [];
+
+  const money = function(value, digits) {
+    return Number(value || 0).toLocaleString('en-CA', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    });
+  };
+
+  const bySection = {};
+
+  holdings.forEach(function(holding) {
+    const section = String(holding.section || 'OTHER').toUpperCase();
+
+    if (!bySection[section]) {
+      bySection[section] = [];
+    }
+
+    bySection[section].push(holding);
+  });
+
+  let html =
+    '<h3 style="margin-top:25px;">HSBC portfolio — approved snapshot</h3>' +
+    '<p style="color:#aaa;font-size:0.85em;">' +
+    'Approved HSBC statement: ' + esc(snapshot.sourceFileName || '') +
+    '</p>';
+
+  Object.keys(bySection).sort().forEach(function(section) {
+    html +=
+      '<h3 style="margin-top:20px;border-bottom:1px solid #333;">' +
+      esc(section) +
+      '</h3>' +
+      '<div style="overflow-x:auto;">' +
+      '<table class="portfolio-table">' +
+      '<thead><tr>' +
+      '<th>Symbol</th><th>Description</th>' +
+      '<th class="text-right">Quantity</th>' +
+      '<th class="text-right">Unit price</th>' +
+      '<th class="text-right">Market value</th>' +
+      '<th>CCY</th>' +
+      '</tr></thead><tbody>';
+
+    bySection[section].forEach(function(holding) {
+      html +=
+        '<tr>' +
+        '<td>' + esc(holding.symbol || '') + '</td>' +
+        '<td>' + esc(holding.description || '') + '</td>' +
+        '<td class="text-right">' + money(holding.quantity, 6) + '</td>' +
+        '<td class="text-right">' + money(holding.unitPrice, 5) + '</td>' +
+        '<td class="text-right">' + money(holding.marketValue, 2) + '</td>' +
+        '<td>' + esc(holding.currency || '') + '</td>' +
+        '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+  });
+
+  return html;
+} 
 
 function hsbcReviewBadge(status, reviewStatus) {
     const statusText = String(status || '').toUpperCase();
@@ -5064,7 +5176,7 @@ function renderHsbcPortfolio() {
 
 function renderPortfolio() {
     if (portfolioSource === 'HSBC_REVIEW') return renderHsbcReviewQueue();
-    if (portfolioSource === 'HSBC_APPROVED') return renderHsbcPortfolio();
+    if (portfolioSource === 'HSBC') return renderHsbcPortfolio();
     const container = document.getElementById('port-table-wrap');
     if (container) container.innerHTML = '<div class="loading">Updating view...</div>';
 
