@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.5">
+    <meta name="version" content="5.6.6">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5092,27 +5092,158 @@ function renderHsbcPortfolio() {
   });
 
   if (!snapshot) {
-    if (label) label.textContent = '';
-
     stats.innerHTML = '';
+
+    if (label) {
+      label.textContent = '';
+    }
+
     wrap.innerHTML =
       '<div class="loading">' +
-      esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
+      esc(hsbcPortfolio.error || 'No approved HSBC snapshots available.') +
       '</div>';
 
     return;
   }
 
-  const date = String(snapshot.statementDate || '').slice(0, 10);
+  const holdings = Array.isArray(snapshot.holdings) ? snapshot.holdings : [];
+  const statementDate = String(snapshot.statementDate || '').slice(0, 10);
+  const livePrices = window.currentPrices || {};
+
+  const money = function(value, digits) {
+    return Number(value || 0).toLocaleString('en-CA', {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits
+    });
+  };
 
   if (label) {
     label.textContent =
-      'Approved snapshot as of ' + date +
-      ' — statement values, not live prices';
+      'HSBC portfolio — approved statement as of ' + statementDate;
   }
 
-  stats.innerHTML = buildHsbcPortfolioStatsHtml_(snapshot);
-  wrap.innerHTML = buildHsbcPortfolioHtml_(snapshot);
+  const valueByCurrency = {};
+
+  holdings.forEach(function(holding) {
+    const currency = String(holding.currency || 'CAD').toUpperCase();
+    const marketValue = Number(holding.marketValue) || 0;
+
+    valueByCurrency[currency] =
+      (valueByCurrency[currency] || 0) + marketValue;
+  });
+
+  stats.innerHTML =
+    Object.keys(valueByCurrency).sort().map(function(currency) {
+      return (
+        '<div class="stat-card">' +
+        '<div class="val">' + money(valueByCurrency[currency], 2) + '</div>' +
+        '<div class="lbl">HSBC ' + esc(currency) + ' market value</div>' +
+        '</div>'
+      );
+    }).join('') +
+    '<div class="stat-card">' +
+    '<div class="val">' + holdings.length + '</div>' +
+    '<div class="lbl">HSBC holdings</div>' +
+    '</div>';
+
+  if (!holdings.length) {
+    wrap.innerHTML =
+      '<div class="loading">' +
+      esc(hsbcPortfolio.error || 'No approved HSBC holdings found.') +
+      '</div>';
+
+    return;
+  }
+
+  let html =
+    '<div style="overflow-x:auto">' +
+    '<table class="portfolio-table">' +
+    '<thead><tr>' +
+    '<th>Symbol</th>' +
+    '<th class="text-right">Qty</th>' +
+    '<th class="text-right">Last</th>' +
+    '<th class="text-right">Changes</th>' +
+    '<th class="text-right">Changes %</th>' +
+    '<th class="text-right">Daily P&amp;L</th>' +
+    '<th class="text-right">MV</th>' +
+    '<th class="text-right">Avg (FIFO)</th>' +
+    '<th class="text-right">Basis</th>' +
+    '<th class="text-right">G/L</th>' +
+    '<th class="text-right">Avg (ACB)</th>' +
+    '<th class="text-right">Total ACB</th>' +
+    '<th class="text-right">G/L</th>' +
+    '<th>CCY</th>' +
+    '</tr></thead><tbody>';
+
+  holdings.forEach(function(holding) {
+    const symbol = String(holding.symbol || '').trim();
+    const currency = String(holding.currency || 'CAD').toUpperCase();
+    const quantity = Number(holding.quantity) || 0;
+
+    const statementLast = Number(holding.unitPrice) || 0;
+    const liveLast = Number(
+      livePrices[String(symbol).toUpperCase()]
+    ) || statementLast;
+
+    const previousClose = Number(holding.previousClose) || 0;
+    const change = previousClose ? (liveLast - previousClose) : 0;
+    const changePercent = previousClose
+      ? (change / previousClose) * 100
+      : 0;
+    const dailyPnl = previousClose ? (change * quantity) : 0;
+
+    const marketValue = quantity * liveLast;
+
+    const avgFifo = Number(holding.avgFifo) || 0;
+    const fifoBasis = avgFifo * quantity;
+    const fifoGainLoss = fifoBasis ? (marketValue - fifoBasis) : 0;
+
+    const avgAcb = Number(holding.avgAcb) || 0;
+    const totalAcb = avgAcb * quantity;
+    const acbGainLoss = totalAcb ? (marketValue - totalAcb) : 0;
+
+    html +=
+      '<tr>' +
+      '<td>' + esc(symbol) + '</td>' +
+      '<td class="text-right">' + money(quantity, 4) + '</td>' +
+      '<td class="text-right">' + money(liveLast, 2) + '</td>' +
+      '<td class="text-right">' +
+      (previousClose ? money(change, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' +
+      (previousClose ? money(changePct, 2) + '%' : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' +
+      (previousClose ? money(dailyPnl, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' + money(marketValue, 2) + '</td>' +
+      '<td class="text-right">' +
+      (avgFifo ? money(avgFifo, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' +
+      (fifoBasis ? money(fifoBasis, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right ' +
+      (fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
+      (fifoBasis ? money(fifoGainLoss, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' +
+      (avgAcb ? money(avgAcb, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">' +
+      (totalAcb ? money(totalAcb, 2) : '&mdash;') +
+      '</td>' +
+      '<td class="text-right ' +
+      (acbGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
+      (totalAcb ? money(acbGainLoss, 2) : '&mdash;') +
+      '</td>' +
+      '<td>' + esc(currency) + '</td>' +
+      '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+
+  wrap.innerHTML = html;
 }
 
 function buildHsbcPortfolioStatsHtml_(snapshot) {
