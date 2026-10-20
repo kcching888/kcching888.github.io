@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.8">
+    <meta name="version" content="5.6.9">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4598,6 +4598,44 @@ async function loadHsbcReviewQueue() {
     return hsbcReview;
 }
 
+async function loadHsbcPrices(symbols) {
+  if (!GASURL || !symbols || !symbols.length) {
+    return;
+  }
+
+  const url = new URL(GASURL);
+  url.searchParams.set('action', 'getPrices');
+  url.searchParams.set(
+    'symbols',
+    JSON.stringify(
+      symbols.map(function(symbol) {
+        return {
+          symbol: symbol,
+          currency: symbol.endsWith('.HK') ? 'HKD' : 'USD'
+        };
+      })
+    )
+  );
+
+  const response = await fetch(url.toString(), {
+    cache: 'no-store',
+    redirect: 'follow'
+  });
+
+  if (!response.ok) {
+    throw new Error('HTTP ' + response.status);
+  }
+
+  const prices = await response.json();
+
+  window.currentPrices = Object.assign(
+    {},
+    window.currentPrices || {},
+    prices
+  );
+}
+
+    
 async function loadHsbcPortfolio() {
     if (!GAS_URL) {
         hsbcPortfolio = { accounts: [], loaded: false, error: 'Configure the Google Sheets Web App URL first.' };
@@ -4622,6 +4660,28 @@ async function loadHsbcPortfolio() {
         hsbcPortfolio = { accounts: [], loaded: false, error: err.message || String(err) };
         updateHsbcAccountOptions();
     }
+
+    const snapshot = hsbcPortfolio.accounts.find(function(account) {
+  return String(account.account) === String(hsbcSelectedAccount);
+});
+
+const trades = snapshot && Array.isArray(snapshot.trades)
+  ? snapshot.trades
+  : [];
+
+const symbols = Array.from(
+  new Set(
+    trades
+      .map(function(trade) {
+        return String(trade.symbol || '').trim();
+      })
+      .filter(Boolean)
+  )
+);
+
+await loadHsbcPrices(symbols);
+
+
     renderHsbcPortfolio();
     return hsbcPortfolio;
 }
