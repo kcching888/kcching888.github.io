@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.7">
+    <meta name="version" content="5.6.8">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4607,6 +4607,7 @@ async function loadHsbcPortfolio() {
     try {
         const url = new URL(GAS_URL);
         url.searchParams.set('action', 'getHsbcPortfolio');
+        url.searchParams.set('account', hsbcSelectedAccount);
         const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
