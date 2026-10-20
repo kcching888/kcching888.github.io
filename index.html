@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.3">
+    <meta name="version" content="5.6.4">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4643,48 +4643,7 @@ function setHsbcAccount(value) {
     renderHsbcPortfolio();
 }
 
-function setPortfolioSource(value) {
-    portfolioSource = value === 'HSBC_REVIEW' ? 'HSBC_REVIEW' :
-        value === 'HSBC' ? 'HSBC' : 
-        value === 'ALL' ? 'ALL' : 'IBKR';
 
-    const accountSelect = document.getElementById('hsbc-account');
-    const accountLabel = document.getElementById('hsbc-account-label');
-    const subfilter = document.getElementById('port-subfilter');
-    const snapshotLabel = document.getElementById('hsbc-snapshot-label');
-
-    if (accountSelect) accountSelect.style.display = portfolioSource === 'HSBC' ? '' : 'none';
-    if (accountLabel) accountLabel.style.display = portfolioSource === 'HSBC' ? '' : 'none';
-    if (subfilter) subfilter.disabled = portfolioSource !== 'IBKR';
-    if (snapshotLabel) snapshotLabel.textContent = '';
-
-    if (portfolioSource === 'IBKR') {
-        renderPortfolio();
-        return;
-    }
-    if (portfolioSource === 'HSBC_REVIEW') {
-        if (hsbcReview.loaded) renderHsbcReviewQueue();
-        else {
-            const wrap = document.getElementById('port-table-wrap');
-            if (wrap) wrap.innerHTML = '<div class="loading">Loading staged HSBC statements...</div>';
-            loadHsbcReviewQueue().catch(function(err) { console.error(err); });
-        }
-        return;
-    }
-    if (portfolioSource === 'HSBC') {
-        if (hsbcPortfolio.loaded) renderHsbcPortfolio();
-        else {
-            const wrap = document.getElementById('port-table-wrap');
-            if (wrap) {
-                wrap.innerHTML = '<div class="loading">Loading approved HSBC snapshots...</div>';
-            }
-            loadHsbcPortfolio().catch(function(err) { console.error(err); });
-        }
-        return;
-    }
-    renderAllPortfolios();
-}
-    
 
 function renderAllPortfolios() {
   portfolioSource = 'ALL';
@@ -6980,6 +6939,87 @@ function divDedupKey(d) {
     ].join('|');
 }
 
+
+function setPortfolioSource(value) {
+  console.log('setPortfolioSource called with:', value);
+
+  portfolioSource =
+    value === 'HSBC_REVIEW' ? 'HSBC_REVIEW' :
+    value === 'HSBC' ? 'HSBC' :
+    value === 'ALL' ? 'ALL' :
+    'IBKR';
+
+  console.log('portfolioSource is now:', portfolioSource);
+
+  const accountSelect = document.getElementById('hsbc-account');
+  const accountLabel = document.getElementById('hsbc-account-label');
+  const subfilter = document.getElementById('port-subfilter');
+  const snapshotLabel = document.getElementById('hsbc-snapshot-label');
+
+  if (accountSelect) {
+    accountSelect.style.display =
+      portfolioSource === 'HSBC' ? '' : 'none';
+  }
+
+  if (accountLabel) {
+    accountLabel.style.display =
+      portfolioSource === 'HSBC' ? '' : 'none';
+  }
+
+  if (subfilter) {
+    subfilter.disabled = portfolioSource !== 'IBKR';
+  }
+
+  if (snapshotLabel) {
+    snapshotLabel.textContent = '';
+  }
+
+  if (portfolioSource === 'IBKR') {
+    renderPortfolio();
+    return;
+  }
+
+  if (portfolioSource === 'HSBC_REVIEW') {
+    if (hsbcReview.loaded) {
+      renderHsbcReviewQueue();
+    } else {
+      const wrap = document.getElementById('port-table-wrap');
+
+      if (wrap) {
+        wrap.innerHTML =
+          '<div class="loading">Loading staged HSBC statements...</div>';
+      }
+
+      loadHsbcReviewQueue().catch(function(err) {
+        console.error('HSBC review load failed:', err);
+      });
+    }
+
+    return;
+  }
+
+  if (portfolioSource === 'HSBC') {
+    if (hsbcPortfolio.loaded) {
+      renderHsbcPortfolio();
+    } else {
+      const wrap = document.getElementById('port-table-wrap');
+
+      if (wrap) {
+        wrap.innerHTML =
+          '<div class="loading">Loading approved HSBC portfolio...</div>';
+      }
+
+      loadHsbcPortfolio().catch(function(err) {
+        console.error('HSBC approved load failed:', err);
+      });
+    }
+
+    return;
+  }
+
+  renderAllPortfolios();
+}
+    
 syncVersion();
 </script>
 </body>
