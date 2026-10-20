@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.6">
+    <meta name="version" content="5.6.7">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5079,6 +5079,89 @@ async function approveHsbcStatement(statementKey) {
     }
 }
 
+function buildHsbcPositionsFromTrades(trades, livePrices) {
+  const lotsBySymbol = {};
+  const currencyBySymbol = {};
+
+  (trades || []).forEach(function(trade) {
+    const symbol = String(trade.symbol || '').trim().toUpperCase();
+    if (!symbol) return;
+
+    const action = String(trade.action || '').trim().toUpperCase();
+    const quantity = Math.abs(Number(trade.quantity) || 0);
+    const price = Number(trade.price) || 0;
+    const commission = Math.abs(
+      Number(trade.commission ?? trade.comm) || 0
+    );
+    const currency = String(trade.currency || 'HKD').toUpperCase();
+
+    if (!lotsBySymbol[symbol]) {
+      lotsBySymbol[symbol] = [];
+    }
+
+    currencyBySymbol[symbol] = currency;
+
+    if (action.indexOf('BUY') === 0) {
+      lotsBySymbol[symbol].push({
+        quantity: quantity,
+        cost: quantity * price + commission
+      });
+
+      return;
+    }
+
+    if (action.indexOf('SELL') === 0) {
+      let remaining = quantity;
+      const lots = lotsBySymbol[symbol];
+
+      while (remaining > 0 && lots.length) {
+        const lot = lots[0];
+        const use = Math.min(lot.quantity, remaining);
+        const unitCost = lot.cost / lot.quantity;
+
+        lot.cost -= use * unitCost;
+        lot.quantity -= use;
+        remaining -= use;
+
+        if (lot.quantity <= 0.000001) {
+          lots.shift();
+        }
+      }
+    }
+  });
+
+  const positions = [];
+
+  Object.keys(lotsBySymbol).sort().forEach(function(symbol) {
+    const lots = lotsBySymbol[symbol];
+
+    const quantity = lots.reduce(function(total, lot) {
+      return total + lot.quantity;
+    }, 0);
+
+    if (quantity <= 0) return;
+
+    const totalCost = lots.reduce(function(total, lot) {
+      return total + lot.cost;
+    }, 0);
+
+    const liveLast = Number(livePrices[symbol]) || 0;
+
+    positions.push({
+      symbol: symbol,
+      quantity: quantity,
+      totalCost: totalCost,
+      avgCost: totalCost / quantity,
+      last: liveLast,
+      marketValue: liveLast * quantity,
+      currency: currencyBySymbol[symbol] || 'HKD'
+    });
+  });
+
+  return positions;
+}
+
+    
 function renderHsbcPortfolio() {
   const wrap = document.getElementById('port-table-wrap');
   const stats = document.getElementById('port-stats');
@@ -5087,6 +5170,7 @@ function renderHsbcPortfolio() {
   if (!wrap || !stats) return;
 
   const accounts = hsbcPortfolio.accounts || [];
+
   const snapshot = accounts.find(function(account) {
     return String(account.account) === String(hsbcSelectedAccount);
   });
@@ -5100,56 +5184,54 @@ function renderHsbcPortfolio() {
 
     wrap.innerHTML =
       '<div class="loading">' +
-      esc(hsbcPortfolio.error || 'No approved HSBC snapshots available.') +
+      esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
       '</div>';
 
     return;
   }
 
-  const holdings = Array.isArray(snapshot.holdings) ? snapshot.holdings : [];
-  const statementDate = String(snapshot.statementDate || '').slice(0, 10);
   const livePrices = window.currentPrices || {};
-
-  const money = function(value, digits) {
-    return Number(value || 0).toLocaleString('en-CA', {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits
-    });
-  };
+  const positions = buildHsbcPositionsFromTrades(
+    snapshot.trades,
+    livePrices
+  );
 
   if (label) {
     label.textContent =
-      'HSBC portfolio — approved statement as of ' + statementDate;
+      'HSBC portfolio — built from approved HSBC trade history';
   }
 
   const valueByCurrency = {};
 
-  holdings.forEach(function(holding) {
-    const currency = String(holding.currency || 'CAD').toUpperCase();
-    const marketValue = Number(holding.marketValue) || 0;
-
+  positions.forEach(function(position) {
+    const currency = position.currency;
     valueByCurrency[currency] =
-      (valueByCurrency[currency] || 0) + marketValue;
+      (valueByCurrency[currency] || 0) + position.marketValue;
   });
 
   stats.innerHTML =
     Object.keys(valueByCurrency).sort().map(function(currency) {
       return (
         '<div class="stat-card">' +
-        '<div class="val">' + money(valueByCurrency[currency], 2) + '</div>' +
+        '<div class="val">' +
+        valueByCurrency[currency].toLocaleString('en-CA', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) +
+        '</div>' +
         '<div class="lbl">HSBC ' + esc(currency) + ' market value</div>' +
         '</div>'
       );
     }).join('') +
     '<div class="stat-card">' +
-    '<div class="val">' + holdings.length + '</div>' +
+    '<div class="val">' + positions.length + '</div>' +
     '<div class="lbl">HSBC holdings</div>' +
     '</div>';
 
-  if (!holdings.length) {
+  if (!positions.length) {
     wrap.innerHTML =
       '<div class="loading">' +
-      esc(hsbcPortfolio.error || 'No approved HSBC holdings found.') +
+      esc(hsbcPortfolio.error || 'No open HSBC positions found.') +
       '</div>';
 
     return;
@@ -5175,69 +5257,83 @@ function renderHsbcPortfolio() {
     '<th>CCY</th>' +
     '</tr></thead><tbody>';
 
-  holdings.forEach(function(holding) {
-    const symbol = String(holding.symbol || '').trim();
-    const currency = String(holding.currency || 'CAD').toUpperCase();
-    const quantity = Number(holding.quantity) || 0;
-
-    const statementLast = Number(holding.unitPrice) || 0;
-    const liveLast = Number(
-      livePrices[String(symbol).toUpperCase()]
-    ) || statementLast;
-
-    const previousClose = Number(holding.previousClose) || 0;
-    const change = previousClose ? (liveLast - previousClose) : 0;
-    const changePercent = previousClose
-      ? (change / previousClose) * 100
-      : 0;
-    const dailyPnl = previousClose ? (change * quantity) : 0;
-
-    const marketValue = quantity * liveLast;
-
-    const avgFifo = Number(holding.avgFifo) || 0;
-    const fifoBasis = avgFifo * quantity;
-    const fifoGainLoss = fifoBasis ? (marketValue - fifoBasis) : 0;
-
-    const avgAcb = Number(holding.avgAcb) || 0;
-    const totalAcb = avgAcb * quantity;
-    const acbGainLoss = totalAcb ? (marketValue - totalAcb) : 0;
+  positions.forEach(function(position) {
+    const hasPrice = position.last > 0;
+    const marketValue = position.marketValue;
+    const fifoBasis = position.totalCost;
+    const fifoGainLoss = marketValue - fifoBasis;
 
     html +=
       '<tr>' +
-      '<td>' + esc(symbol) + '</td>' +
-      '<td class="text-right">' + money(quantity, 4) + '</td>' +
-      '<td class="text-right">' + money(liveLast, 2) + '</td>' +
+      '<td>' + esc(position.symbol) + '</td>' +
       '<td class="text-right">' +
-      (previousClose ? money(change, 2) : '&mdash;') +
+      position.quantity.toLocaleString('en-CA', {
+        minimumFractionDigits: 4,
+        maximumFractionDigits: 4
+      }) +
       '</td>' +
       '<td class="text-right">' +
-      (previousClose ? money(changePct, 2) + '%' : '&mdash;') +
+      (hasPrice
+        ? position.last.toLocaleString('en-CA', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })
+        : '&mdash;') +
+      '</td>' +
+      '<td class="text-right">&mdash;</td>' +
+      '<td class="text-right">&mdash;</td>' +
+      '<td class="text-right">&mdash;</td>' +
+      '<td class="text-right">' +
+      (hasPrice
+        ? marketValue.toLocaleString('en-CA', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })
+        : '&mdash;') +
       '</td>' +
       '<td class="text-right">' +
-      (previousClose ? money(dailyPnl, 2) : '&mdash;') +
+      position.avgCost.toLocaleString('en-CA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) +
       '</td>' +
-      '<td class="text-right">' + money(marketValue, 2) + '</td>' +
       '<td class="text-right">' +
-      (avgFifo ? money(avgFifo, 2) : '&mdash;') +
-      '</td>' +
-      '<td class="text-right">' +
-      (fifoBasis ? money(fifoBasis, 2) : '&mdash;') +
+      fifoBasis.toLocaleString('en-CA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) +
       '</td>' +
       '<td class="text-right ' +
       (fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
-      (fifoBasis ? money(fifoGainLoss, 2) : '&mdash;') +
+      (hasPrice
+        ? fifoGainLoss.toLocaleString('en-CA', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })
+        : '&mdash;') +
       '</td>' +
       '<td class="text-right">' +
-      (avgAcb ? money(avgAcb, 2) : '&mdash;') +
+      position.avgCost.toLocaleString('en-CA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) +
       '</td>' +
       '<td class="text-right">' +
-      (totalAcb ? money(totalAcb, 2) : '&mdash;') +
+      fifoBasis.toLocaleString('en-CA', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }) +
       '</td>' +
       '<td class="text-right ' +
-      (acbGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
-      (totalAcb ? money(acbGainLoss, 2) : '&mdash;') +
+      (fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
+      (hasPrice
+        ? fifoGainLoss.toLocaleString('en-CA', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          })
+        : '&mdash;') +
       '</td>' +
-      '<td>' + esc(currency) + '</td>' +
+      '<td>' + esc(position.currency) + '</td>' +
       '</tr>';
   });
 
