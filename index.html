@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.17">
+    <meta name="version" content="5.6.18">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5355,8 +5355,41 @@ if (!isAllAccounts && !snapshot) {
 
   const valueByCurrency = {};
 
+  let totalMarketValue = 0;
+  let totalFifoBasis = 0;
+  let totalFifoGainLoss = 0;
+  let totalAcb = 0;
+  let totalAcbGainLoss = 0;
+  let totalDailyPnl = 0;
+  let hasDailyPnl = false;
+
   positions.forEach(function(position) {
     const currency = position.currency;
+
+    const hasPrice = position.last > 0;
+const fifoBasis = position.totalCost;
+const fifoGainLoss = position.marketValue - fifoBasis;
+
+const change = position.previousClose
+    ? position.last - position.previousClose
+    : 0;
+
+const dailyPnl = position.previousClose
+    ? change * position.quantity
+    : 0;
+
+totalMarketValue += position.marketValue;
+totalFifoBasis += fifoBasis;
+totalFifoGainLoss += fifoGainLoss;
+totalAcb += fifoBasis;
+totalAcbGainLoss += fifoGainLoss;
+
+if (position.previousClose) {
+    totalDailyPnl += dailyPnl;
+    hasDailyPnl = true;
+}
+
+      
     valueByCurrency[currency] =
       (valueByCurrency[currency] || 0) + position.marketValue;
   });
@@ -5427,6 +5460,11 @@ if (!isAllAccounts && !snapshot) {
         ? change * position.quantity
         : 0;
 
+    const changeClass = change >= 0 ? 'pos-gain' : 'pos-loss';
+    const dailyPnlClass = dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
+
+    const fifoClass = fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+      
     html +=
       '<tr>' +
       '<td>' + esc(position.symbol) + '</td>' +
@@ -5444,15 +5482,15 @@ if (!isAllAccounts && !snapshot) {
           })
         : '&mdash;') +
       '</td>' +
-    '<td class="text-right">' +
-    (position.previousClose ? formatMoney(change) : '&mdash;') +
-    '</td>' +
-    '<td class="text-right">' +
-    (position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
-    '</td>' +
-    '<td class="text-right">' +
-    (position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
-    '</td>' +
+    '<td class="text-right ' + changeClass + '">' +
+(position.previousClose ? formatMoney(change) : '&mdash;') +
+'</td>' +
+'<td class="text-right ' + changeClass + '">' +
+(position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
+'</td>' +
+'<td class="text-right ' + dailyPnlClass + '">' +
+(position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
+'</td>' +
       '<td class="text-right">' +
       (hasPrice
         ? marketValue.toLocaleString('en-CA', {
@@ -5506,6 +5544,43 @@ if (!isAllAccounts && !snapshot) {
       '<td>' + esc(position.currency) + '</td>' +
       '</tr>';
   });
+
+const totalFifoClass =
+    totalFifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+
+html +=
+    '<tr class="total-row" style="font-weight:bold; background:#16202a;">' +
+    '<td>Total</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right ' +
+    (hasDailyPnl
+        ? (totalDailyPnl >= 0 ? 'pos-gain' : 'pos-loss')
+        : '') +
+    '">' +
+    (hasDailyPnl ? formatMoney(totalDailyPnl) : '&mdash;') +
+    '</td>' +
+    '<td class="text-right">' +
+    formatMoney(totalMarketValue) +
+    '</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">' +
+    formatMoney(totalFifoBasis) +
+    '</td>' +
+    '<td class="text-right ' + totalFifoClass + '">' +
+    formatMoney(totalFifoGainLoss) +
+    '</td>' +
+    '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">' +
+    formatMoney(totalAcb) +
+    '</td>' +
+    '<td class="text-right ' + totalFifoClass + '">' +
+    formatMoney(totalAcbGainLoss) +
+    '</td>' +
+    '<td>&mdash;</td>' +
+    '</tr>';
 
   html += '</tbody></table></div>';
 
