@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.14">
+    <meta name="version" content="5.6.15">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5282,16 +5282,19 @@ function buildHsbcPositionsFromTrades(trades, livePrices) {
       return total + lot.cost;
     }, 0);
 
-    const liveLast = Number(livePrices[symbol]) || 0;
+    const priceInfo = livePrices[symbol] || {};
+    const liveLast = Number(priceInfo.price) || 0;
+    const previousClose = Number(priceInfo.previousClose) || 0;
 
     positions.push({
-      symbol: symbol,
-      quantity: quantity,
-      totalCost: totalCost,
-      avgCost: totalCost / quantity,
-      last: liveLast,
-      marketValue: liveLast * quantity,
-      currency: currencyBySymbol[symbol] || 'HKD'
+    symbol: symbol,
+    quantity: quantity,
+    totalCost: totalCost,
+    avgCost: totalCost / quantity,
+    last: liveLast,
+    previousClose: previousClose,
+    marketValue: liveLast * quantity,
+    currency: currencyBySymbol[symbol] || 'HKD'
     });
   });
 
@@ -5405,6 +5408,18 @@ if (!isAllAccounts && !snapshot) {
     const fifoBasis = position.totalCost;
     const fifoGainLoss = marketValue - fifoBasis;
 
+    const change = position.previousClose
+        ? position.last - position.previousClose
+        : 0;
+
+    const changePercent = position.previousClose
+        ? (change / position.previousClose) * 100
+        : 0;
+
+    const dailyPnl = position.previousClose
+        ? change * position.quantity
+        : 0;
+
     html +=
       '<tr>' +
       '<td>' + esc(position.symbol) + '</td>' +
@@ -5422,9 +5437,15 @@ if (!isAllAccounts && !snapshot) {
           })
         : '&mdash;') +
       '</td>' +
-      '<td class="text-right">&mdash;</td>' +
-      '<td class="text-right">&mdash;</td>' +
-      '<td class="text-right">&mdash;</td>' +
+    '<td class="text-right">' +
+    (position.previousClose ? formatMoney(change) : '&mdash;') +
+    '</td>' +
+    '<td class="text-right">' +
+    (position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
+    '</td>' +
+    '<td class="text-right">' +
+    (position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
+    '</td>' +
       '<td class="text-right">' +
       (hasPrice
         ? marketValue.toLocaleString('en-CA', {
