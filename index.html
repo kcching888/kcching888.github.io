@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.16">
+    <meta name="version" content="5.6.17">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5558,6 +5558,14 @@ function renderPortfolio() {
     var positions = {};
     var livePrices = window.currentPrices || {};
 
+const hsbcAccountPattern = /^\d{3}-\d{3}-\d{3}-\d{3}$/;
+
+const isHsbcAccount = function(account) {
+    return hsbcAccountPattern.test(
+        String(account || '').trim()
+    );
+};
+
     // 1. DUAL-TRACKING ENGINE
 var scopedTrades = portfolioSource === 'IBKR'
   ? allTrades.filter(function(trade) {
@@ -5701,12 +5709,17 @@ sortedTrades.forEach(function(t) {
         return total;
     }
 
-    var posArr = Object.values(positions).filter(function(p) {
-        var qty = Math.abs(parseFloat(p.qty) || 0);
-        var amount = Math.abs(parseFloat(p.acbTotalCost) || 0);
-        var cadBal = Math.abs(parseFloat(p.cadBalance) || 0);
-        return qty > 0.001 || amount > 0.001 || cadBal > 0.001;
-    });
+var posArr = Object.values(positions).filter(function(p) {
+    if (isHsbcAccount(p.account)) {
+        return false;
+    }
+
+    var qty = Math.abs(parseFloat(p.qty) || 0);
+    var amount = Math.abs(parseFloat(p.acbTotalCost) || 0);
+    var cadBal = Math.abs(parseFloat(p.cadBalance) || 0);
+
+    return qty > 0.001 || amount > 0.001 || cadBal > 0.001;
+});
 
     var grouped = {};
     posArr.forEach(function(p) {
