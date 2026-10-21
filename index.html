@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.11">
+    <meta name="version" content="5.6.12">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4683,7 +4683,12 @@ if (String(hsbcSelectedAccount).toUpperCase() === 'ALL') {
 window.hsbcActiveTrades = hsbcActiveTrades;
         
         const accounts = data.accounts.map(function(a) { return String(a.account || ''); });
-        if (accounts.indexOf(hsbcSelectedAccount) < 0) hsbcSelectedAccount = accounts[0] || '';
+       if (
+  String(hsbcSelectedAccount).toUpperCase() !== 'ALL' &&
+  accounts.indexOf(hsbcSelectedAccount) < 0
+) {
+  hsbcSelectedAccount = accounts[0];
+}
         updateHsbcAccountOptions();
     } catch (err) {
         hsbcPortfolio = { accounts: [], loaded: false, error: err.message || String(err) };
@@ -4716,21 +4721,40 @@ await loadHsbcPrices(symbols);
 }
 
 function updateHsbcAccountOptions() {
-    const select = document.getElementById('hsbc-account');
-    if (!select) return;
-    select.replaceChildren();
-    (hsbcPortfolio.accounts || []).forEach(function(account) {
-        const option = document.createElement('option');
-        option.value = String(account.account || '');
-        option.textContent = String(account.account || '');
-        select.appendChild(option);
-    });
-    select.value = hsbcSelectedAccount;
+  const select = document.getElementById('hsbc-account');
+
+  if (!select) {
+    return;
+  }
+
+  const currentValue = String(hsbcSelectedAccount || 'ALL').toUpperCase();
+
+  select.replaceChildren();
+
+  const allOption = document.createElement('option');
+  allOption.value = 'ALL';
+  allOption.textContent = 'All HSBC accounts';
+  select.appendChild(allOption);
+
+  (hsbcPortfolio.accounts || []).forEach(function(account) {
+    const option = document.createElement('option');
+    option.value = String(account.account);
+    option.textContent = String(account.account);
+    select.appendChild(option);
+  });
+
+  const selectedValue = currentValue === 'ALL'
+    ? 'ALL'
+    : currentValue;
+
+  select.value = selectedValue;
+  hsbcSelectedAccount = selectedValue;
 }
 
+    
 function setHsbcAccount(value) {
-    hsbcSelectedAccount = String(value || '');
-    renderHsbcPortfolio();
+  hsbcSelectedAccount = String(value || 'ALL').toUpperCase();
+  loadHsbcPortfolio();
 }
 
 
