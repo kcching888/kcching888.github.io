@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.13">
+    <meta name="version" content="5.6.14">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4640,86 +4640,109 @@ async function loadHsbcPrices(symbols) {
     
 async function loadHsbcPortfolio() {
     if (!GAS_URL) {
-        hsbcPortfolio = { accounts: [], loaded: false, error: 'Configure the Google Sheets Web App URL first.' };
+        hsbcPortfolio = {
+            accounts: [],
+            loaded: false,
+            error: 'Configure the Google Sheets Web App URL first.'
+        };
+
         renderHsbcPortfolio();
         return hsbcPortfolio;
     }
+
     try {
         const url = new URL(GAS_URL);
         url.searchParams.set('action', 'getHsbcPortfolio');
         url.searchParams.set('account', hsbcSelectedAccount);
-        const response = await fetch(url.toString(), { cache: 'no-store', redirect: 'follow' });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const data = await response.json();
-        if (!data || !Array.isArray(data.accounts)) {
-            throw new Error(data && data.error ? data.error : 'Invalid HSBC portfolio response');
+
+        const response = await fetch(url.toString(), {
+            cache: 'no-store',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
         }
-        hsbcPortfolio = { accounts: data.accounts, loaded: true, error: '' };
 
-        // Build the active trade list.
-// For ALL, combine trades from every HSBC account.
-let hsbcActiveTrades = [];
+        const data = await response.json();
 
-if (String(hsbcSelectedAccount).toUpperCase() === 'ALL') {
-  data.accounts.forEach(function(account) {
-    const accountTrades = Array.isArray(account.trades)
-      ? account.trades
-      : [];
+        if (!data || !Array.isArray(data.accounts)) {
+            throw new Error(
+                data && data.error
+                    ? data.error
+                    : 'Invalid HSBC portfolio response'
+            );
+        }
 
-    accountTrades.forEach(function(trade) {
-      hsbcActiveTrades.push(trade);
-    });
-  });
-} else {
-  const selectedSnapshot = data.accounts.find(function(account) {
-    return String(account.account) === String(hsbcSelectedAccount);
-  });
+        hsbcPortfolio = {
+            accounts: data.accounts,
+            loaded: true,
+            error: ''
+        };
 
-  hsbcActiveTrades = selectedSnapshot && Array.isArray(selectedSnapshot.trades)
-    ? selectedSnapshot.trades
-    : [];
-}
+        let hsbcActiveTrades = [];
 
-window.hsbcActiveTrades = hsbcActiveTrades;
-        
-        const accounts = data.accounts.map(function(a) { return String(a.account || ''); });
-       if (
-  String(hsbcSelectedAccount).toUpperCase() !== 'ALL' &&
-  accounts.indexOf(hsbcSelectedAccount) < 0
-) {
-  hsbcSelectedAccount = accounts[0];
-}
+        if (String(hsbcSelectedAccount).toUpperCase() === 'ALL') {
+            data.accounts.forEach(function(account) {
+                const accountTrades = Array.isArray(account.trades)
+                    ? account.trades
+                    : [];
+
+                accountTrades.forEach(function(trade) {
+                    hsbcActiveTrades.push(trade);
+                });
+            });
+        } else {
+            const selectedSnapshot = data.accounts.find(function(account) {
+                return String(account.account) === String(hsbcSelectedAccount);
+            });
+
+            hsbcActiveTrades =
+                selectedSnapshot && Array.isArray(selectedSnapshot.trades)
+                    ? selectedSnapshot.trades
+                    : [];
+        }
+
+        window.hsbcActiveTrades = hsbcActiveTrades;
+
+        const accountNames = data.accounts.map(function(account) {
+            return String(account.account || '');
+        });
+
+        if (
+            String(hsbcSelectedAccount).toUpperCase() !== 'ALL' &&
+            accountNames.indexOf(hsbcSelectedAccount) < 0
+        ) {
+            hsbcSelectedAccount = accountNames[0];
+        }
+
         updateHsbcAccountOptions();
     } catch (err) {
-        hsbcPortfolio = { accounts: [], loaded: false, error: err.message || String(err) };
+        hsbcPortfolio = {
+            accounts: [],
+            loaded: false,
+            error: err.message || String(err)
+        };
+
         updateHsbcAccountOptions();
     }
 
-    const snapshot = hsbcPortfolio.accounts.find(function(account) {
-  return String(account.account) === String(hsbcSelectedAccount);
-});
+    const symbols = Array.from(
+        new Set(
+            (window.hsbcActiveTrades || [])
+                .map(function(trade) {
+                    return String(trade.symbol || '').trim();
+                })
+                .filter(Boolean)
+        )
+    );
 
-const trades = snapshot && Array.isArray(snapshot.trades)
-  ? snapshot.trades
-  : [];
-
-const symbols = Array.from(
-  new Set(
-    window.hsbcActiveTrades
-      .map(function(trade) {
-        return String(trade.symbol || '').trim();
-      })
-      .filter(Boolean)
-  )
-);
-
-await loadHsbcPrices(symbols);
-
+    await loadHsbcPrices(symbols);
 
     renderHsbcPortfolio();
+
     return hsbcPortfolio;
 }
-
 function updateHsbcAccountOptions() {
   const select = document.getElementById('hsbc-account');
 
@@ -5285,35 +5308,40 @@ function renderHsbcPortfolio() {
 
   const accounts = hsbcPortfolio.accounts || [];
 
-  const snapshot = accounts.find(function(account) {
-    return String(account.account) === String(hsbcSelectedAccount);
-  });
+ const isAllAccounts =
+    String(hsbcSelectedAccount).toUpperCase() === 'ALL';
 
-  if (!snapshot) {
+const snapshot = isAllAccounts
+    ? null
+    : hsbcPortfolio.accounts.find(function(account) {
+        return String(account.account) === String(hsbcSelectedAccount);
+    });
+
+if (!isAllAccounts && !snapshot) {
     stats.innerHTML = '';
 
     if (label) {
-      label.textContent = '';
+        label.textContent = '';
     }
 
     wrap.innerHTML =
-      '<div class="loading">' +
-      esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
-      '</div>';
+        '<div class="loading">' +
+        esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
+        '</div>';
 
     return;
-  }
-
+}
   const livePrices = window.currentPrices || {};
  const positions = buildHsbcPositionsFromTrades(
   window.hsbcActiveTrades || [],
   livePrices
 );
 
-  if (label) {
-    label.textContent =
-      'HSBC portfolio — built from approved HSBC trade history';
-  }
+ if (label) {
+    label.textContent = isAllAccounts
+        ? 'HSBC Portfolio — all HSBC accounts'
+        : 'HSBC Portfolio — ' + hsbcSelectedAccount;
+}
 
   const valueByCurrency = {};
 
