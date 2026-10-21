@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.18">
+    <meta name="version" content="5.6.19">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1002,6 +1002,7 @@ function setPerfChartGranularity(val) {
                 if (hsbcPortfolio.loaded) {
                   renderHsbcPortfolio();
                 } else {
+                    hsbcSelectedAccount = 'ALL';
                   loadHsbcPortfolio().catch(function(err) {
                     console.error('HSBC approved load failed:', err);
                   });
@@ -1238,6 +1239,7 @@ function syncData() {
             if (hsbcPortfolio.loaded) {
                 renderHsbcPortfolio();
             } else {
+                hsbcSelectedAccount = 'ALL';
                 loadHsbcPortfolio().catch(function(err) {
                   console.error('HSBC approved load failed:', err);
                 });
@@ -7494,6 +7496,7 @@ function setPortfolioSource(value) {
           '<div class="loading">Loading approved HSBC portfolio...</div>';
       }
 
+       hsbcSelectedAccount = 'ALL';
       loadHsbcPortfolio().catch(function(err) {
         console.error('HSBC approved load failed:', err);
       });
