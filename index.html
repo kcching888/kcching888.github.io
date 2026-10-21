@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.10">
+    <meta name="version" content="5.6.11">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -258,7 +258,9 @@
         <option value="ALL">ALL</option>
     </select>
     <label id="hsbc-account-label" for="hsbc-account" style="display:none;font-size:0.85em;color:#aaa;">HSBC account:</label>
-    <select id="hsbc-account" onchange="setHsbcAccount(this.value)" style="display:none;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;"></select>
+    <select id="hsbc-account" onchange="setHsbcAccount(this.value)" style="display:none;background:#0f3460;color:#e0e0e0;border:1px solid #1a4a8a;border-radius:4px;padding:5px 8px;">
+        <option value="ALL">All HSBC accounts</option>
+    </select>
     <span id="hsbc-snapshot-label" style="font-size:0.82em;color:#aaa;"></span>
     <label style="font-size:0.85em; color:#aaa;">View:</label>
     <select id="port-subfilter" onchange="setSubPortfolioFilter(this.value)" style="background:#0f3460; color:#e0e0e0; border:1px solid #1a4a8a; border-radius:4px; padding:5px 8px;">
@@ -4653,6 +4655,33 @@ async function loadHsbcPortfolio() {
             throw new Error(data && data.error ? data.error : 'Invalid HSBC portfolio response');
         }
         hsbcPortfolio = { accounts: data.accounts, loaded: true, error: '' };
+
+        // Build the active trade list.
+// For ALL, combine trades from every HSBC account.
+let hsbcActiveTrades = [];
+
+if (String(hsbcSelectedAccount).toUpperCase() === 'ALL') {
+  data.accounts.forEach(function(account) {
+    const accountTrades = Array.isArray(account.trades)
+      ? account.trades
+      : [];
+
+    accountTrades.forEach(function(trade) {
+      hsbcActiveTrades.push(trade);
+    });
+  });
+} else {
+  const selectedSnapshot = data.accounts.find(function(account) {
+    return String(account.account) === String(hsbcSelectedAccount);
+  });
+
+  hsbcActiveTrades = selectedSnapshot && Array.isArray(selectedSnapshot.trades)
+    ? selectedSnapshot.trades
+    : [];
+}
+
+window.hsbcActiveTrades = hsbcActiveTrades;
+        
         const accounts = data.accounts.map(function(a) { return String(a.account || ''); });
         if (accounts.indexOf(hsbcSelectedAccount) < 0) hsbcSelectedAccount = accounts[0] || '';
         updateHsbcAccountOptions();
@@ -5252,10 +5281,10 @@ function renderHsbcPortfolio() {
   }
 
   const livePrices = window.currentPrices || {};
-  const positions = buildHsbcPositionsFromTrades(
-    snapshot.trades,
-    livePrices
-  );
+ const positions = buildHsbcPositionsFromTrades(
+  window.hsbcActiveTrades || [],
+  livePrices
+);
 
   if (label) {
     label.textContent =
