@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.19">
+    <meta name="version" content="5.6.20">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5239,6 +5239,38 @@ function buildHsbcPositionsFromTrades(trades, livePrices) {
     }
 
     currencyBySymbol[symbol] = currency;
+
+      if (action.indexOf('CORPORATE ACTION IN') === 0) {
+      // Stock dividends, splits, and similar events increase
+      // share count without adding cash cost.
+      lotsBySymbol[symbol].push({
+        quantity: quantity,
+        cost: 0
+      });
+
+      return;
+    }
+
+    if (action.indexOf('CORPORATE ACTION OUT') === 0) {
+      let remaining = quantity;
+      const lots = lotsBySymbol[symbol];
+
+      while (remaining > 0 && lots.length) {
+        const lot = lots[0];
+        const use = Math.min(lot.quantity, remaining);
+        const unitCost = lot.cost / lot.quantity;
+
+        lot.cost -= use * unitCost;
+        lot.quantity -= use;
+        remaining -= use;
+
+        if (lot.quantity <= 0.000001) {
+          lots.shift();
+        }
+      }
+
+      return;
+    }
 
     if (action.indexOf('BUY') === 0) {
       lotsBySymbol[symbol].push({
