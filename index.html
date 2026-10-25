@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.23">
+    <meta name="version" content="5.6.24">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4896,40 +4896,52 @@ function hsbcReviewBadge(status, reviewStatus) {
     return '<span class="badge">' + esc(statusText || reviewText || 'UNKNOWN') + '</span>';
 }
 
-async function loadHsbcUnitTrustPrices() {
-  try {
-    const response = await fetch(
-      GAS_URL + '?action=hsbcUnitTrustNavs'
-    );
+function loadHsbcUnitTrustPrices() {
+  return new Promise(function(resolve) {
+    const callbackName =
+      'hsbcUnitTrustNavCallback_' + Date.now();
 
-    const result = await response.json();
+    const script = document.createElement('script');
+    let completed = false;
 
-    if (!result || !result.success || !result.data || !result.data.prices) {
-      return;
+    function cleanup() {
+      if (script.parentNode) {
+        script.parentNode.removeChild(script);
+      }
+
+      delete window[callbackName];
     }
 
-    window.currentPrices = window.currentPrices || {};
+    window[callbackName] = function(result) {
+      completed = true;
+      cleanup();
+      resolve(result);
+    };
 
-    Object.keys(result.data.prices).forEach(function(symbol) {
-      const nav = result.data.prices[symbol];
+    script.src =
+      GAS_URL +
+      '?action=hsbcUnitTrustNavs' +
+      '&callback=' + callbackName;
 
-      window.currentPrices[symbol] = {
-        price: nav.price,
-        previousClose: nav.previousClose || nav.price,
-        currency: 'HKD',
-        asOf: nav.asOf,
-        source: nav.source
-      };
-    });
+    script.onerror = function() {
+      if (!completed) {
+        completed = true;
+        cleanup();
+        resolve(null);
+      }
+    };
 
-  } catch (error) {
-    console.warn(
-      'Unable to load HSBC unit-trust NAV prices:',
-      error
-    );
-  }
+    document.head.appendChild(script);
+
+    setTimeout(function() {
+      if (!completed) {
+        completed = true;
+        cleanup();
+        resolve(null);
+      }
+    }, 15000);
+  });
 }
-
     
 function renderHsbcReviewQueue() {
     const wrap = document.getElementById('port-table-wrap');
@@ -5416,11 +5428,32 @@ function buildHsbcPortfolioGrandTotal(groups) {
 }
 
 async function renderHsbcPortfolio() {
-  await loadHsbcUnitTrustPrices();
+  loadHsbcUnitTrustPrices().then(function(result) {
+  if (
+    result &&
+    result.success &&
+    result.data &&
+    result.data.prices
+  ) {
+    window.currentPrices = window.currentPrices || {};
+
+    Object.keys(result.data.prices).forEach(function(symbol) {
+      const nav = result.data.prices[symbol];
+
+      window.currentPrices[symbol] = {
+        price: nav.price,
+        previousClose: nav.previousClose || nav.price,
+        currency: 'HKD',
+        asOf: nav.asOf,
+        source: nav.source
+      };
+    });
+  }
 
   renderHsbcPortfolioAfterUTPrices();
+});
+
 }
-    
     
 function renderHsbcPortfolioAfterUTPrices() {
   const wrap = document.getElementById('port-table-wrap');
