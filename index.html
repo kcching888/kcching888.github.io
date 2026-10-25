@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.27">
+    <meta name="version" content="5.6.28">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -240,39 +240,50 @@
     gap: 0.35rem;
 }
 
+.currency-breakdown-header,
 .currency-breakdown-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns:
+        minmax(8rem, 1fr)
+        minmax(8rem, 1fr)
+        minmax(6rem, 0.8fr)
+        minmax(6rem, 0.8fr);
     gap: 0.75rem;
+    align-items: baseline;
+    text-align: left;
 }
 
-.currency-label {
-    font-size: 0.85rem;
+.currency-breakdown-header {
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--text-muted, #64748b);
-    min-width: 3.5rem;
+    margin-bottom: 0.4rem;
 }
 
-.currency-amounts {
-    display: flex;
-    align-items: baseline;
-    justify-content: flex-end;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-
-.currency-native {
-    font-size: 1.35rem;
-    font-weight: 700;
+.currency-native,
+.currency-cad,
+.currency-tax-native,
+.currency-tax-cad {
+    text-align: left;
     white-space: nowrap;
 }
 
+.currency-native,
 .currency-cad {
     font-size: 1.35rem;
     font-weight: 700;
+}
+
+.currency-tax-native,
+.currency-tax-cad {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--text-muted, #64748b);
+}
+
+.currency-cad,
+.currency-tax-cad {
     color: var(--accent, #2563eb);
-    white-space: nowrap;
 }
 
 .total-records {
@@ -280,7 +291,6 @@
     font-size: 0.8rem;
     color: var(--text-muted, #64748b);
 }
-
 
 
         
@@ -2042,29 +2052,33 @@ function renderDivStats() {
 
     grandNetCad = grandGrossCad - grandTaxCad;
 
-    const currencyRows = Object.keys(currencyTotals)
-        .sort()
-        .map(function(currency) {
-            const totals = currencyTotals[currency];
-            const netNative = totals.dividendsNative - totals.taxNative;
-            const netCad = totals.dividendsCad - totals.taxCad;
+const currencyRows = Object.keys(currencyTotals)
+    .sort()
+    .map(function(currency) {
+        const totals = currencyTotals[currency];
 
-            return (
-                '<div class="currency-breakdown-row">' +
-                    '<div class="currency-label">' + esc(currency) + '</div>' +
-                    '<div class="currency-amounts">' +
-                        '<div class="currency-native">' +
-                            esc(currency) + ' ' + fmt(netNative) +
-                        '</div>' +
-                        '<div class="currency-cad">' +
-                            'CAD $' + fmt(netCad) +
-                        '</div>' +
-                    '</div>' +
-                '</div>'
-            );
-        })
-        .join('');
+        const netNative = totals.dividendsNative - totals.taxNative;
+        const netCad = totals.dividendsCad - totals.taxCad;
 
+        return (
+            '<div class="currency-breakdown-row">' +
+                '<div class="currency-native">' +
+                    esc(currency) + ' ' + fmt(netNative) +
+                '</div>' +
+                '<div class="currency-cad">' +
+                    'CAD $' + fmt(netCad) +
+                '</div>' +
+                '<div class="currency-tax-native">' +
+                    esc(currency) + ' ' + fmt(totals.taxNative) +
+                '</div>' +
+                '<div class="currency-tax-cad">' +
+                    'CAD $' + fmt(totals.taxCad) +
+                '</div>' +
+            '</div>'
+        );
+    })
+    .join('');
+    
     const missingWarning = missingConversionCount > 0
         ? '<div class="warning">' +
           missingConversionCount +
@@ -2081,6 +2095,12 @@ function renderDivStats() {
         '</div>' +
         '<div class="stat-card dividend-breakdown-card">' +
             '<div class="breakdown-title">Dividends by Currency</div>' +
+        '<div class="currency-breakdown-header">' +
+    '<div class="currency-native">Net Dividend</div>' +
+    '<div class="currency-cad">Net Dividend (CAD)</div>' +
+    '<div class="currency-tax-native">Tax</div>' +
+    '<div class="currency-tax-cad">Tax (CAD)</div>' +
+    '</div>' +
             '<div class="currency-breakdown">' +
                 (currencyRows ||
                     '<div class="currency-breakdown-row">No dividends</div>') +
