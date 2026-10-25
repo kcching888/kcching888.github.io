@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.20">
+    <meta name="version" content="5.6.21">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5335,6 +5335,51 @@ function buildHsbcPositionsFromTrades(trades, livePrices) {
   return positions;
 }
 
+    function buildHsbcPortfolioGroups(positions) {
+  const groups = {
+    stocks: {
+      label: 'Stocks',
+      positions: [],
+      marketValue: 0,
+      totalCost: 0
+    },
+    unitTrusts: {
+      label: 'Unit Trusts',
+      positions: [],
+      marketValue: 0,
+      totalCost: 0
+    }
+  };
+
+  (positions || []).forEach(function(position) {
+    const symbol = String(position.symbol || '').trim().toUpperCase();
+    const quantity = Number(position.quantity) || 0;
+    const marketValue = Number(position.marketValue) || 0;
+    const totalCost = Number(position.totalCost) || 0;
+
+    // HSBC unit-trust symbols use the Uxxxxx format.
+    const isUnitTrust = /^U\d{4,6}$/.test(symbol);
+
+    const target = isUnitTrust ? groups.unitTrusts : groups.stocks;
+
+    target.positions.push(position);
+    target.marketValue += marketValue;
+    target.totalCost += totalCost;
+  });
+
+  return groups;
+}
+
+function buildHsbcPortfolioGrandTotal(groups) {
+  const stockValue = Number(groups.stocks.marketValue) || 0;
+  const unitTrustValue = Number(groups.unitTrusts.marketValue) || 0;
+
+  return {
+    label: 'HSBC Portfolio Market Value',
+    marketValue: stockValue + unitTrustValue
+  };
+}
+    
     
 function renderHsbcPortfolio() {
   const wrap = document.getElementById('port-table-wrap');
@@ -5380,6 +5425,9 @@ if (!isAllAccounts && !snapshot) {
   window.hsbcActiveTrades || [],
   livePrices
 );
+
+const hsbcGroups = buildHsbcPortfolioGroups(positions);
+const hsbcGrandTotal = buildHsbcPortfolioGrandTotal(hsbcGroups);
 
  if (label) {
     label.textContent = isAllAccounts
