@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.26">
+    <meta name="version" content="5.6.27">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -214,6 +214,76 @@
   align-items: center;
   flex-wrap: wrap;
 }
+
+.dividend-grand-total-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.dividend-breakdown-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.breakdown-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+    margin-bottom: 0.5rem;
+}
+
+.currency-breakdown {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.currency-breakdown-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.currency-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+    min-width: 3.5rem;
+}
+
+.currency-amounts {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.currency-native {
+    font-size: 1.35rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.currency-cad {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--accent, #2563eb);
+    white-space: nowrap;
+}
+
+.total-records {
+    margin-top: 0.6rem;
+    font-size: 0.8rem;
+    color: var(--text-muted, #64748b);
+}
+
+
+
+        
     </style>
 </head>
 <body>
@@ -1908,69 +1978,92 @@ function renderDivStats() {
     let grandNetCad = 0;
     let missingConversionCount = 0;
 
-data.forEach(function(d) {
-    const currency = String(d.currency || '').toUpperCase();
-    const action = String(d.action || '').trim();
-    const amountCad = getDividendCadAmount(d);
+    data.forEach(function(d) {
+        const currency = String(d.currency || '').toUpperCase();
+        const action = String(d.action || '').trim();
+        const nativeAmount = Math.abs(parseFloat(d.amount) || 0);
+        const amountCad = getDividendCadAmount(d);
 
-    const isTax = action === 'Withholding Tax';
-    const isDividend = action === 'Dividends';
+        const isTax = action === 'Withholding Tax';
+        const isDividend = action === 'Dividends';
 
-    if (!isTax && !isDividend) {
-        return;
-    }
+        if (!isTax && !isDividend) {
+            return;
+        }
 
-    if (amountCad === null) {
-        missingConversionCount += 1;
+        if (!currencyTotals[currency]) {
+            currencyTotals[currency] = {
+                dividendsNative: 0,
+                taxNative: 0,
+                dividendsCad: 0,
+                taxCad: 0,
+                count: 0
+            };
+        }
 
-        console.warn(
-            'Missing valid CAD conversion:',
-            d.symbol,
-            d.date,
-            currency,
-            d.amount,
-            d.cadAmount,
-            d.exchRate
-        );
+        if (amountCad === null) {
+            missingConversionCount += 1;
 
-        return;
-    }
+            console.warn(
+                'Missing valid CAD conversion:',
+                d.symbol,
+                d.date,
+                currency,
+                nativeAmount,
+                d.cadAmount,
+                d.exchRate
+            );
 
-    if (!currencyTotals[currency]) {
-        currencyTotals[currency] = {
-            dividends: 0,
-            tax: 0,
-            net: 0,
-            count: 0
-        };
-    }
+            // Still show the native amount, but exclude it from CAD totals.
+            if (isTax) {
+                currencyTotals[currency].taxNative += nativeAmount;
+            } else {
+                currencyTotals[currency].dividendsNative += nativeAmount;
+            }
 
-    if (isTax) {
-        currencyTotals[currency].tax += amountCad;
-        grandTaxCad += amountCad;
-    } else {
-        currencyTotals[currency].dividends += amountCad;
-        grandGrossCad += amountCad;
-    }
+            currencyTotals[currency].count += 1;
+            return;
+        }
 
-    currencyTotals[currency].net =
-        currencyTotals[currency].dividends -
-        currencyTotals[currency].tax;
+        if (isTax) {
+            currencyTotals[currency].taxNative += nativeAmount;
+            currencyTotals[currency].taxCad += amountCad;
 
-    currencyTotals[currency].count += 1;
-});
+            grandTaxCad += amountCad;
+        } else {
+            currencyTotals[currency].dividendsNative += nativeAmount;
+            currencyTotals[currency].dividendsCad += amountCad;
+
+            grandGrossCad += amountCad;
+        }
+
+        currencyTotals[currency].count += 1;
+    });
 
     grandNetCad = grandGrossCad - grandTaxCad;
 
-    const currencySummary = Object.keys(currencyTotals)
+    const currencyRows = Object.keys(currencyTotals)
         .sort()
         .map(function(currency) {
             const totals = currencyTotals[currency];
+            const netNative = totals.dividendsNative - totals.taxNative;
+            const netCad = totals.dividendsCad - totals.taxCad;
 
-            return currency + ': $' + fmt(totals.net) +
-                ' gross | $' + fmt(totals.tax) + ' tax';
+            return (
+                '<div class="currency-breakdown-row">' +
+                    '<div class="currency-label">' + esc(currency) + '</div>' +
+                    '<div class="currency-amounts">' +
+                        '<div class="currency-native">' +
+                            esc(currency) + ' ' + fmt(netNative) +
+                        '</div>' +
+                        '<div class="currency-cad">' +
+                            'CAD $' + fmt(netCad) +
+                        '</div>' +
+                    '</div>' +
+                '</div>'
+            );
         })
-        .join(' | ');
+        .join('');
 
     const missingWarning = missingConversionCount > 0
         ? '<div class="warning">' +
@@ -1979,22 +2072,22 @@ data.forEach(function(d) {
         : '';
 
     $('div-stats').innerHTML =
-        '<div class="stat-card">' +
+        '<div class="stat-card dividend-grand-total-card">' +
             '<div class="val">$' + fmt(grandNetCad) + '</div>' +
-            '<div class="lbl">Grand Total (CAD)<br>' +
-            'Gross: $' + fmt(grandGrossCad) +
-            ' | Tax: $' + fmt(grandTaxCad) +
-            '</div>' +
+            '<div class="lbl">Grand Total (CAD)</div>' +
+            '<div class="lbl">Gross: $' + fmt(grandGrossCad) +
+            ' | Tax: $' + fmt(grandTaxCad) + '</div>' +
             missingWarning +
         '</div>' +
-        '<div class="stat-card">' +
-            '<div class="val">$' + fmt(grandGrossCad) + ' | $' + fmt(grandTaxCad) + '</div>' +
-            '<div class="lbl">All-Currency Dividends | Tax (CAD)</div>' +
-        '</div>' +
-        '<div class="stat-card">' +
-            '<div class="val">' + data.length + '</div>' +
-            '<div class="lbl">Total Records</div>' +
-            '<div class="lbl">' + esc(currencySummary) + '</div>' +
+        '<div class="stat-card dividend-breakdown-card">' +
+            '<div class="breakdown-title">Dividends by Currency</div>' +
+            '<div class="currency-breakdown">' +
+                (currencyRows ||
+                    '<div class="currency-breakdown-row">No dividends</div>') +
+            '</div>' +
+            '<div class="total-records">' +
+                'Total Records: ' + data.length +
+            '</div>' +
         '</div>';
 }
 
