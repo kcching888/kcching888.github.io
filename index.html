@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.21">
+    <meta name="version" content="5.6.22">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5388,90 +5388,76 @@ function renderHsbcPortfolio() {
 
   if (!wrap || !stats) return;
 
-const formatMoney = function(value) {
+  const formatMoney = function(value) {
     return Number(value || 0).toLocaleString('en-CA', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
     });
-};
+  };
 
   const accounts = hsbcPortfolio.accounts || [];
 
- const isAllAccounts =
+  const isAllAccounts =
     String(hsbcSelectedAccount).toUpperCase() === 'ALL';
 
-const snapshot = isAllAccounts
+  const snapshot = isAllAccounts
     ? null
     : hsbcPortfolio.accounts.find(function(account) {
         return String(account.account) === String(hsbcSelectedAccount);
-    });
+      });
 
-if (!isAllAccounts && !snapshot) {
+  if (!isAllAccounts && !snapshot) {
     stats.innerHTML = '';
 
     if (label) {
-        label.textContent = '';
+      label.textContent = '';
     }
 
     wrap.innerHTML =
-        '<div class="loading">' +
-        esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
-        '</div>';
+      '<div class="loading">' +
+      esc(hsbcPortfolio.error || 'No approved HSBC portfolio available.') +
+      '</div>';
 
     return;
-}
+  }
+
   const livePrices = window.currentPrices || {};
- const positions = buildHsbcPositionsFromTrades(
-  window.hsbcActiveTrades || [],
-  livePrices
-);
 
-const hsbcGroups = buildHsbcPortfolioGroups(positions);
-const hsbcGrandTotal = buildHsbcPortfolioGrandTotal(hsbcGroups);
+  const positions = buildHsbcPositionsFromTrades(
+    window.hsbcActiveTrades || [],
+    livePrices
+  );
 
- if (label) {
+  const hsbcGroups = buildHsbcPortfolioGroups(positions);
+  const hsbcGrandTotal = buildHsbcPortfolioGrandTotal(hsbcGroups);
+
+  if (label) {
     label.textContent = isAllAccounts
-        ? 'HSBC Portfolio — all HSBC accounts'
-        : 'HSBC Portfolio — ' + hsbcSelectedAccount;
-}
+      ? 'HSBC Portfolio — all HSBC accounts'
+      : 'HSBC Portfolio — ' + hsbcSelectedAccount;
+  }
 
   const valueByCurrency = {};
 
   let totalMarketValue = 0;
   let totalFifoBasis = 0;
   let totalFifoGainLoss = 0;
-  let totalAcb = 0;
-  let totalAcbGainLoss = 0;
   let totalDailyPnl = 0;
   let hasDailyPnl = false;
 
   positions.forEach(function(position) {
     const currency = position.currency;
 
-    const hasPrice = position.last > 0;
-const fifoBasis = position.totalCost;
-const fifoGainLoss = position.marketValue - fifoBasis;
+    totalMarketValue += position.marketValue;
+    totalFifoBasis += position.totalCost;
+    totalFifoGainLoss += position.marketValue - position.totalCost;
 
-const change = position.previousClose
-    ? position.last - position.previousClose
-    : 0;
+    if (position.previousClose) {
+      const change = position.last - position.previousClose;
+      totalDailyPnl += change * position.quantity;
+      hasDailyPnl = true;
+    }
 
-const dailyPnl = position.previousClose
-    ? change * position.quantity
-    : 0;
-
-totalMarketValue += position.marketValue;
-totalFifoBasis += fifoBasis;
-totalFifoGainLoss += fifoGainLoss;
-totalAcb += fifoBasis;
-totalAcbGainLoss += fifoGainLoss;
-
-if (position.previousClose) {
-    totalDailyPnl += dailyPnl;
-    hasDailyPnl = true;
-}
-
-      
     valueByCurrency[currency] =
       (valueByCurrency[currency] || 0) + position.marketValue;
   });
@@ -5504,171 +5490,218 @@ if (position.previousClose) {
     return;
   }
 
-  let html =
-    '<div style="overflow-x:auto">' +
-    '<table class="portfolio-table">' +
-    '<thead><tr>' +
-    '<th>Symbol</th>' +
-    '<th class="text-right">Qty</th>' +
-    '<th class="text-right">Last</th>' +
-    '<th class="text-right">Changes</th>' +
-    '<th class="text-right">Changes %</th>' +
-    '<th class="text-right">Daily P&amp;L</th>' +
-    '<th class="text-right">MV</th>' +
-    '<th class="text-right">Avg (FIFO)</th>' +
-    '<th class="text-right">Basis</th>' +
-    '<th class="text-right">G/L</th>' +
-    '<th class="text-right">Avg (ACB)</th>' +
-    '<th class="text-right">Total ACB</th>' +
-    '<th class="text-right">G/L</th>' +
-    '<th>CCY</th>' +
-    '</tr></thead><tbody>';
+  function calculateGroupTotals(positions) {
+    let marketValue = 0;
+    let fifoBasis = 0;
+    let fifoGainLoss = 0;
+    let dailyPnl = 0;
+    let hasDailyPnl = false;
 
-  positions.forEach(function(position) {
-    const hasPrice = position.last > 0;
-    const marketValue = position.marketValue;
-    const fifoBasis = position.totalCost;
-    const fifoGainLoss = marketValue - fifoBasis;
+    positions.forEach(function(position) {
+      marketValue += position.marketValue;
+      fifoBasis += position.totalCost;
+      fifoGainLoss += position.marketValue - position.totalCost;
 
-    const change = position.previousClose
+      if (position.previousClose) {
+        const change = position.last - position.previousClose;
+        dailyPnl += change * position.quantity;
+        hasDailyPnl = true;
+      }
+    });
+
+    return {
+      marketValue: marketValue,
+      fifoBasis: fifoBasis,
+      fifoGainLoss: fifoGainLoss,
+      dailyPnl: dailyPnl,
+      hasDailyPnl: hasDailyPnl
+    };
+  }
+
+  function renderPositionRows(positions) {
+    let html = '';
+
+    positions.forEach(function(position) {
+      const hasPrice = position.last > 0;
+      const marketValue = position.marketValue;
+      const fifoBasis = position.totalCost;
+      const fifoGainLoss = marketValue - fifoBasis;
+
+      const change = position.previousClose
         ? position.last - position.previousClose
         : 0;
 
-    const changePercent = position.previousClose
+      const changePercent = position.previousClose
         ? (change / position.previousClose) * 100
         : 0;
 
-    const dailyPnl = position.previousClose
+      const dailyPnl = position.previousClose
         ? change * position.quantity
         : 0;
 
-    const changeClass = change >= 0 ? 'pos-gain' : 'pos-loss';
-    const dailyPnlClass = dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
+      const changeClass = change >= 0 ? 'pos-gain' : 'pos-loss';
+      const dailyPnlClass = dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
+      const fifoClass = fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
 
-    const fifoClass = fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
-      
-    html +=
-      '<tr>' +
-      '<td>' + esc(position.symbol) + '</td>' +
-      '<td class="text-right">' +
-      position.quantity.toLocaleString('en-CA', {
-        minimumFractionDigits: 4,
-        maximumFractionDigits: 4
-      }) +
-      '</td>' +
-      '<td class="text-right">' +
-      (hasPrice
-        ? position.last.toLocaleString('en-CA', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })
-        : '&mdash;') +
-      '</td>' +
-    '<td class="text-right ' + changeClass + '">' +
-(position.previousClose ? formatMoney(change) : '&mdash;') +
-'</td>' +
-'<td class="text-right ' + changeClass + '">' +
-(position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
-'</td>' +
-'<td class="text-right ' + dailyPnlClass + '">' +
-(position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
-'</td>' +
-      '<td class="text-right">' +
-      (hasPrice
-        ? marketValue.toLocaleString('en-CA', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })
-        : '&mdash;') +
-      '</td>' +
-      '<td class="text-right">' +
-      position.avgCost.toLocaleString('en-CA', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) +
-      '</td>' +
-      '<td class="text-right">' +
-      fifoBasis.toLocaleString('en-CA', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) +
-      '</td>' +
-      '<td class="text-right ' +
-      (fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
-      (hasPrice
-        ? fifoGainLoss.toLocaleString('en-CA', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })
-        : '&mdash;') +
-      '</td>' +
-      '<td class="text-right">' +
-      position.avgCost.toLocaleString('en-CA', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) +
-      '</td>' +
-      '<td class="text-right">' +
-      fifoBasis.toLocaleString('en-CA', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-      }) +
-      '</td>' +
-      '<td class="text-right ' +
-      (fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss') + '">' +
-      (hasPrice
-        ? fifoGainLoss.toLocaleString('en-CA', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-          })
-        : '&mdash;') +
-      '</td>' +
-      '<td>' + esc(position.currency) + '</td>' +
-      '</tr>';
-  });
+      html +=
+        '<tr>' +
+        '<td>' + esc(position.symbol) + '</td>' +
+        '<td class="text-right">' +
+        position.quantity.toLocaleString('en-CA', {
+          minimumFractionDigits: 4,
+          maximumFractionDigits: 4
+        }) +
+        '</td>' +
+        '<td class="text-right">' +
+        (hasPrice
+          ? position.last.toLocaleString('en-CA', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })
+          : '&mdash;') +
+        '</td>' +
+        '<td class="text-right ' + changeClass + '">' +
+        (position.previousClose ? formatMoney(change) : '&mdash;') +
+        '</td>' +
+        '<td class="text-right ' + changeClass + '">' +
+        (position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
+        '</td>' +
+        '<td class="text-right ' + dailyPnlClass + '">' +
+        (position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
+        '</td>' +
+        '<td class="text-right">' +
+        (hasPrice
+          ? marketValue.toLocaleString('en-CA', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })
+          : '&mdash;') +
+        '</td>' +
+        '<td class="text-right">' +
+        position.avgCost.toLocaleString('en-CA', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) +
+        '</td>' +
+        '<td class="text-right">' +
+        fifoBasis.toLocaleString('en-CA', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) +
+        '</td>' +
+        '<td class="text-right ' + fifoClass + '">' +
+        (hasPrice
+          ? fifoGainLoss.toLocaleString('en-CA', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })
+          : '&mdash;') +
+        '</td>' +
+        '<td class="text-right">' +
+        position.avgCost.toLocaleString('en-CA', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) +
+        '</td>' +
+        '<td class="text-right">' +
+        fifoBasis.toLocaleString('en-CA', {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }) +
+        '</td>' +
+        '<td class="text-right ' + fifoClass + '">' +
+        (hasPrice
+          ? fifoGainLoss.toLocaleString('en-CA', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            })
+          : '&mdash;') +
+        '</td>' +
+        '<td>' + esc(position.currency) + '</td>' +
+        '</tr>';
+    });
 
-const totalFifoClass =
-    totalFifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+    return html;
+  }
 
-html +=
-    '<tr class="total-row" style="font-weight:bold; background:#16202a;">' +
-    '<td>Total</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right ' +
-    (hasDailyPnl
-        ? (totalDailyPnl >= 0 ? 'pos-gain' : 'pos-loss')
-        : '') +
-    '">' +
-    (hasDailyPnl ? formatMoney(totalDailyPnl) : '&mdash;') +
-    '</td>' +
-    '<td class="text-right">' +
-    formatMoney(totalMarketValue) +
-    '</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right">' +
-    formatMoney(totalFifoBasis) +
-    '</td>' +
-    '<td class="text-right ' + totalFifoClass + '">' +
-    formatMoney(totalFifoGainLoss) +
-    '</td>' +
-    '<td class="text-right">&mdash;</td>' +
-    '<td class="text-right">' +
-    formatMoney(totalAcb) +
-    '</td>' +
-    '<td class="text-right ' + totalFifoClass + '">' +
-    formatMoney(totalAcbGainLoss) +
-    '</td>' +
-    '<td>&mdash;</td>' +
-    '</tr>';
+  function renderGroupTable(groupTitle, groupPositions, totalLabel) {
+    const totals = calculateGroupTotals(groupPositions);
 
-  html += '</tbody></table></div>';
+    const totalFifoClass =
+      totals.fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+
+    return `
+      <h3 style="margin:18px 0 8px;">${esc(groupTitle)}</h3>
+      <div style="overflow-x:auto">
+        <table class="portfolio-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th class="text-right">Qty</th>
+              <th class="text-right">Last</th>
+              <th class="text-right">Changes</th>
+              <th class="text-right">Changes %</th>
+              <th class="text-right">Daily P&amp;L</th>
+              <th class="text-right">MV</th>
+              <th class="text-right">Avg (FIFO)</th>
+              <th class="text-right">Basis</th>
+              <th class="text-right">G/L</th>
+              <th class="text-right">Avg (ACB)</th>
+              <th class="text-right">Total ACB</th>
+              <th class="text-right">G/L</th>
+              <th>CCY</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${renderPositionRows(groupPositions)}
+            <tr class="total-row" style="font-weight:bold; background:#16202a;">
+              <td>${esc(totalLabel)}</td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right ${
+                totals.hasDailyPnl
+                  ? (totals.dailyPnl >= 0 ? 'pos-gain' : 'pos-loss')
+                  : ''
+              }">
+                ${totals.hasDailyPnl ? formatMoney(totals.dailyPnl) : '&mdash;'}
+              </td>
+              <td class="text-right">${formatMoney(totals.marketValue)}</td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right">${formatMoney(totals.fifoBasis)}</td>
+              <td class="text-right ${totalFifoClass}">
+                ${formatMoney(totals.fifoGainLoss)}
+              </td>
+              <td class="text-right">&mdash;</td>
+              <td class="text-right">${formatMoney(totals.fifoBasis)}</td>
+              <td class="text-right ${totalFifoClass}">
+                ${formatMoney(totals.fifoGainLoss)}
+              </td>
+              <td>&mdash;</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  let html = '';
+
+  html += renderGroupTable(
+    'Stocks',
+    hsbcGroups.stocks.positions,
+    'Stocks Total'
+  );
+
+  html += renderGroupTable(
+    'Unit Trusts',
+    hsbcGroups.unitTrusts.positions,
+    'Unit Trusts Total'
+  );
 
   wrap.innerHTML = html;
 }
-
 function buildHsbcPortfolioStatsHtml_(snapshot) {
   const holdings = Array.isArray(snapshot.holdings)
     ? snapshot.holdings
