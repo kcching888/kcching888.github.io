@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.24">
+    <meta name="version" content="5.6.25">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1871,70 +1871,110 @@ function renderTradesTable(){
     }
     function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
 
- function renderDivStats() {
+function renderDivStats() {
     const data = currentFilteredDivs || [];
 
-    let cadDiv = 0, cadTax = 0;
-    let usdDiv = 0, usdTax = 0;
+    const currencyTotals = {};
+    let grandGrossCad = 0;
+    let grandTaxCad = 0;
+    let grandNetCad = 0;
+    let missingConversionCount = 0;
 
     data.forEach(function(d) {
-        const ccy = String(d.currency || '').toUpperCase();
+        const currency = String(d.currency || '').toUpperCase();
         const action = String(d.action || '').trim();
-        const amt = Math.abs(parseFloat(d.amount) || 0);
+        const nativeAmount = Math.abs(parseFloat(d.amount) || 0);
+        const cadAmount = Number(d.cadAmount);
 
-        if (ccy === 'USD') {
-            if (action === 'Withholding Tax') usdTax += amt;
-            else if (action === 'Dividends') usdDiv += amt;
-        } else {
-            if (action === 'Withholding Tax') cadTax += amt;
-            else if (action === 'Dividends') cadDiv += amt;
+        const isTax = action === 'Withholding Tax';
+        const isDividend = action === 'Dividends';
+
+        if (!isTax && !isDividend) {
+            return;
         }
+
+        // Use the backend-converted CAD amount whenever available.
+        let amountCad;
+
+        if (Number.isFinite(cadAmount) && cadAmount !== 0) {
+            amountCad = Math.abs(cadAmount);
+        } else if (currency === 'CAD') {
+            amountCad = nativeAmount;
+        } else {
+            amountCad = 0;
+            missingConversionCount += 1;
+
+            console.warn(
+                'Dividend record is missing cadAmount:',
+                d.symbol,
+                d.date,
+                currency,
+                nativeAmount
+            );
+        }
+
+        if (!currencyTotals[currency]) {
+            currencyTotals[currency] = {
+                dividends: 0,
+                tax: 0,
+                net: 0,
+                count: 0
+            };
+        }
+
+        if (isTax) {
+            currencyTotals[currency].tax += amountCad;
+            grandTaxCad += amountCad;
+        } else {
+            currencyTotals[currency].dividends += amountCad;
+            grandGrossCad += amountCad;
+        }
+
+        currencyTotals[currency].net =
+            currencyTotals[currency].dividends -
+            currencyTotals[currency].tax;
+
+        currencyTotals[currency].count += 1;
     });
 
-    const cadNet = cadDiv - cadTax;
-    const usdNet = usdDiv - usdTax;
-    const usdToCadRate = 1.36;
-    const grandTotalCad = cadNet + (usdNet * usdToCadRate);
+    grandNetCad = grandGrossCad - grandTaxCad;
+
+    const currencySummary = Object.keys(currencyTotals)
+        .sort()
+        .map(function(currency) {
+            const totals = currencyTotals[currency];
+
+            return currency + ': $' + fmt(totals.net) +
+                ' gross | $' + fmt(totals.tax) + ' tax';
+        })
+        .join(' | ');
+
+    const missingWarning = missingConversionCount > 0
+        ? '<div class="warning">' +
+          missingConversionCount +
+          ' non-CAD record(s) missing CAD conversion.</div>'
+        : '';
 
     $('div-stats').innerHTML =
         '<div class="stat-card">' +
-            '<div class="val">$' + fmt(grandTotalCad) + '</div>' +
-            '<div class="lbl">Grand Total (CAD est)<br>' +
-            'CAD: $' + fmt(cadNet) + ' | USD: $' + fmt(usdNet) +
+            '<div class="val">$' + fmt(grandNetCad) + '</div>' +
+            '<div class="lbl">Grand Total (CAD)<br>' +
+            'Gross: $' + fmt(grandGrossCad) +
+            ' | Tax: $' + fmt(grandTaxCad) +
             '</div>' +
+            missingWarning +
         '</div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(cadDiv) + ' | $' + fmt(cadTax) + '</div><div class="lbl">CAD Dividends | Tax</div></div>' +
-       // '<div class="val">$' + fmt(cadTax) + '</div><div class="lbl">CAD Tax</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(usdDiv) + ' | $' + fmt(usdTax) + '</div><div class="lbl">USD Dividends | Tax</div></div>' +
-  //      '<div class="val">$' + fmt(usdTax) + '</div><div class="lbl">USD Tax</div></div>' +
-        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
-}
-
-function renderDivStats_bkup() {
-    const data = currentFilteredDivs || [];
-    let totalCAD = 0;
-    let totalUSD = 0;
-
-    data.forEach(function(d) {
-        const amt = parseFloat(d.amount) || 0;
-        if ((d.currency || '').toUpperCase() === 'USD') totalUSD += amt;
-        else totalCAD += amt;
-    });
-
-    const usdToCadRate = 1.36;
-    const grandTotalCAD = totalCAD + (totalUSD * usdToCadRate);
-
-    $('div-stats').innerHTML =
         '<div class="stat-card">' +
-            '<div class="val">$' + fmt(grandTotalCAD) + '</div>' +
-            '<div class="lbl">Filtered Total (CAD est)<br>CAD: $' + fmt(totalCAD) + ' | USD: $' + fmt(totalUSD) + '</div>' +
+            '<div class="val">$' + fmt(grandGrossCad) + ' | $' + fmt(grandTaxCad) + '</div>' +
+            '<div class="lbl">All-Currency Dividends | Tax (CAD)</div>' +
         '</div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalCAD) + '</div><div class="lbl">CAD Dividends</div></div>' +
-        '<div class="stat-card"><div class="val">$' + fmt(totalUSD) + '</div><div class="lbl">USD Dividends</div></div>' +
-        '<div class="stat-card"><div class="val">' + data.length + '</div><div class="lbl">Total Records</div></div>';
+        '<div class="stat-card">' +
+            '<div class="val">' + data.length + '</div>' +
+            '<div class="lbl">Total Records</div>' +
+            '<div class="lbl">' + esc(currencySummary) + '</div>' +
+        '</div>';
 }
 
-  
 function renderDivTable(){
   const container = document.getElementById('div-table-wrap'); if(!container) return;
   const data = currentFilteredDivs.slice().sort(function(a,b){
@@ -2102,81 +2142,9 @@ function renderDivTable(){
 }
 
     
-function renderDivTable_bkup() {
-    const container = $('div-table-wrap');
-    if (!container) return;
-
-    const data = currentFilteredDivs || [];
-    const perPageVal = ($('df-perpage') || {}).value || '25';
-    const total = data.length;
-    const perPage = perPageVal === 'all' ? Math.max(total, 1) : (parseInt(perPageVal, 10) || 25);
-    const totalPages = Math.max(1, Math.ceil(Math.max(total, 1) / perPage));
-
-    if (divCurrentPage > totalPages) divCurrentPage = totalPages;
-
-    const start = (divCurrentPage - 1) * perPage;
-    const rows = perPageVal === 'all' ? data : data.slice(start, start + perPage);
-
-    if (!rows.length) {
-        container.innerHTML = '<div class="loading">No dividends found for these filters.</div>';
-        const pag = $('div-pagination');
-        if (pag) pag.innerHTML = '';
-        return;
-    }
-
-    const bodyRows = rows.map(function(d) {
-        const rowId = esc(String(d.id || ''));
-        return `
-            <tr>
-                <td>${fmtDate(d.date)}</td>
-                <td>${esc(d.account)}</td>
-                <td>${esc(d.symbol)}</td>
-                <td>${esc(d.description)}</td>
-                <td class="pos-gain">${fmt(d.amount)}</td>
-                <td>${esc(d.currency)}</td>
-                <td><button class="btn btn-danger div-del-btn" data-id="${rowId}" style="padding:3px 8px;font-size:0.75em">Del</button></td>
-            </tr>`;
-    }).join('');
-
-    container.innerHTML = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Account</th>
-                    <th>Symbol</th>
-                    <th>Description</th>
-                    <th>Amount</th>
-                    <th>Currency</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>${bodyRows}</tbody>
-        </table>`;
-
-    container.querySelectorAll('.div-del-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            deleteDiv(this.getAttribute('data-id') || '');
-        });
-    });
-
-    renderPagination('div-pagination', totalPages, divCurrentPage, function(p) {
-        divCurrentPage = p;
-        renderDivTable();
-    });
-}
     
 
-    
-    function renderDivStats_bkup(){
-        var totalCAD=0, totalUSD=0;
-        allDivs.forEach(function(d){
-            if((d.currency||'').toUpperCase()==='USD') totalUSD+=parseFloat(d.amount)||0;
-            else totalCAD+=parseFloat(d.amount)||0;
-        });
-        $('div-stats').innerHTML='<div class="stat-card"><div class="val">$'+fmt(totalCAD)+'</div><div class="lbl">Total Dividends (CAD)</div></div><div class="stat-card"><div class="val">$'+fmt(totalUSD)+'</div><div class="lbl">Total Dividends (USD)</div></div><div class="stat-card"><div class="val">'+allDivs.length+'</div><div class="lbl">Total Records</div></div>';
-    }
-
+  
 // Replace your old fetch logic with this Finnhub version
 async function getLivePrice(symbol) {
     //const FINNHUB_KEY = "YOUR_FINNHUB_API_KEY"; // Replace with your key
