@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.25">
+    <meta name="version" content="5.6.26">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1871,6 +1871,34 @@ function renderTradesTable(){
     }
     function showPage(containerId, p){ if(window['cb_'+containerId]) window['cb_'+containerId](p); }
 
+
+function getDividendCadAmount(d) {
+    const currency = String(d.currency || '').toUpperCase();
+    const amount = Math.abs(parseFloat(d.amount) || 0);
+    const exchRate = parseFloat(d.exchRate);
+    const cadAmount = parseFloat(d.cadAmount);
+
+    if (currency === 'CAD') {
+        return amount;
+    }
+
+    // Preferred: calculate from the statement-date FX rate.
+    if (Number.isFinite(exchRate) && exchRate > 0) {
+        return amount * exchRate;
+    }
+
+    // Fallback: use cadAmount only if it is present and differs from native amount.
+    if (
+        Number.isFinite(cadAmount) &&
+        cadAmount > 0 &&
+        Math.abs(cadAmount - amount) > 0.005
+    ) {
+        return cadAmount;
+    }
+
+    return null;
+}
+    
 function renderDivStats() {
     const data = currentFilteredDivs || [];
 
@@ -1880,62 +1908,57 @@ function renderDivStats() {
     let grandNetCad = 0;
     let missingConversionCount = 0;
 
-    data.forEach(function(d) {
-        const currency = String(d.currency || '').toUpperCase();
-        const action = String(d.action || '').trim();
-        const nativeAmount = Math.abs(parseFloat(d.amount) || 0);
-        const cadAmount = Number(d.cadAmount);
+data.forEach(function(d) {
+    const currency = String(d.currency || '').toUpperCase();
+    const action = String(d.action || '').trim();
+    const amountCad = getDividendCadAmount(d);
 
-        const isTax = action === 'Withholding Tax';
-        const isDividend = action === 'Dividends';
+    const isTax = action === 'Withholding Tax';
+    const isDividend = action === 'Dividends';
 
-        if (!isTax && !isDividend) {
-            return;
-        }
+    if (!isTax && !isDividend) {
+        return;
+    }
 
-        // Use the backend-converted CAD amount whenever available.
-        let amountCad;
+    if (amountCad === null) {
+        missingConversionCount += 1;
 
-        if (Number.isFinite(cadAmount) && cadAmount !== 0) {
-            amountCad = Math.abs(cadAmount);
-        } else if (currency === 'CAD') {
-            amountCad = nativeAmount;
-        } else {
-            amountCad = 0;
-            missingConversionCount += 1;
+        console.warn(
+            'Missing valid CAD conversion:',
+            d.symbol,
+            d.date,
+            currency,
+            d.amount,
+            d.cadAmount,
+            d.exchRate
+        );
 
-            console.warn(
-                'Dividend record is missing cadAmount:',
-                d.symbol,
-                d.date,
-                currency,
-                nativeAmount
-            );
-        }
+        return;
+    }
 
-        if (!currencyTotals[currency]) {
-            currencyTotals[currency] = {
-                dividends: 0,
-                tax: 0,
-                net: 0,
-                count: 0
-            };
-        }
+    if (!currencyTotals[currency]) {
+        currencyTotals[currency] = {
+            dividends: 0,
+            tax: 0,
+            net: 0,
+            count: 0
+        };
+    }
 
-        if (isTax) {
-            currencyTotals[currency].tax += amountCad;
-            grandTaxCad += amountCad;
-        } else {
-            currencyTotals[currency].dividends += amountCad;
-            grandGrossCad += amountCad;
-        }
+    if (isTax) {
+        currencyTotals[currency].tax += amountCad;
+        grandTaxCad += amountCad;
+    } else {
+        currencyTotals[currency].dividends += amountCad;
+        grandGrossCad += amountCad;
+    }
 
-        currencyTotals[currency].net =
-            currencyTotals[currency].dividends -
-            currencyTotals[currency].tax;
+    currencyTotals[currency].net =
+        currencyTotals[currency].dividends -
+        currencyTotals[currency].tax;
 
-        currencyTotals[currency].count += 1;
-    });
+    currencyTotals[currency].count += 1;
+});
 
     grandNetCad = grandGrossCad - grandTaxCad;
 
