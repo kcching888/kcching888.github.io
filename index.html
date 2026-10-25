@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.22">
+    <meta name="version" content="5.6.23">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4896,6 +4896,41 @@ function hsbcReviewBadge(status, reviewStatus) {
     return '<span class="badge">' + esc(statusText || reviewText || 'UNKNOWN') + '</span>';
 }
 
+async function loadHsbcUnitTrustPrices() {
+  try {
+    const response = await fetch(
+      GAS_URL + '?action=hsbcUnitTrustNavs'
+    );
+
+    const result = await response.json();
+
+    if (!result || !result.success || !result.data || !result.data.prices) {
+      return;
+    }
+
+    window.currentPrices = window.currentPrices || {};
+
+    Object.keys(result.data.prices).forEach(function(symbol) {
+      const nav = result.data.prices[symbol];
+
+      window.currentPrices[symbol] = {
+        price: nav.price,
+        previousClose: nav.previousClose || nav.price,
+        currency: 'HKD',
+        asOf: nav.asOf,
+        source: nav.source
+      };
+    });
+
+  } catch (error) {
+    console.warn(
+      'Unable to load HSBC unit-trust NAV prices:',
+      error
+    );
+  }
+}
+
+    
 function renderHsbcReviewQueue() {
     const wrap = document.getElementById('port-table-wrap');
     const stats = document.getElementById('port-stats');
@@ -5379,9 +5414,15 @@ function buildHsbcPortfolioGrandTotal(groups) {
     marketValue: stockValue + unitTrustValue
   };
 }
+
+async function renderHsbcPortfolio() {
+  await loadHsbcUnitTrustPrices();
+
+  renderHsbcPortfolioAfterUTPrices();
+}
     
     
-function renderHsbcPortfolio() {
+function renderHsbcPortfolioAfterUTPrices() {
   const wrap = document.getElementById('port-table-wrap');
   const stats = document.getElementById('port-stats');
   const label = document.getElementById('hsbc-snapshot-label');
