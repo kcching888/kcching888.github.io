@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.30">
+    <meta name="version" content="5.6.31">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5569,7 +5569,13 @@ function calculateHsbcAcb(trades, cutoffDate) {
     const relevantTrades = (trades || [])
         .filter(function(trade) {
             const action = String(trade.action || '').toUpperCase();
-            return action === 'BUY' || action === 'SELL';
+
+            return (
+                action === 'BUY' ||
+                action === 'SELL' ||
+                action === 'BOUGHT' ||
+                action === 'SOLD'
+            );
         })
         .filter(function(trade) {
             if (!cutoff) return true;
@@ -5584,15 +5590,30 @@ function calculateHsbcAcb(trades, cutoffDate) {
     relevantTrades.forEach(function(trade) {
         const action = String(trade.action || '').toUpperCase();
         const quantity = Math.abs(parseFloat(trade.quantity) || 0);
-        const amount = Math.abs(parseFloat(trade.cadAmount ?? trade.amount) || 0);
-        const commission = Math.abs(
-            parseFloat(trade.commissionCad ?? trade.commission ?? trade.comm) || 0
+        const price = Math.abs(parseFloat(trade.price) || 0);
+        const commission = Math.abs(parseFloat(trade.commission || 0) || 0);
+
+        // Calculate trade cost when amount/cadAmount is absent.
+        const amount = Math.abs(
+            parseFloat(
+                trade.cadAmount && trade.cadAmount !== 0
+                    ? trade.cadAmount
+                    : trade.amount && trade.amount !== 0
+                        ? trade.amount
+                        : quantity * price
+            ) || 0
         );
 
-        if (action === 'BUY') {
+        const isBuy =
+            action === 'BUY' || action === 'BOUGHT';
+
+        const isSell =
+            action === 'SELL' || action === 'SOLD';
+
+        if (isBuy) {
             totalAcb += amount + commission;
             totalQuantity += quantity;
-        } else {
+        } else if (isSell) {
             const avgAcbBefore = totalQuantity > 0
                 ? totalAcb / totalQuantity
                 : 0;
