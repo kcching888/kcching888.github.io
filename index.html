@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.29">
+    <meta name="version" content="5.6.30">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5559,6 +5559,74 @@ async function renderHsbcPortfolio() {
 });
 
 }
+
+function calculateHsbcAcb(trades, cutoffDate) {
+    const cutoff = cutoffDate ? new Date(cutoffDate) : null;
+
+    let totalQuantity = 0;
+    let totalAcb = 0;
+
+    const relevantTrades = (trades || [])
+        .filter(function(trade) {
+            const action = String(trade.action || '').toUpperCase();
+            return action === 'BUY' || action === 'SELL';
+        })
+        .filter(function(trade) {
+            if (!cutoff) return true;
+
+            const tradeDate = new Date(trade.date);
+            return !isNaN(tradeDate.getTime()) && tradeDate >= cutoff;
+        })
+        .sort(function(a, b) {
+            return new Date(a.date) - new Date(b.date);
+        });
+
+    relevantTrades.forEach(function(trade) {
+        const action = String(trade.action || '').toUpperCase();
+        const quantity = Math.abs(parseFloat(trade.quantity) || 0);
+        const amount = Math.abs(parseFloat(trade.cadAmount ?? trade.amount) || 0);
+        const commission = Math.abs(
+            parseFloat(trade.commissionCad ?? trade.commission ?? trade.comm) || 0
+        );
+
+        if (action === 'BUY') {
+            totalAcb += amount + commission;
+            totalQuantity += quantity;
+        } else {
+            const avgAcbBefore = totalQuantity > 0
+                ? totalAcb / totalQuantity
+                : 0;
+
+            const acbRemoved = avgAcbBefore * quantity;
+
+            totalAcb = Math.max(0, totalAcb - acbRemoved);
+            totalQuantity = Math.max(0, totalQuantity - quantity);
+        }
+    });
+
+    return {
+        averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
+        totalAcb: totalAcb,
+        totalQuantity: totalQuantity
+    };
+}
+
+function getHsbcTradesForPosition(position) {
+    return (window.hsbcActiveTrades || []).filter(function(trade) {
+        const sameSymbol =
+            String(trade.symbol || '').toUpperCase() ===
+            String(position.symbol || '').toUpperCase();
+
+        const sameAccount =
+            !position.account ||
+            !trade.account ||
+            String(trade.account) === String(position.account);
+
+        return sameSymbol && sameAccount;
+    });
+}
+
+
     
 function renderHsbcPortfolioAfterUTPrices() {
   const wrap = document.getElementById('port-table-wrap');
@@ -5697,117 +5765,158 @@ function renderHsbcPortfolioAfterUTPrices() {
     };
   }
 
-  function renderPositionRows(positions) {
+function renderPositionRows(positions) {
     let html = '';
 
     positions.forEach(function(position) {
-      const hasPrice = position.last > 0;
-      const marketValue = position.marketValue;
-      const fifoBasis = position.totalCost;
-      const fifoGainLoss = marketValue - fifoBasis;
+        const hasPrice = position.last > 0;
+        const marketValue = position.marketValue;
+        const currentQuantity = Number(position.quantity) || 0;
 
-      const change = position.previousClose
-        ? position.last - position.previousClose
-        : 0;
+        const positionTrades = getHsbcTradesForPosition(position);
 
-      const changePercent = position.previousClose
-        ? (change / position.previousClose) * 100
-        : 0;
+        const oldestAcb = calculateHsbcAcb(positionTrades, null);
+        const recentAcb = calculateHsbcAcb(positionTrades, '2021-12-05');
 
-      const dailyPnl = position.previousClose
-        ? change * position.quantity
-        : 0;
+        const oldestBasis = oldestAcb.averageAcb * currentQuantity;
+        const recentBasis = recentAcb.averageAcb * currentQuantity;
 
-      const changeClass = change >= 0 ? 'pos-gain' : 'pos-loss';
-      const dailyPnlClass = dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
-      const fifoClass = fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+        const oldestGainLoss = hasPrice
+            ? marketValue - oldestBasis
+            : 0;
 
-      html +=
-        '<tr>' +
-        '<td>' + esc(position.symbol) + '</td>' +
-        '<td class="text-right">' +
-        position.quantity.toLocaleString('en-CA', {
-          minimumFractionDigits: 4,
-          maximumFractionDigits: 4
-        }) +
-        '</td>' +
-        '<td class="text-right">' +
-        (hasPrice
-          ? position.last.toLocaleString('en-CA', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })
-          : '&mdash;') +
-        '</td>' +
-        '<td class="text-right ' + changeClass + '">' +
-        (position.previousClose ? formatMoney(change) : '&mdash;') +
-        '</td>' +
-        '<td class="text-right ' + changeClass + '">' +
-        (position.previousClose ? formatMoney(changePercent) + '%' : '&mdash;') +
-        '</td>' +
-        '<td class="text-right ' + dailyPnlClass + '">' +
-        (position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
-        '</td>' +
-        '<td class="text-right">' +
-        (hasPrice
-          ? marketValue.toLocaleString('en-CA', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })
-          : '&mdash;') +
-        '</td>' +
-        '<td class="text-right">' +
-        position.avgCost.toLocaleString('en-CA', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        }) +
-        '</td>' +
-        '<td class="text-right">' +
-        fifoBasis.toLocaleString('en-CA', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        }) +
-        '</td>' +
-        '<td class="text-right ' + fifoClass + '">' +
-        (hasPrice
-          ? fifoGainLoss.toLocaleString('en-CA', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })
-          : '&mdash;') +
-        '</td>' +
-        '<td class="text-right">' +
-        position.avgCost.toLocaleString('en-CA', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        }) +
-        '</td>' +
-        '<td class="text-right">' +
-        fifoBasis.toLocaleString('en-CA', {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        }) +
-        '</td>' +
-        '<td class="text-right ' + fifoClass + '">' +
-        (hasPrice
-          ? fifoGainLoss.toLocaleString('en-CA', {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
-            })
-          : '&mdash;') +
-        '</td>' +
-        '<td>' + esc(position.currency) + '</td>' +
-        '</tr>';
+        const recentGainLoss = hasPrice
+            ? marketValue - recentBasis
+            : 0;
+
+        const change = position.previousClose
+            ? position.last - position.previousClose
+            : 0;
+
+        const changePercent = position.previousClose
+            ? (change / position.previousClose) * 100
+            : 0;
+
+        const dailyPnl = position.previousClose
+            ? change * currentQuantity
+            : 0;
+
+        const changeClass = change >= 0 ? 'pos-gain' : 'pos-loss';
+        const dailyPnlClass = dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
+
+        const oldestClass = oldestGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+        const recentClass = recentGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+
+        html +=
+            '<tr>' +
+            '<td>' + esc(position.symbol) + '</td>' +
+            '<td class="text-right">' +
+                currentQuantity.toLocaleString('en-CA', {
+                    minimumFractionDigits: 4,
+                    maximumFractionDigits: 4
+                }) +
+            '</td>' +
+            '<td class="text-right">' +
+                (hasPrice
+                    ? position.last.toLocaleString('en-CA', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })
+                    : '&mdash;') +
+            '</td>' +
+            '<td class="text-right ' + changeClass + '">' +
+                (position.previousClose ? formatMoney(change) : '&mdash;') +
+            '</td>' +
+            '<td class="text-right ' + changeClass + '">' +
+                (position.previousClose
+                    ? formatMoney(changePercent) + '%'
+                    : '&mdash;') +
+            '</td>' +
+            '<td class="text-right ' + dailyPnlClass + '">' +
+                (position.previousClose ? formatMoney(dailyPnl) : '&mdash;') +
+            '</td>' +
+            '<td class="text-right">' +
+                (hasPrice
+                    ? marketValue.toLocaleString('en-CA', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    })
+                    : '&mdash;') +
+            '</td>' +
+
+            // Oldest-trade ACB block
+            '<td class="text-right">' +
+                formatMoney(oldestAcb.averageAcb) +
+            '</td>' +
+            '<td class="text-right">' +
+                formatMoney(oldestBasis) +
+            '</td>' +
+            '<td class="text-right ' + oldestClass + '">' +
+                (hasPrice ? formatMoney(oldestGainLoss) : '&mdash;') +
+            '</td>' +
+
+            // 2021-12-05 onward ACB block
+            '<td class="text-right">' +
+                formatMoney(recentAcb.averageAcb) +
+            '</td>' +
+            '<td class="text-right">' +
+                formatMoney(recentBasis) +
+            '</td>' +
+            '<td class="text-right ' + recentClass + '">' +
+                (hasPrice ? formatMoney(recentGainLoss) : '&mdash;') +
+            '</td>' +
+
+            '<td>' + esc(position.currency) + '</td>' +
+            '</tr>';
     });
 
     return html;
-  }
+}
 
-  function renderGroupTable(groupTitle, groupPositions, totalLabel) {
-    const totals = calculateGroupTotals(groupPositions);
+function renderGroupTable(groupTitle, groupPositions, totalLabel) {
+    let marketValue = 0;
+    let oldestBasis = 0;
+    let oldestGainLoss = 0;
+    let recentBasis = 0;
+    let recentGainLoss = 0;
+    let dailyPnl = 0;
+    let hasDailyPnl = false;
 
-    const totalFifoClass =
-      totals.fifoGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+    groupPositions.forEach(function(position) {
+        const currentQuantity = Number(position.quantity) || 0;
+        const positionTrades = getHsbcTradesForPosition(position);
+
+        const oldestAcb = calculateHsbcAcb(positionTrades, null);
+        const recentAcb = calculateHsbcAcb(positionTrades, '2021-12-05');
+
+        const positionOldestBasis =
+            oldestAcb.averageAcb * currentQuantity;
+
+        const positionRecentBasis =
+            recentAcb.averageAcb * currentQuantity;
+
+        marketValue += position.marketValue;
+        oldestBasis += positionOldestBasis;
+        recentBasis += positionRecentBasis;
+
+        oldestGainLoss += position.marketValue - positionOldestBasis;
+        recentGainLoss += position.marketValue - positionRecentBasis;
+
+        if (position.previousClose) {
+            dailyPnl +=
+                (position.last - position.previousClose) * currentQuantity;
+            hasDailyPnl = true;
+        }
+    });
+
+    const oldestClass =
+        oldestGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+
+    const recentClass =
+        recentGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
+
+    const dailyClass =
+        dailyPnl >= 0 ? 'pos-gain' : 'pos-loss';
 
     return `
       <h3 style="margin:18px 0 8px;">${esc(groupTitle)}</h3>
@@ -5822,12 +5931,12 @@ function renderHsbcPortfolioAfterUTPrices() {
               <th class="text-right">Changes %</th>
               <th class="text-right">Daily P&amp;L</th>
               <th class="text-right">MV</th>
-              <th class="text-right">Avg (FIFO)</th>
+              <th class="text-right">Avg (ACB)</th>
               <th class="text-right">Basis</th>
-              <th class="text-right">G/L</th>
+              <th class="text-right">Basis G/L</th>
               <th class="text-right">Avg (ACB)</th>
               <th class="text-right">Total ACB</th>
-              <th class="text-right">G/L</th>
+              <th class="text-right">Basis G/L</th>
               <th>CCY</th>
             </tr>
           </thead>
@@ -5839,23 +5948,19 @@ function renderHsbcPortfolioAfterUTPrices() {
               <td class="text-right">&mdash;</td>
               <td class="text-right">&mdash;</td>
               <td class="text-right">&mdash;</td>
-              <td class="text-right ${
-                totals.hasDailyPnl
-                  ? (totals.dailyPnl >= 0 ? 'pos-gain' : 'pos-loss')
-                  : ''
-              }">
-                ${totals.hasDailyPnl ? formatMoney(totals.dailyPnl) : '&mdash;'}
+              <td class="text-right ${hasDailyPnl ? dailyClass : ''}">
+                ${hasDailyPnl ? formatMoney(dailyPnl) : '&mdash;'}
               </td>
-              <td class="text-right">${formatMoney(totals.marketValue)}</td>
+              <td class="text-right">${formatMoney(marketValue)}</td>
               <td class="text-right">&mdash;</td>
-              <td class="text-right">${formatMoney(totals.fifoBasis)}</td>
-              <td class="text-right ${totalFifoClass}">
-                ${formatMoney(totals.fifoGainLoss)}
+              <td class="text-right">${formatMoney(oldestBasis)}</td>
+              <td class="text-right ${oldestClass}">
+                ${formatMoney(oldestGainLoss)}
               </td>
               <td class="text-right">&mdash;</td>
-              <td class="text-right">${formatMoney(totals.fifoBasis)}</td>
-              <td class="text-right ${totalFifoClass}">
-                ${formatMoney(totals.fifoGainLoss)}
+              <td class="text-right">${formatMoney(recentBasis)}</td>
+              <td class="text-right ${recentClass}">
+                ${formatMoney(recentGainLoss)}
               </td>
               <td>&mdash;</td>
             </tr>
@@ -5863,7 +5968,7 @@ function renderHsbcPortfolioAfterUTPrices() {
         </table>
       </div>
     `;
-  }
+}
 
   let html = '';
 
