@@ -5582,29 +5582,6 @@ function calculateHsbcAcb(trades, cutoffDate) {
             return new Date(a.date) - new Date(b.date);
         });
 
-    const getTradeAmount = function(trade) {
-        const quantity = Math.abs(parseFloat(trade.quantity) || 0);
-        const price = Math.abs(parseFloat(trade.price) || 0);
-
-        const recordedAmount =
-            trade.cadAmount && trade.cadAmount !== 0
-                ? trade.cadAmount
-                : trade.amount && trade.amount !== 0
-                    ? trade.amount
-                    : quantity * price;
-
-        return Math.abs(parseFloat(recordedAmount(recordedAmountFallback())) || 0);
-
-        function recordedAmount() {
-            return recordedAmountValue;
-        }
-
-        function recordedAmountFallback() {
-            return recordedAmountValue;
-        }
-    };
-
-    // Simpler, correct amount helper:
     const amountOf = function(trade) {
         const quantity = Math.abs(parseFloat(trade.quantity) || 0);
         const price = Math.abs(parseFloat(trade.price) || 0);
@@ -5652,14 +5629,12 @@ function calculateHsbcAcb(trades, cutoffDate) {
             totalAcb = Math.max(0, totalAcb - acbRemoved);
             totalQuantity = Math.max(0, totalQuantity - quantity);
         } else if (isLanding) {
-            // A landing establishes the opening ACB position.
             totalAcb += amount + commission;
             totalQuantity += quantity;
         }
     };
 
     if (!cutoff) {
-        // Left ACB: oldest trade onward.
         allTrades.forEach(processTrade);
 
         return {
@@ -5675,7 +5650,6 @@ function calculateHsbcAcb(trades, cutoffDate) {
     });
 
     if (!hasPreCutoffTrade) {
-        // First trade is already on/after cutoff: use it onward.
         allTrades.forEach(processTrade);
 
         return {
@@ -5684,6 +5658,31 @@ function calculateHsbcAcb(trades, cutoffDate) {
             totalQuantity: totalQuantity
         };
     }
+
+    const landingTrades = allTrades.filter(function(trade) {
+        return String(trade.action || '').toUpperCase() === 'LANDING';
+    });
+
+    landingTrades.forEach(processTrade);
+
+    allTrades
+        .filter(function(trade) {
+            const tradeDate = new Date(trade.date);
+
+            return (
+                !isNaN(tradeDate.getTime()) &&
+                tradeDate >= cutoff &&
+                String(trade.action || '').toUpperCase() !== 'LANDING'
+            );
+        })
+        .forEach(processTrade);
+
+    return {
+        averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
+        totalAcb: totalAcb,
+        totalQuantity: totalQuantity
+    };
+}
 
     // There are pre-cutoff trades: begin with the Landing trade,
     // then apply only trades on/after the cutoff.
