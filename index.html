@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.31">
+    <meta name="version" content="5.6.32">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5566,7 +5566,7 @@ function calculateHsbcAcb(trades, cutoffDate) {
     let totalQuantity = 0;
     let totalAcb = 0;
 
-    const relevantTrades = (trades || [])
+    const allTrades = (trades || [])
         .filter(function(trade) {
             const action = String(trade.action || '').toUpperCase();
 
@@ -5574,41 +5574,70 @@ function calculateHsbcAcb(trades, cutoffDate) {
                 action === 'BUY' ||
                 action === 'SELL' ||
                 action === 'BOUGHT' ||
-                action === 'SOLD'
+                action === 'SOLD' ||
+                action === 'LANDING'
             );
-        })
-        .filter(function(trade) {
-            if (!cutoff) return true;
-
-            const tradeDate = new Date(trade.date);
-            return !isNaN(tradeDate.getTime()) && tradeDate >= cutoff;
         })
         .sort(function(a, b) {
             return new Date(a.date) - new Date(b.date);
         });
 
-    relevantTrades.forEach(function(trade) {
-        const action = String(trade.action || '').toUpperCase();
+    const getTradeAmount = function(trade) {
         const quantity = Math.abs(parseFloat(trade.quantity) || 0);
         const price = Math.abs(parseFloat(trade.price) || 0);
-        const commission = Math.abs(parseFloat(trade.commission || 0) || 0);
 
-        // Calculate trade cost when amount/cadAmount is absent.
-        const amount = Math.abs(
-            parseFloat(
-                trade.cadAmount && trade.cadAmount !== 0
-                    ? trade.cadAmount
-                    : trade.amount && trade.amount !== 0
-                        ? trade.amount
-                        : quantity * price
-            ) || 0
-        );
+        const recordedAmount =
+            trade.cadAmount && trade.cadAmount !== 0
+                ? trade.cadAmount
+                : trade.amount && trade.amount !== 0
+                    ? trade.amount
+                    : quantity * price;
+
+        return Math.abs(parseFloat(recordedAmount(recordedAmountFallback())) || 0);
+
+        function recordedAmount() {
+            return recordedAmountValue;
+        }
+
+        function recordedAmountFallback() {
+            return recordedAmountValue;
+        }
+    };
+
+    // Simpler, correct amount helper:
+    const amountOf = function(trade) {
+        const quantity = Math.abs(parseFloat(trade.quantity) || 0);
+        const price = Math.abs(parseFloat(trade.price) || 0);
+
+        if (trade.cadAmount && trade.cadAmount !== 0) {
+            return Math.abs(parseFloat(trade.cadAmount) || 0);
+        }
+
+        if (trade.amount && trade.amount !== 0) {
+            return Math.abs(parseFloat(trade.amount) || 0);
+        }
+
+        return quantity * price;
+    };
+
+    const commissionOf = function(trade) {
+        return Math.abs(parseFloat(trade.commission || 0) || 0);
+    };
+
+    const processTrade = function(trade) {
+        const action = String(trade.action || '').toUpperCase();
+        const quantity = Math.abs(parseFloat(trade.quantity) || 0);
+        const amount = amountOf(trade);
+        const commission = commissionOf(trade);
 
         const isBuy =
             action === 'BUY' || action === 'BOUGHT';
 
         const isSell =
             action === 'SELL' || action === 'SOLD';
+
+        const isLanding =
+            action === 'LANDING';
 
         if (isBuy) {
             totalAcb += amount + commission;
@@ -5622,8 +5651,58 @@ function calculateHsbcAcb(trades, cutoffDate) {
 
             totalAcb = Math.max(0, totalAcb - acbRemoved);
             totalQuantity = Math.max(0, totalQuantity - quantity);
+        } else if (isLanding) {
+            // A landing establishes the opening ACB position.
+            totalAcb += amount + commission;
+            totalQuantity += quantity;
         }
+    };
+
+    if (!cutoff) {
+        // Left ACB: oldest trade onward.
+        allTrades.forEach(processTrade);
+
+        return {
+            averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
+            totalAcb: totalAcb,
+            totalQuantity: totalQuantity
+        };
+    }
+
+    const hasPreCutoffTrade = allTrades.some(function(trade) {
+        const tradeDate = new Date(trade.date);
+        return !isNaN(tradeDate.getTime()) && tradeDate < cutoff;
     });
+
+    if (!hasPreCutoffTrade) {
+        // First trade is already on/after cutoff: use it onward.
+        allTrades.forEach(processTrade);
+
+        return {
+            averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
+            totalAcb: totalAcb,
+            totalQuantity: totalQuantity
+        };
+    }
+
+    // There are pre-cutoff trades: begin with the Landing trade,
+    // then apply only trades on/after the cutoff.
+    const landingTrades = allTrades.filter(function(trade) {
+        return String(trade.action || '').toUpperCase() === 'LANDING';
+    });
+
+    landingTrades.forEach(processTrade);
+
+    allTrades
+        .filter(function(trade) {
+            const tradeDate = new Date(trade.date);
+            return (
+                !isNaN(tradeDate.getTime()) &&
+                tradeDate >= cutoff &&
+                String(trade.action || '').toUpperCase() !== 'LANDING'
+            );
+        })
+        .forEach(processTrade);
 
     return {
         averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
@@ -5631,7 +5710,6 @@ function calculateHsbcAcb(trades, cutoffDate) {
         totalQuantity: totalQuantity
     };
 }
-
 function getHsbcTradesForPosition(position) {
     return (window.hsbcActiveTrades || []).filter(function(trade) {
         const sameSymbol =
