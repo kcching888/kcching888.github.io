@@ -5684,31 +5684,9 @@ function calculateHsbcAcb(trades, cutoffDate) {
     };
 }
 
-    // There are pre-cutoff trades: begin with the Landing trade,
-    // then apply only trades on/after the cutoff.
-    const landingTrades = allTrades.filter(function(trade) {
-        return String(trade.action || '').toUpperCase() === 'LANDING';
-    });
 
-    landingTrades.forEach(processTrade);
-
-    allTrades
-        .filter(function(trade) {
-            const tradeDate = new Date(trade.date);
-            return (
-                !isNaN(tradeDate.getTime()) &&
-                tradeDate >= cutoff &&
-                String(trade.action || '').toUpperCase() !== 'LANDING'
-            );
-        })
-        .forEach(processTrade);
-
-    return {
-        averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
-        totalAcb: totalAcb,
-        totalQuantity: totalQuantity
-    };
-}
+  
+    
 function getHsbcTradesForPosition(position) {
     return (window.hsbcActiveTrades || []).filter(function(trade) {
         const sameSymbol =
