@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.32">
+    <meta name="version" content="5.6.33">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5634,15 +5634,19 @@ function calculateHsbcAcb(trades, cutoffDate) {
         }
     };
 
-    if (!cutoff) {
-        allTrades.forEach(processTrade);
+  if (!cutoff) {
+    allTrades
+        .filter(function(trade) {
+            return String(trade.action || '').toUpperCase() !== 'LANDING';
+        })
+        .forEach(processTrade);
 
-        return {
-            averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
-            totalAcb: totalAcb,
-            totalQuantity: totalQuantity
-        };
-    }
+    return {
+        averageAcb: totalQuantity > 0 ? totalAcb / totalQuantity : 0,
+        totalAcb: totalAcb,
+        totalQuantity: totalQuantity
+    };
+}
 
     const hasPreCutoffTrade = allTrades.some(function(trade) {
         const tradeDate = new Date(trade.date);
