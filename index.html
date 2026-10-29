@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.38">
+    <meta name="version" content="5.6.39">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -298,29 +298,46 @@
     justify-content: center;
 }
 
-.latest-upload-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 0.75rem;
-}
-
-.latest-upload-label {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--text-muted, #64748b);
-}
-
-.latest-upload-date {
-    font-size: 1.35rem;
-    font-weight: 700;
-    white-space: nowrap;
-}
 
 .latest-upload-card .lbl {
     margin-top: 0.5rem;
 }
 
+        h1 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.header-title-text {
+    white-space: nowrap;
+}
+
+.latest-upload-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.8rem;
+}
+
+.latest-upload-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}
+
+.latest-upload-label {
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+}
+
+.latest-upload-date {
+    font-weight: 700;
+    white-space: nowrap;
+}
         
     </style>
 </head>
@@ -933,18 +950,31 @@ function setPerfChartGranularity(val) {
 
     //const APP_VERSION = "3.84";
     
-    console.log("allTrades: ", allTrades);
-    console.log("allFxTrades: ", allFxTrades);
+   // console.log("allTrades: ", allTrades);
+   // console.log("allFxTrades: ", allFxTrades);
     
-    function syncVersion() {
+function syncVersion() {
     // This looks for the content inside the meta tag named 'version'
-        const versionMeta = document.querySelector('meta[name="version"]');
-        const ver = versionMeta ? versionMeta.getAttribute('content') : "0.0.0";
+    const versionMeta = document.querySelector('meta[name="version"]');
+    const ver = versionMeta ? versionMeta.getAttribute('content') : '0.0.0';
 
-        document.title = "Investment Dashboard v" + ver;
-        const header = document.querySelector('h1');
-        if (header) header.innerText = "Investment Dashboard v" + ver;
+    document.title = 'Investment Dashboard v' + ver;
+
+    const header = document.querySelector('h1');
+
+    if (header) {
+        // Preserve the latest-upload indicator while updating the title.
+        const indicator = document.getElementById(
+            'latest-upload-indicator'
+        );
+
+        header.innerHTML =
+            '<span class="header-title-text">' +
+                'Investment Dashboard v' + ver +
+            '</span>' +
+            (indicator ? indicator.outerHTML : '');
     }
+}
     
     // Replace your current function $(id) with this:
     function $(id) {
