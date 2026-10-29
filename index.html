@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.50">
+    <meta name="version" content="5.6.51">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -6962,37 +6962,20 @@ if (act === 'landing') {
 
 // Corporate Action Out: reduce share count, preserve total cost.
 if (act.includes('corporate action out')) {
-    var caOutPosition = costBasis[symbol + '|' + currency + '|' + account];
-
-    if (caOutPosition) {
-        caOutPosition.qty = Math.max(0, caOutPosition.qty - q);
+    if (costBasis[key]) {
+        costBasis[key].qty = Math.max(0, costBasis[key].qty - q);
     }
-
     return;
 }
 
 // Corporate Action In: increase share count, preserve total cost.
 if (act.includes('corporate action in')) {
-    var caInPosition = costBasis[symbol + '|' + currency + '|' + account];
-
-    if (caInPosition) {
-        caInPosition.qty += q;
+    if (costBasis[key]) {
+        costBasis[key].qty += q;
     }
-
     return;
-}
+} 
 
-if (act.includes('corporate action in')) {
-    var caInKey = symbol + '|' + currency + '|' + account;
-    var caInPosition = costBasis[caInKey];
-
-    if (caInPosition) {
-        // Increase share count without adding new cost.
-        caInPosition.qty += q;
-    }
-
-    return;
-}
      
   var rate = num(t.exchRate, 1); // historical exchange rate at time of this trade
   var txYear = '';
