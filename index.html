@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.33">
+    <meta name="version" content="5.6.34">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4678,7 +4678,62 @@ function buildLotGapBannerHtml(positions) {
       '<ul class="lot-gap-list">' + listHtml + '</ul>' +
     '</div>';
 }
-    
+
+
+function getLatestRecordDate(records) {
+    if (!Array.isArray(records) || records.length === 0) {
+        return null;
+    }
+
+    const latest = records.reduce(function(latestDate, record) {
+        const currentDate = new Date(record.date);
+
+        if (
+            !isNaN(currentDate.getTime()) &&
+            (!latestDate || currentDate > latestDate)
+        ) {
+            return currentDate;
+        }
+
+        return latestDate;
+    }, null);
+
+    return latest;
+}
+
+function buildLatestUploadCardsHtml() {
+    const latestIbkrDate = getLatestRecordDate(allTrades || []);
+    const latestHsbcDate = getLatestRecordDate(
+        window.hsbcActiveTrades || []
+    );
+
+    return (
+        '<div class="stat-card">' +
+            '<div class="val">' +
+                formatLatestUploadDate(latestIbkrDate) +
+            '</div>' +
+            '<div class="lbl">Latest IBKR record uploaded</div>' +
+        '</div>' +
+        '<div class="stat-card">' +
+            '<div class="val">' +
+                formatLatestUploadDate(latestHsbcDate) +
+            '</div>' +
+            '<div class="lbl">Latest HSBC record uploaded</div>' +
+        '</div>'
+    );
+}
+
+function formatLatestUploadDate(date) {
+    if (!date) {
+        return 'No records';
+    }
+
+    return date.toLocaleDateString('en-CA', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
 
 // ---------------------------------------------------------------------------
 // HSBC staged review and approved snapshots
@@ -5806,7 +5861,8 @@ function renderHsbcPortfolioAfterUTPrices() {
     '<div class="stat-card">' +
     '<div class="val">' + positions.length + '</div>' +
     '<div class="lbl">HSBC holdings</div>' +
-    '</div>';
+     '</div>' +
+    buildLatestUploadCardsHtml();
 
   if (!positions.length) {
     wrap.innerHTML =
@@ -6296,9 +6352,6 @@ html += '</div>';
 
 html += lotGapBannerHtml;
 
-/* then continue with your existing portfolio table/cards HTML */
-    
-    // let html = '';
 
     var fundsSet = 0;
     
@@ -6505,9 +6558,12 @@ var acct = key.substring(dashIdx + 1);
                 <td class="text-right">$${fmt(totalFxComm)}</td>
             </tr>`;
 
+            buildLatestUploadCardsHtml()
             html += `</tbody></table></div>`;
         }
     });
+
+ 
 
     document.getElementById('port-table-wrap').innerHTML = html;
 }
