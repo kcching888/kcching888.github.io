@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.34">
+    <meta name="version" content="5.6.35">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -292,7 +292,34 @@
     font-size: 0.8rem;
     color: var(--text-muted, #64748b);
 }
+.latest-upload-card {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
 
+.latest-upload-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.latest-upload-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted, #64748b);
+}
+
+.latest-upload-date {
+    font-size: 1.35rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.latest-upload-card .lbl {
+    margin-top: 0.5rem;
+}
 
         
     </style>
@@ -1382,26 +1409,7 @@ function attachFilterListeners() {
         };
     });
 }
-/*    
-function attachFilterListeners_bkp() {
-    ['f-gl-account', 'f-gl-stock', 'f-gl-year', 'f-div-account', 'f-div-stock', 'f-div-year'].forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
 
-        el.onchange = function() {
-            console.log("Filter action triggered on:", id);
-            
-            // Route to the correct refresh function based on the ID prefix
-            if (id.startsWith('f-gl-')) {
-                renderGainLoss(); // Refresh Gain/Loss
-            } else if (id.startsWith('f-div-')) {
-                ();  // Refresh Dividends
-            }
-        };
-    });
-}
-    
-*/
     
     function openAddTradeModal(){
         $('at-date').value = new Date().toISOString().slice(0,10);
@@ -3544,12 +3552,7 @@ function renderEquityDrawdown() {
 
     html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px;">' +
         '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'1M\')">1M</button>' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'3M\')">3M</button>' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'6M\')">6M</button>' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'YTD\')">YTD</button>' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'1Y\')">1Y</button>' +
-   //         '<button class="btn-secondary" onclick="setPerfRange(\'ALL\')">All</button>' +
+
         '</div>' +
     '</div>';
     
@@ -4702,27 +4705,36 @@ function getLatestRecordDate(records) {
 }
 
 function buildLatestUploadCardsHtml() {
-    const latestIbkrDate = getLatestRecordDate(allTrades || []);
-    const latestHsbcDate = getLatestRecordDate(
-        window.hsbcActiveTrades || []
-    );
+    const latestIbkrDate = getLatestRecordDate([
+        ...(allTrades || []),
+        ...(allDivs || [])
+    ]);
+
+    const latestHsbcDate = getLatestRecordDate([
+        ...(window.hsbcActiveTrades || []),
+        ...(window.hsbcDividends || [])
+    ]);
 
     return (
-        '<div class="stat-card">' +
-            '<div class="val">' +
-                formatLatestUploadDate(latestIbkrDate) +
+        '<div class="stat-card latest-upload-card">' +
+            '<div class="latest-upload-row">' +
+                '<div class="latest-upload-label">IBKR</div>' +
+                '<div class="latest-upload-date">' +
+                    formatLatestUploadDate(latestIbkrDate) +
+                '</div>' +
             '</div>' +
-            '<div class="lbl">Latest IBKR record uploaded</div>' +
-        '</div>' +
-        '<div class="stat-card">' +
-            '<div class="val">' +
-                formatLatestUploadDate(latestHsbcDate) +
+            '<div class="latest-upload-row">' +
+                '<div class="latest-upload-label">HSBC</div>' +
+                '<div class="latest-upload-date">' +
+                    formatLatestUploadDate(latestHsbcDate) +
+                '</div>' +
             '</div>' +
-            '<div class="lbl">Latest HSBC record uploaded</div>' +
+            '<div class="lbl">Latest record uploaded</div>' +
         '</div>'
     );
 }
 
+    
 function formatLatestUploadDate(date) {
     if (!date) {
         return 'No records';
