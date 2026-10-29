@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.44">
+    <meta name="version" content="5.6.45">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -7566,40 +7566,58 @@ function fileToBase64(file) {
     }
 
 window.addEventListener('load', function() {
-    // 1. Initial UI Setup
+    // 1. Set IBKR Portfolio as the default source
+    portfolioSource = 'IBKR';
+
+    const portfolioSourceSelect =
+        document.getElementById('portfolio-source');
+
+    if (portfolioSourceSelect) {
+        portfolioSourceSelect.value = 'IBKR';
+    }
+
+    // 2. Initial UI Setup
     updateAccountFilter();
     applyFilters();
     updateSubPortfolioSelectors();
 
-    // 2. Load sync time UI
+    // 3. Load sync time UI
     const syncTime = localStorage.getItem('ibkr_sync_time');
+
     if (syncTime && $('sync-status')) {
-        $('sync-status').textContent = '✔ Last synced: ' + syncTime;
+        $('sync-status').textContent =
+            '✔ Last synced: ' + syncTime;
         $('sync-status').style.display = '';
     }
 
-    // 3. Handle Connection / Auto-Sync
+    // 4. Handle Connection / Auto-Sync
     if (GAS_URL) {
         checkConnection();
-        const autoSync = localStorage.getItem('ibkr_autosync') === 'true';
+
+        const autoSync =
+            localStorage.getItem('ibkr_autosync') === 'true';
+
         if (autoSync) {
             syncData();
         }
+
         loadSubPortfolios();
     }
 
-    // Load prices from cache immediately for instant UI populating
-    const cached = JSON.parse(localStorage.getItem('finnhub_price_cache') || '{}');
+    // 5. Load prices from cache immediately
+    const cached = JSON.parse(
+        localStorage.getItem('finnhub_price_cache') || '{}'
+    );
+
     if (cached.prices) {
         window.currentPrices = cached.prices;
         renderPortfolio();
         renderLatestUploadIndicator();
     }
 
-    // Still call updateAllPrices to check if cache is expired
+    // 6. Check whether cached prices are expired
     updateAllPrices();
 });
-
 const TxType = Object.freeze({
   BUY: 'BUY',
   SELL: 'SELL',
