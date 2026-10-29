@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.49">
+    <meta name="version" content="5.6.50">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -6955,24 +6955,28 @@ function renderGainLoss() {
   var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
   var act = String(t.action || '').toLowerCase();
 
-    // Ignore Landing records in Gain/Loss calculations.
+// Ignore Landing records in Gain/Loss calculations.
 if (act === 'landing') {
-    console.log("landing act: " + act);
     return;
 }
 
-// Treat Corporate Action Out/In as a share conversion,
-// not as a purchase or sale.
+// Corporate Action Out: reduce share count, preserve total cost.
 if (act.includes('corporate action out')) {
-    var caOutKey = symbol + '|' + currency + '|' + account;
-    var caOutPosition = costBasis[caOutKey];
+    var caOutPosition = costBasis[symbol + '|' + currency + '|' + account];
 
     if (caOutPosition) {
-        // Reduce share count but preserve the total ACB.
-        caOutPosition.qty = Math.max(
-            0,
-            caOutPosition.qty - q
-        );
+        caOutPosition.qty = Math.max(0, caOutPosition.qty - q);
+    }
+
+    return;
+}
+
+// Corporate Action In: increase share count, preserve total cost.
+if (act.includes('corporate action in')) {
+    var caInPosition = costBasis[symbol + '|' + currency + '|' + account];
+
+    if (caInPosition) {
+        caInPosition.qty += q;
     }
 
     return;
