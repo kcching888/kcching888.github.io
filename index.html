@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.39">
+    <meta name="version" content="5.6.40">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -954,7 +954,6 @@ function setPerfChartGranularity(val) {
    // console.log("allFxTrades: ", allFxTrades);
     
 function syncVersion() {
-    // This looks for the content inside the meta tag named 'version'
     const versionMeta = document.querySelector('meta[name="version"]');
     const ver = versionMeta ? versionMeta.getAttribute('content') : '0.0.0';
 
@@ -962,18 +961,61 @@ function syncVersion() {
 
     const header = document.querySelector('h1');
 
-    if (header) {
-        // Preserve the latest-upload indicator while updating the title.
-        const indicator = document.getElementById(
-            'latest-upload-indicator'
-        );
-
-        header.innerHTML =
-            '<span class="header-title-text">' +
-                'Investment Dashboard v' + ver +
-            '</span>' +
-            (indicator ? indicator.outerHTML : '');
+    if (!header) {
+        return;
     }
+
+    let indicator = document.getElementById('latest-upload-indicator');
+
+    if (!indicator) {
+        indicator = document.createElement('span');
+        indicator.id = 'latest-upload-indicator';
+        indicator.className = 'latest-upload-indicator';
+        header.appendChild(indicator);
+    }
+
+    header.innerHTML =
+        '<span class="header-title-text">' +
+            'Investment Dashboard v' + ver +
+        '</span>' +
+        indicator.outerHTML;
+
+    renderLatestUploadIndicator();
+}
+
+function renderLatestUploadIndicator() {
+    const latestIbkrDate = getLatestRecordDate([
+        ...(allTrades || []),
+        ...(allDivs || [])
+    ]);
+
+    const latestHsbcDate = getLatestRecordDate([
+        ...(window.hsbcActiveTrades || []),
+        ...(window.hsbcDividends || [])
+    ]);
+
+    const container = document.getElementById(
+        'latest-upload-indicator'
+    );
+
+    if (!container) {
+        console.warn('Latest-upload indicator container not found.');
+        return;
+    }
+
+    container.innerHTML =
+        '<div class="latest-upload-row">' +
+            '<span class="latest-upload-label">IBKR</span>' +
+            '<span class="latest-upload-date">' +
+                formatLatestUploadDate(latestIbkrDate) +
+            '</span>' +
+        '</div>' +
+        '<div class="latest-upload-row">' +
+            '<span class="latest-upload-label">HSBC</span>' +
+            '<span class="latest-upload-date">' +
+                formatLatestUploadDate(latestHsbcDate) +
+            '</span>' +
+        '</div>';
 }
     
     // Replace your current function $(id) with this:
@@ -7550,6 +7592,7 @@ window.addEventListener('load', function() {
     if (cached.prices) {
         window.currentPrices = cached.prices;
         renderPortfolio();
+        renderLatestUploadIndicator();
     }
 
     // Still call updateAllPrices to check if cache is expired
