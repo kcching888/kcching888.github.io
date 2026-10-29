@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.35">
+    <meta name="version" content="5.6.36">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4879,6 +4879,8 @@ async function loadHsbcPortfolio() {
 
         window.hsbcActiveTrades = hsbcActiveTrades;
 
+       
+
         const accountNames = data.accounts.map(function(account) {
             return String(account.account || '');
         });
@@ -4901,6 +4903,31 @@ async function loadHsbcPortfolio() {
         updateHsbcAccountOptions();
     }
 
+ let hsbcDividends = [];
+
+if (
+  String(hsbcSelectedAccount).toUpperCase() === 'ALL'
+) {
+  data.accounts.forEach(function(account) {
+    const accountDividends = Array.isArray(account.dividends)
+      ? account.dividends
+      : [];
+
+    hsbcDividends = hsbcDividends.concat(accountDividends);
+  });
+} else {
+  const selectedSnapshot = data.accounts.find(function(account) {
+    return String(account.account) === String(hsbcSelectedAccount);
+  });
+
+  hsbcDividends = selectedSnapshot &&
+    Array.isArray(selectedSnapshot.dividends)
+      ? selectedSnapshot.dividends
+      : [];
+}
+
+window.hsbcDividends = hsbcDividends;
+    
     const symbols = Array.from(
         new Set(
             (window.hsbcActiveTrades || [])
