@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.42">
+    <meta name="version" content="5.6.43">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1407,6 +1407,7 @@ function syncData() {
         applyFilters();
         updateAccountFilter();
         renderPortfolio();
+        renderLatestUploadIndicator();
         
         if (portfolioSource === 'HSBC_REVIEW') {
             if (hsbcReview.loaded) {
