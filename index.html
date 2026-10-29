@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.47">
+    <meta name="version" content="5.6.48">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -6954,6 +6954,41 @@ function renderGainLoss() {
   var a = Math.abs(parseFloat(t.amount) || 0);
   var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
   var act = String(t.action || '').toLowerCase();
+
+    // Ignore Landing records in Gain/Loss calculations.
+if (act === 'landing') {
+    return;
+}
+
+// Treat Corporate Action Out/In as a share conversion,
+// not as a purchase or sale.
+if (act.includes('corporate action out')) {
+    var caOutKey = symbol + '|' + currency + '|' + account;
+    var caOutPosition = costBasis[caOutKey];
+
+    if (caOutPosition) {
+        // Reduce share count but preserve the total ACB.
+        caOutPosition.qty = Math.max(
+            0,
+            caOutPosition.qty - q
+        );
+    }
+
+    return;
+}
+
+if (act.includes('corporate action in')) {
+    var caInKey = symbol + '|' + currency + '|' + account;
+    var caInPosition = costBasis[caInKey];
+
+    if (caInPosition) {
+        // Increase share count without adding new cost.
+        caInPosition.qty += q;
+    }
+
+    return;
+}
+     
   var rate = num(t.exchRate, 1); // historical exchange rate at time of this trade
   var txYear = '';
   try { txYear = new Date(t.date).getFullYear().toString(); } catch(e) {}
@@ -6988,39 +7023,7 @@ function renderGainLoss() {
       costBasis[key].totalCost -= costOfSold;
     }
   }
-  // Ignore Landing records in Gain/Loss calculations.
-if (act === 'landing') {
-    return;
-}
 
-// Treat Corporate Action Out/In as a share conversion,
-// not as a purchase or sale.
-if (act.includes('corporate action out')) {
-    var caOutKey = symbol + '|' + currency + '|' + account;
-    var caOutPosition = costBasis[caOutKey];
-
-    if (caOutPosition) {
-        // Reduce share count but preserve the total ACB.
-        caOutPosition.qty = Math.max(
-            0,
-            caOutPosition.qty - q
-        );
-    }
-
-    return;
-}
-
-if (act.includes('corporate action in')) {
-    var caInKey = symbol + '|' + currency + '|' + account;
-    var caInPosition = costBasis[caInKey];
-
-    if (caInPosition) {
-        // Increase share count without adding new cost.
-        caInPosition.qty += q;
-    }
-
-    return;
-}
 });
 
     var glArr = Object.values(realized).filter(function(r) {
