@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.37">
+    <meta name="version" content="5.6.38">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -1325,6 +1325,7 @@ function syncData() {
         allHistory = enrichHistoryWithDerivedFees(cloudData.history || []);
         allFxTrades = cloudData.fxTrades || cloudData.FX || cloudData.fx || [];
         allInterest = cloudData.interest || cloudData.Interest || [];
+        window.hsbcDividends = cloudData.hsbcDividends || [];   //??????
         
         saveLocal();
         loadSubPortfolios();
@@ -4879,34 +4880,7 @@ async function loadHsbcPortfolio() {
 
         window.hsbcActiveTrades = hsbcActiveTrades;
 
-        
- let hsbcDividends = [];
-
-if (
-  String(hsbcSelectedAccount).toUpperCase() === 'ALL'
-) {
-  data.accounts.forEach(function(account) {
-    const accountDividends = Array.isArray(account.dividends)
-      ? account.dividends
-      : [];
-
-    hsbcDividends = hsbcDividends.concat(accountDividends);
-  });
-} else {
-  const selectedSnapshot = data.accounts.find(function(account) {
-    return String(account.account) === String(hsbcSelectedAccount);
-  });
-
-  hsbcDividends = selectedSnapshot &&
-    Array.isArray(selectedSnapshot.dividends)
-      ? selectedSnapshot.dividends
-      : [];
-}
-
-window.hsbcDividends = hsbcDividends;
-
-       
-
+ 
         const accountNames = data.accounts.map(function(account) {
             return String(account.account || '');
         });
