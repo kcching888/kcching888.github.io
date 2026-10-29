@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.36">
+    <meta name="version" content="5.6.37">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4879,30 +4879,7 @@ async function loadHsbcPortfolio() {
 
         window.hsbcActiveTrades = hsbcActiveTrades;
 
-       
-
-        const accountNames = data.accounts.map(function(account) {
-            return String(account.account || '');
-        });
-
-        if (
-            String(hsbcSelectedAccount).toUpperCase() !== 'ALL' &&
-            accountNames.indexOf(hsbcSelectedAccount) < 0
-        ) {
-            hsbcSelectedAccount = accountNames[0];
-        }
-
-        updateHsbcAccountOptions();
-    } catch (err) {
-        hsbcPortfolio = {
-            accounts: [],
-            loaded: false,
-            error: err.message || String(err)
-        };
-
-        updateHsbcAccountOptions();
-    }
-
+        
  let hsbcDividends = [];
 
 if (
@@ -4927,6 +4904,31 @@ if (
 }
 
 window.hsbcDividends = hsbcDividends;
+
+       
+
+        const accountNames = data.accounts.map(function(account) {
+            return String(account.account || '');
+        });
+
+        if (
+            String(hsbcSelectedAccount).toUpperCase() !== 'ALL' &&
+            accountNames.indexOf(hsbcSelectedAccount) < 0
+        ) {
+            hsbcSelectedAccount = accountNames[0];
+        }
+
+        updateHsbcAccountOptions();
+    } catch (err) {
+        hsbcPortfolio = {
+            accounts: [],
+            loaded: false,
+            error: err.message || String(err)
+        };
+
+        updateHsbcAccountOptions();
+    }
+
     
     const symbols = Array.from(
         new Set(
