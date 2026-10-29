@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.45">
+    <meta name="version" content="5.6.46">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -7975,11 +7975,20 @@ function buildLedgerFromData(opts) {
   }
 }
 
+function isLandingTrade(trade) {
+    return String(trade.action || '').trim().toUpperCase() === 'LANDING';
+}
+    
 function buildLedgerFromCurrentAppData(opts = {}) {
   const ledger = makeEmptyLedger(opts.baseCurrency || 'CAD');
   const livePrices = opts.livePrices || window.currentPrices || {};
 
-  const trades = sortByDateThenId((window.allTrades || []).map(normalizeTradeRecord).filter(t => t.type));
+  const trades = sortByDateThenId(window.allTrades)
+    .map(normalizeTradeRecord)
+    .filter(t => t.type)
+    .filter(t => !isLandingTrade(t));
+
+    
   const divs = sortByDateThenId((window.allDivs || []).map(normalizeDividendRecord));
   const transfers = sortByDateThenId((window.allTransfers || []).map(normalizeTransferRecord));
   const interest = sortByDateThenId((window.allInterest || []).map(normalizeInterestRecord));
