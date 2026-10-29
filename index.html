@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.40">
+    <meta name="version" content="5.6.41">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -989,10 +989,9 @@ function renderLatestUploadIndicator() {
         ...(allDivs || [])
     ]);
 
-    const latestHsbcDate = getLatestRecordDate([
-        ...(window.hsbcActiveTrades || []),
-        ...(window.hsbcDividends || [])
-    ]);
+    const latestHsbcDate = window.hsbcLatestRecordDate
+        ? new Date(window.hsbcLatestRecordDate)
+        : null;
 
     const container = document.getElementById(
         'latest-upload-indicator'
@@ -1017,7 +1016,6 @@ function renderLatestUploadIndicator() {
             '</span>' +
         '</div>';
 }
-    
     // Replace your current function $(id) with this:
     function $(id) {
         if (id.startsWith('#')) id = id.substring(1); // Handle both 'id' and '#id'
@@ -1397,8 +1395,9 @@ function syncData() {
         allHistory = enrichHistoryWithDerivedFees(cloudData.history || []);
         allFxTrades = cloudData.fxTrades || cloudData.FX || cloudData.fx || [];
         allInterest = cloudData.interest || cloudData.Interest || [];
-        window.hsbcDividends = cloudData.hsbcDividends || [];   //??????
-        
+        window.hsbcDividends = cloudData.hsbcDividends || [];  
+
+        window.hsbcLatestRecordDate =  cloudData.hsbcLatestRecordDate || null;
         saveLocal();
         loadSubPortfolios();
         updateFilterOptions();
