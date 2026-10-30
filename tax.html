@@ -1,88 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CRA Tax Reporting</title>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #1a1a2e;
-            color: #e0e0e0;
-            margin: 0;
-            padding: 20px;
-        }
-
-        h1 {
-            color: #e94560;
-        }
-
-        .filter-bar {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-
-        select, button {
-            padding: 8px;
-            border-radius: 5px;
-            border: 1px solid #4f98a3;
-            background: #16213e;
-            color: #e0e0e0;
-        }
-
-        .card {
-            background: #16213e;
-            border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        th, td {
-            padding: 8px;
-            border-bottom: 1px solid #333;
-            text-align: left;
-        }
-
-        .text-right {
-            text-align: right;
-        }
-
-        .pos-gain { color: #4caf50; }
-        .pos-loss { color: #f44336; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CRA Tax Reporting</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
+  <header class="page-header">
     <h1>CRA Tax Reporting</h1>
+    <nav>
+      <a href="index.html">Dashboard</a>
+      <a href="tax.html" class="active">Tax</a>
+    </nav>
+  </header>
 
-    <div class="filter-bar">
-        <select id="f-cra-year"></select>
+  <main>
+    <section class="card">
+      <div class="filters">
+        <label>
+          Tax year
+          <select id="f-cra-year"></select>
+        </label>
 
-        <select id="f-cra-source">
-            <option value="ALL">All Accounts</option>
+        <label>
+          Account source
+          <select id="f-cra-source">
+            <option value="All">All</option>
             <option value="IBKR">IBKR</option>
             <option value="HSBC">HSBC</option>
-        </select>
+          </select>
+        </label>
 
-        <button onclick="renderCraCapitalGains()">
-            Refresh
-        </button>
+        <button id="btn-cra-refresh">Refresh</button>
+        <button id="btn-cra-export">Export CRA CSV</button>
+      </div>
 
-        <button onclick="exportCraCapitalGains()">
-            Export CSV
-        </button>
-    </div>
+      <div id="cra-status" class="status"></div>
 
-    <div id="cra-summary"></div>
-    <div id="cra-table"></div>
+      <div class="summary-grid">
+        <div class="summary">
+          <span>Total proceeds</span>
+          <strong id="sum-proceeds">—</strong>
+        </div>
+        <div class="summary">
+          <span>Total ACB</span>
+          <strong id="sum-acb">—</strong>
+        </div>
+        <div class="summary">
+          <span>Net capital gain / loss</span>
+          <strong id="sum-gain">—</strong>
+        </div>
+        <div class="summary">
+          <span>Taxable capital gain</span>
+          <strong id="sum-taxable">—</strong>
+        </div>
+      </div>
+    </section>
 
-    <script src="tax.js"></script>
+    <section class="card">
+      <h2>Annual Realized Capital Gains</h2>
+      <div class="table-wrap">
+        <table id="cra-gains-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Source</th>
+              <th>Symbol</th>
+              <th>Description</th>
+              <th>Qty sold</th>
+              <th>Proceeds CAD</th>
+              <th>ACB CAD</th>
+              <th>Outlays CAD</th>
+              <th>Gain / Loss CAD</th>
+              <th>Gain / Loss USD</th>
+              <th>FX rate</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="tax.js"></script>
 </body>
 </html>
