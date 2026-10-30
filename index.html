@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.52">
+    <meta name="version" content="5.6.53">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -3205,6 +3205,7 @@ renderPerfAnnualChart(rowsForChart);
     
 }
 
+    
 
 function computeAnnualPerformanceBreakdown(perfData, unrealizedLedger, realizedRows, startDate, endDate, unrealizedTotal) {
   const acctFilter = String(perfAccount || 'ALL').trim();
@@ -4953,7 +4954,8 @@ async function loadHsbcPortfolio() {
 
         window.hsbcActiveTrades = hsbcActiveTrades;
 
- 
+        invalidateHsbcTradeIndex();
+        
         const accountNames = data.accounts.map(function(account) {
             return String(account.account || '');
         });
@@ -5832,24 +5834,39 @@ function calculateHsbcAcb(trades, cutoffDate) {
 }
 
 
-  
-    
-function getHsbcTradesForPosition(position) {
-    return (window.hsbcActiveTrades || []).filter(function(trade) {
-        const sameSymbol =
-            String(trade.symbol || '').toUpperCase() ===
-            String(position.symbol || '').toUpperCase();
+let hsbcTradeIndex = null;
 
-        const sameAccount =
-            !position.account ||
-            !trade.account ||
-            String(trade.account) === String(position.account);
+function buildHsbcTradeIndex(trades) {
+    const index = {};
 
-        return sameSymbol && sameAccount;
+    (trades || []).forEach(function(trade) {
+        const key = String(trade.symbol).trim().toUpperCase() + '|' +
+                    String(trade.account).trim();
+
+        if (!index[key]) {
+            index[key] = [];
+        }
+
+        index[key].push(trade);
     });
+
+    return index;
 }
 
+function getHsbcTradesForPosition(position) {
+    if (!hsbcTradeIndex) {
+        hsbcTradeIndex = buildHsbcTradeIndex(window.hsbcActiveTrades);
+    }
 
+    const key = String(position.symbol).trim().toUpperCase() + '|' +
+                String(position.account).trim();
+
+    return hsbcTradeIndex[key] || [];
+}
+
+function invalidateHsbcTradeIndex() {
+    hsbcTradeIndex = null;
+}
     
 function renderHsbcPortfolioAfterUTPrices() {
   const wrap = document.getElementById('port-table-wrap');
@@ -5897,6 +5914,8 @@ function renderHsbcPortfolioAfterUTPrices() {
     window.hsbcActiveTrades || [],
     livePrices
   );
+
+
 
   const hsbcGroups = buildHsbcPortfolioGroups(positions);
   const hsbcGrandTotal = buildHsbcPortfolioGrandTotal(hsbcGroups);
@@ -7447,27 +7466,34 @@ function fileToBase64(file) {
     applyFilters();
   }
 
-    // Put this in your index.html script section
-    async function getBOCRate(currency, date) {
-        if (currency === 'CAD') return 1;
+const fxRateCache = new Map();
 
-        if (currency === 'CNH') 
-            currency = 'CHN';
-    
-        try {
-            // Ask your Apps Script for the rate instead of BoC directly
-            const url = GAS_URL + "?action=getRate&currency=" + currency + "&date=" + date;
-            const response = await fetch(url);
-            const data = await response.json();
-            
-            console.log("getBOCRate data: ", data);
-            
-            return data.rate || 1; 
-        } catch (e) {
-            console.error("Proxy Rate Error for " + currency + " on " + date + ":", e);
-            return 1; // Fallback so the upload doesn't fail
-        }
+async function getBOCRate(currency, date) {
+    if (currency === 'CAD') return 1;
+
+    const key = currency + '|' + date;
+
+    if (fxRateCache.has(key)) {
+        return fxRateCache.get(key);
     }
+
+    try {
+        const url = GASURL +
+            '?action=getRate' +
+            '&currency=' + encodeURIComponent(currency) +
+            '&date=' + encodeURIComponent(date);
+
+        const response = await fetch(url, { cache: 'no-store' });
+        const data = await response.json();
+        const rate = Number(data.rate) || 1;
+
+        fxRateCache.set(key, rate);
+        return rate;
+    } catch (err) {
+        console.error('Rate lookup failed', currency, date, err);
+        return 1;
+    }
+}
 
     function parseNum(val) {
       if (val === null || val === undefined) return NaN;
