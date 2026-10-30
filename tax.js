@@ -1,227 +1,495 @@
+/* =========================================================
+   CRA Tax Reporting — Annual Realized Capital Gains
+   ========================================================= */
+
 const GAS_URL = localStorage.getItem('ibkr_gas_url');
 
-let allTrades = [];
+let taxData = {
+  allTrades: [],
+  transfers: [],
+  hsbcStatements: []
+};
+
+const els = {
+  year: document.getElementById('f-cra-year'),
+  source: document.getElementById('f-cra-source'),
+  status: document.getElementById('cra-status'),
+  tbody: document.querySelector('#cra-gains-table tbody'),
+  proceeds: document.getElementById('sum-proceeds'),
+  acb: document.getElementById('sum-acb'),
+  gain: document.getElementById('sum-gain'),
+  taxable: document.getElementById('sum-taxable'),
+  refresh: document.getElementById('btn-cra-refresh'),
+  export: document.getElementById('btn-cra-export')
+};
+
+/* ---------------- Utilities ---------------- */
+
+function num(value) {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function fmtCad(value) {
+  return value.toLocaleString('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    maximumFractionDigits: 2
+  });
+}
+
+function fmtDate(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  return isNaN(d) ? String(value) : d.toISOString().slice(0, 10);
+}
+
+function setStatus(message, isError = false) {
+  els.status.textContent = message || '';
+  els.status.classList.toggle('error', isError);
+}
+
+function getTradeDate(t) {
+  return t.date || t.tradeDate || t.dateTime || t.timestamp || '';
+}
+
+function getTradeSource(t) {
+  const raw = String(
+    t.source || t.account || t.accountSource || t.portfolio || ''
+  ).toUpperCase();
+
+  if (raw.includes('IBKR') || raw.includes('IB')) return 'IBKR';
+  if (raw.includes('HSBC')) return 'HSBC';
+  return raw || 'UNKNOWN';
+}
+
+function getSymbol(t) {
+  return String(
+    t.symbol || t.ticker || t.security || t.securityId || ''
+  ).trim().toUpperCase();
+}
+
+function getQuantity(t) {
+  return num(
+    t.quantity ??
+    t.qty ??
+    t.shares ??
+    t.units ??
+    0
+  );
+}
+
+function getTradeType(t) {
+  return String(
+    t.type || t.action || t.transactionType || t.side || ''
+  ).trim();
+}
+
+function isBuy(t) {
+  const type = getTradeType(t).toLowerCase();
+  return (
+    type.includes('buy') ||
+    type.includes('purchase') ||
+    num(t.quantity) > 0 && !type.includes('sell')
+  );
+}
+
+function isSell(t) {
+  const type = getTradeType(t).toLowerCase();
+  return (
+    type.includes('sell') ||
+    type.includes('sale') ||
+    num(t.quantity) < 0 && !type.includes('buy')
+  );
+}
+
+function isCorporateActionOut(t) {
+  const type = getTradeType(t).toLowerCase();
+  return type.includes('corporate action out') || type.includes('ca out');
+}
+
+function isCorporateActionIn(t) {
+  const type = getTradeType(t).toLowerCase();
+  return type.includes('corporate action in') || type.includes('ca in');
+}
+
+function isLanding(t) {
+  const type = getTradeType(t).toLowerCase();
+  return type.includes('landing');
+}
+
+/* CAD value:
+   Prefer the dashboard's calculated CAD amount.
+   Otherwise use amount x exchange rate. */
+function getCadAmount(t) {
+  if (t.cadAmount !== undefined && t.cadAmount !== null && t.cadAmount !== '') {
+    return num(t.cadAmount);
+  }
+
+  const amount = num(
+    t.amount ??
+    t.grossAmount ??
+    t.netAmount ??
+    t.proceeds ??
+    t.cost ??
+    0
+  );
+
+  const fx = num(
+    t.exchRate ??
+    t.exchangeRate ??
+    t.fxRate ??
+    1
+  );
+
+  return amount * fx;
+}
+
+function getUsdAmount(t) {
+  return num(
+    t.amount ??
+    t.grossAmount ??
+    t.netAmount ??
+    t.proceeds ??
+    t.cost ??
+    0
+  );
+}
+
+function getFeesCad(t) {
+  const fee = num(
+    t.fee ??
+    t.commission ??
+    t.fees ??
+    0
+  );
+
+  const feeCad = num(t.feeCad);
+
+  if (feeCad) return Math.abs(feeCad);
+  if (fee) return Math.abs(fee) * num(t.exchRate || t.exchangeRate || 1);
+  return 0;
+}
+
+/* ---------------- Data loading ---------------- */
 
 async function loadTaxData() {
-    if (!GAS_URL) {
-        alert('Configure the Google Sheets Web App URL first.');
-        return;
+  if (!GAS_URL) {
+    setStatus('Configure the Google Sheets Web App URL first.', true);
+    return;
+  }
+
+  setStatus('Loading investment data…');
+
+  const url = `${GAS_URL}?action=getData&t=${Date.now()}`;
+  const res = await fetch(url);
+  const json = await res.json();
+
+  taxData.allTrades = normalizeTrades(json.allTrades || json.trades || []);
+  taxData.transfers = json.transfers || [];
+  taxData.hsbcStatements = json.hsbcStatements || [];
+
+  populateYearFilter();
+  setStatus(`Loaded ${taxData.allTrades.length.toLocaleString()} transactions.`);
+}
+
+/* Normalize field names so the tax engine is resilient
+   to small differences between IBKR and HSBC records. */
+function normalizeTrades(rows) {
+  return rows.map((r, i) => ({
+    ...r,
+    _id: r.id || r.reference || r.statementKey || `row-${i}`,
+    _date: getTradeDate(r),
+    _source: getTradeSource(r),
+    _symbol: getSymbol(r),
+    _qty: getQuantity(r),
+    _type: getTradeType(r),
+    _cad: getCadAmount(r),
+    _usd: getUsdAmount(r),
+    _feesCad: getFeesCad(r)
+  })).filter(r => r._symbol);
+}
+
+/* ---------------- Year filter ---------------- */
+
+function populateYearFilter() {
+  const years = new Set();
+
+  taxData.allTrades.forEach(t => {
+    const d = new Date(t._date);
+    if (!isNaN(d)) years.add(d.getFullYear());
+  });
+
+  const sorted = [...years].sort((a, b) => b - a);
+
+  els.year.innerHTML = '';
+
+  if (!sorted.length) {
+    els.year.innerHTML = '<option value="">No dates</option>';
+    return;
+  }
+
+  sorted.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y;
+    opt.textContent = y;
+    els.year.appendChild(opt);
+  });
+
+  els.year.value = sorted[0];
+}
+
+/* ---------------- ACB engine ---------------- */
+
+function buildAcbLedger(sourceFilter) {
+  const ledger = new Map();
+
+  const rows = taxData.allTrades
+    .filter(t => sourceFilter === 'All' || t._source === sourceFilter)
+    .sort((a, b) => new Date(a._date) - new Date(b._date));
+
+  rows.forEach(t => {
+    const key = `${t._source}||${t._symbol}`;
+
+    if (!ledger.has(key)) {
+      ledger.set(key, {
+        source: t._source,
+        symbol: t._symbol,
+        qty: 0,
+        costCad: 0,
+        sales: []
+      });
     }
 
-    const response = await fetch(
-        GAS_URL + '?action=getAll',
-        { cache: 'no-store' }
-    );
+    const pos = ledger.get(key);
 
-    const data = await response.json();
+    // Ignore HSBC Landing records for original ACB.
+    if (isLanding(t)) return;
 
-    allTrades = data.trades || [];
+    if (isCorporateActionOut(t)) {
+      // Split / corporate-action removal:
+      // reduce share count but preserve remaining cost basis.
+      pos.qty -= Math.abs(t._qty);
+      return;
+    }
 
-    populateYearOptions();
-    renderCraCapitalGains();
-}
+    if (isCorporateActionIn(t)) {
+      // Split / corporate-action receipt:
+      // increase share count but preserve cost basis.
+      pos.qty += Math.abs(t._qty);
+      return;
+    }
 
-function isHsbcAccount(account) {
-    return /^\d{3}-\d{3}-\d{3}-\d{3}$/.test(String(account).trim());
-}
+    if (isBuy(t)) {
+      const buyQty = Math.abs(t._qty);
+      const buyCost = Math.abs(t._cad) + t._feesCad;
 
-function populateYearOptions() {
-    const select = document.getElementById('f-cra-year');
-    const years = new Set();
+      pos.qty += buyQty;
+      pos.costCad += buyCost;
+      return;
+    }
 
-    allTrades.forEach(function(trade) {
-        if (trade.date) {
-            years.add(new Date(trade.date).getFullYear().toString());
-        }
-    });
+    if (isSell(t)) {
+      const sellQty = Math.abs(t._qty);
 
-    years.add(new Date().getFullYear().toString());
+      if (pos.qty <= 0) return;
 
-    select.innerHTML = Array.from(years)
-        .sort()
-        .reverse()
-        .map(function(year) {
-            return '<option value="' + year + '">' + year + '</option>';
-        })
-        .join('');
+      const avgCostCad = pos.costCad / pos.qty;
+      const acbCad = avgCostCad * sellQty;
 
-    select.value = new Date().getFullYear().toString();
+      const proceedsCad = Math.abs(t._cad);
+      const outlaysCad = t._feesCad;
+
+      const gainCad = proceedsCad - acbCad - outlaysCad;
+
+      pos.sales.push({
+        date: t._date,
+        source: t._source,
+        symbol: t._symbol,
+        description: t.description || t.name || t.securityName || '',
+        qtySold: sellQty,
+        proceedsCad,
+        acbCad,
+        outlaysCad,
+        gainCad,
+        gainUsd: t._usd,
+        fxRate: num(t.exchRate || t.exchangeRate || 1),
+        raw: t
+      });
+
+      pos.qty -= sellQty;
+      pos.costCad -= acbCad;
+
+      if (pos.qty < 0.0000001) {
+        pos.qty = 0;
+        pos.costCad = 0;
+      }
+    }
+  });
+
+  return ledger;
 }
 
 function getCraCapitalGainsRows() {
-    const year = document.getElementById('f-cra-year').value;
-    const source = document.getElementById('f-cra-source').value;
+  const year = els.year.value;
+  const source = els.source.value;
 
-    const sortedTrades = allTrades
-        .slice()
-        .sort(function(a, b) {
-            return new Date(a.date) - new Date(b.date);
-        });
+  if (!year) return [];
 
-    const positions = {};
-    const results = [];
+  const ledger = buildAcbLedger(source);
+  const rows = [];
 
-    sortedTrades.forEach(function(trade) {
-        const symbol = String(trade.symbol || '').trim().toUpperCase();
-        const account = String(trade.account || '').trim();
-        const currency = String(trade.currency || '').trim().toUpperCase();
-        const action = String(trade.action || '').trim().toLowerCase();
-
-        const key = symbol + '|' + currency + '|' + account;
-
-        if (!positions[key]) {
-            positions[key] = {
-                qty: 0,
-                totalCost: 0
-            };
-        }
-
-        const position = positions[key];
-
-        const quantity = Math.abs(Number(trade.quantity) || 0);
-        const amount = Math.abs(Number(trade.amount) || 0);
-        const commission = Math.abs(
-            Number(trade.commission ?? trade.comm) || 0
-        );
-
-        const rate = Number(trade.exchRate) || 1;
-
-        // Landing is ignored for the original ACB calculation.
-        if (action === 'landing') {
-            return;
-        }
-
-        // Corporate Action Out: reduce shares, preserve cost.
-        if (action.includes('corporate action out')) {
-            position.qty = Math.max(0, position.qty - quantity);
-            return;
-        }
-
-        // Corporate Action In: increase shares, preserve cost.
-        if (action.includes('corporate action in')) {
-            position.qty += quantity;
-            return;
-        }
-
-        if (action.includes('buy')) {
-            position.qty += quantity;
-            position.totalCost += amount + commission;
-            return;
-        }
-
-        if (action.includes('sell')) {
-            if (position.qty <= 0) {
-                return;
-            }
-
-            const sellQuantity = Math.min(quantity, position.qty);
-
-            const averageCost = position.totalCost / position.qty;
-            const acbCad = averageCost * sellQuantity * rate;
-
-            const proceedsCad =
-                (amount - commission) * rate;
-
-            const capitalGainCad = proceedsCad - acbCad;
-
-            const tradeYear = new Date(trade.date)
-                .getFullYear()
-                .toString();
-
-            const selectedYear = document
-                .getElementById('f-cra-year')
-                .value;
-
-            const isHsbc = isHsbcAccount(account);
-
-            const matchesSource =
-                source === 'ALL' ||
-                (source === 'HSBC' && isHsbc) ||
-                (source === 'IBKR' && !isHsbc);
-
-            if (tradeYear === selectedYear && matchesSource) {
-                results.push({
-                    date: trade.date,
-                    source: isHsbc ? 'HSBC' : 'IBKR',
-                    account: account,
-                    symbol: symbol,
-                    currency: currency,
-                    quantity: sellQuantity,
-                    proceedsCad: proceedsCad,
-                    acbCad: acbCad,
-                    capitalGainCad: capitalGainCad
-                });
-            }
-
-            position.qty -= sellQuantity;
-            position.totalCost -= averageCost * sellQuantity;
-
-            if (position.qty <= 0.000001) {
-                position.qty = 0;
-                position.totalCost = 0;
-            }
-        }
+  ledger.forEach(pos => {
+    pos.sales.forEach(sale => {
+      const d = new Date(sale.date);
+      if (isNaN(d) || d.getFullYear() !== Number(year)) return;
+      rows.push(sale);
     });
+  });
 
-    return results;
+  rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return rows;
 }
-function renderCraCapitalGains() {
-    const rows = getCraCapitalGainsRows();
 
-    const tableRows = rows.map(function(trade) {
-        const quantity = Math.abs(Number(trade.quantity) || 0);
-        const amount = Math.abs(Number(trade.amount) || 0);
-        const rate = Number(trade.exchRate) || 1;
+/* ---------------- Rendering ---------------- */
 
-        const proceedsCad = amount * rate;
+function renderCraGains() {
+  const rows = getCraCapitalGainsRows();
 
-        const acbCad = Number(trade.acbCad) || 0;
-        const capitalGainCad = Number(trade.capitalGainCad) || 0;
+  els.tbody.innerHTML = '';
 
-        return `
-            <tr>
-                <td>${trade.date}</td>
-                <td>${isHsbcAccount(trade.account) ? 'HSBC' : 'IBKR'}</td>
-                <td>${trade.account}</td>
-                <td>${trade.symbol}</td>
-                <td class="text-right">${quantity}</td>
-                <td class="text-right">${proceedsCad.toFixed(2)}</td>
-                <td class="text-right">${acbCad.toFixed(2)}</td>
-                <td class="text-right ${capitalGainCad >= 0 ? 'pos-gain' : 'pos-loss'}">
-                    ${capitalGainCad.toFixed(2)}
-</td>
-            </tr>
-        `;
-    }).join('');
+  let totalProceeds = 0;
+  let totalAcb = 0;
+  let totalGain = 0;
 
-    document.getElementById('cra-table').innerHTML = `
-        <div class="card">
-            <h3>Annual Realized Capital Gains</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Source</th>
-                        <th>Account</th>
-                        <th>Symbol</th>
-                        <th class="text-right">Quantity</th>
-                        <th class="text-right">Proceeds (CAD)</th>
-                        <th class="text-right">ACB (CAD)</th>
-                        <th class="text-right">Capital Gain / Loss (CAD)</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${tableRows}
-                </tbody>
-            </table>
-        </div>
+  rows.forEach(r => {
+    totalProceeds += r.proceedsCad;
+    totalAcb += r.acbCad;
+    totalGain += r.gainCad;
+
+    const tr = document.createElement('tr');
+
+    tr.innerHTML = `
+      <td>${fmtDate(r.date)}</td>
+      <td>${r.source}</td>
+      <td>${r.symbol}</td>
+      <td>${r.description || ''}</td>
+      <td class="num">${r.qtySold.toLocaleString('en-CA')}</td>
+      <td class="num">${fmtCad(r.proceedsCad)}</td>
+      <td class="num">${fmtCad(r.acbCad)}</td>
+      <td class="num">${fmtCad(r.outlaysCad)}</td>
+      <td class="num ${r.gainCad >= 0 ? 'positive' : 'negative'}">
+        ${fmtCad(r.gainCad)}
+      </td>
+      <td class="num">${r.gainUsd ? r.gainUsd.toLocaleString('en-CA', { maximumFractionDigits: 2 }) : ''}</td>
+      <td class="num">${r.fxRate ? r.fxRate.toFixed(4) : ''}</td>
     `;
+
+    els.tbody.appendChild(tr);
+  });
+
+  els.proceeds.textContent = fmtCad(totalProceeds);
+  els.acb.textContent = fmtCad(totalAcb);
+  els.gain.textContent = fmtCad(totalGain);
+
+  // CRA generally taxes one-half of a net capital gain.
+  const taxableGain = totalGain > 0 ? totalGain / 2 : totalGain / 2;
+  els.taxable.textContent = fmtCad(taxableGain);
+
+  if (!rows.length) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td colspan="11" class="empty">No realized sales for this year and account source.</td>';
+    els.tbody.appendChild(tr);
+  }
 }
 
-document.getElementById('f-cra-year')
-    .addEventListener('change', renderCraCapitalGains);
+/* ---------------- CSV export ---------------- */
 
-document.getElementById('f-cra-source')
-    .addEventListener('change', renderCraCapitalGains);
+function exportCraCsv() {
+  const rows = getCraCapitalGainsRows();
 
-loadTaxData();
+  if (!rows.length) {
+    alert('No capital-gains rows to export.');
+    return;
+  }
+
+  const headers = [
+    'Tax Year',
+    'Date Sold',
+    'Account Source',
+    'Symbol',
+    'Description',
+    'Quantity Sold',
+    'Proceeds CAD',
+    'ACB CAD',
+    'Outlays CAD',
+    'Capital Gain Loss CAD',
+    'Capital Gain Loss USD',
+    'FX Rate',
+    'Transaction Reference'
+  ];
+
+  const year = els.year.value;
+
+  const csvRows = rows.map(r => [
+    year,
+    fmtDate(r.date),
+    r.source,
+    r.symbol,
+    r.description || '',
+    r.qtySold,
+    r.proceedsCad.toFixed(2),
+    r.acbCad.toFixed(2),
+    r.outlaysCad.toFixed(2),
+    r.gainCad.toFixed(2),
+    r.gainUsd ? r.gainUsd.toFixed(2) : '',
+    r.fxRate ? r.fxRate.toFixed(6) : '',
+    r.raw._id || ''
+  ]);
+
+  const csv = [headers, ...csvRows]
+    .map(row => row.map(csvEscape).join(','))
+    .join('\n');
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `CRA_Realized_Capital_Gains_${year}_${els.source.value}.csv`;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+
+function csvEscape(value) {
+  const s = String(value ?? '');
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+/* ---------------- Events and init ---------------- */
+
+els.year.addEventListener('change', renderCraGains);
+els.source.addEventListener('change', renderCraGains);
+
+els.refresh.addEventListener('click', async () => {
+  try {
+    await loadTaxData();
+    renderCraGains();
+  } catch (err) {
+    console.error(err);
+    setStatus(`Failed to load data: ${err.message}`, true);
+  }
+});
+
+els.export.addEventListener('click', exportCraCsv);
+
+(async function initTaxPage() {
+  try {
+    await loadTaxData();
+    renderCraGains();
+  } catch (err) {
+    console.error(err);
+    setStatus(`Failed to initialize tax page: ${err.message}`, true);
+  }
+})();
