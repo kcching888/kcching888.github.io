@@ -1,4 +1,4 @@
-const GAS_URL = localStorage.getItem('ibkrgasurl');
+const GAS_URL = localStorage.getItem('ibkr_gas_url');
 
 let allTrades = [];
 
