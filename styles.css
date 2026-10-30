@@ -1,21 +1,20 @@
 /* =========================================================
    CRA Tax Reporting — style.css
    ========================================================= */
-
 :root {
-  --bg: #f4f6f9;
-  --card-bg: #ffffff;
-  --text: #1a202c;
-  --muted: #64748b;
-  --border: #dbe2ea;
-  --primary: #1a365d;
-  --primary-hover: #234e80;
-  --accent: #2b6cb0;
-  --positive: #166534;
-  --negative: #b91c1c;
-  --table-head: #edf2f7;
-  --table-row-alt: #f8fafc;
-  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  --bg: #0f172a;
+  --card-bg: #1e293b;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --border: #334155;
+  --primary: #1e3a8a;
+  --primary-hover: #1d4ed8;
+  --accent: #60a5fa;
+  --positive: #4ade80;
+  --negative: #f87171;
+  --table-head: #273449;
+  --table-row-alt: #243247;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
 }
 
 * {
