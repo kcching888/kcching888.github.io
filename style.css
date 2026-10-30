@@ -1,0 +1,305 @@
+/* =========================================================
+   CRA Tax Reporting — style.css
+   ========================================================= */
+
+:root {
+  --bg: #f4f6f9;
+  --card-bg: #ffffff;
+  --text: #1a202c;
+  --muted: #64748b;
+  --border: #dbe2ea;
+  --primary: #1a365d;
+  --primary-hover: #234e80;
+  --accent: #2b6cb0;
+  --positive: #166534;
+  --negative: #b91c1c;
+  --table-head: #edf2f7;
+  --table-row-alt: #f8fafc;
+  --shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+/* ---------------- Header ---------------- */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 24px;
+  background: var(--primary);
+  color: #fff;
+  box-shadow: var(--shadow);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.page-header nav {
+  display: flex;
+  gap: 8px;
+}
+
+.page-header nav a {
+  color: #dbeafe;
+  text-decoration: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.page-header nav a:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.page-header nav a.active {
+  background: #fff;
+  color: var(--primary);
+  font-weight: 600;
+}
+
+/* ---------------- Layout ---------------- */
+
+main {
+  max-width: 1500px;
+  margin: 20px auto;
+  padding: 0 20px 40px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+
+.card h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  color: var(--primary);
+  border-bottom: 2px solid #bee3f8;
+  padding-bottom: 8px;
+}
+
+/* ---------------- Filters ---------------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.filters select {
+  min-width: 150px;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+}
+
+.filters select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(43, 108, 176, 0.15);
+}
+
+button {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#btn-cra-refresh {
+  background: var(--primary);
+  color: #fff;
+}
+
+#btn-cra-refresh:hover {
+  background: var(--primary-hover);
+}
+
+#btn-cra-export {
+  background: #2f855a;
+  color: #fff;
+}
+
+#btn-cra-export:hover {
+  background: #276749;
+}
+
+/* ---------------- Status ---------------- */
+
+.status {
+  min-height: 18px;
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.status.error {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+/* ---------------- Summary cards ---------------- */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.summary {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.summary span {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.summary strong {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+}
+
+/* ---------------- Table ---------------- */
+
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1050px;
+  font-size: 12.5px;
+}
+
+thead th {
+  position: sticky;
+  top: 0;
+  background: var(--table-head);
+  color: var(--primary);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+tbody td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf2f7;
+  vertical-align: top;
+}
+
+tbody tr:nth-child(even) {
+  background: var(--table-row-alt);
+}
+
+tbody tr:hover {
+  background: #ebf8ff;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+td.positive {
+  color: var(--positive);
+  font-weight: 600;
+}
+
+td.negative {
+  color: var(--negative);
+  font-weight: 600;
+}
+
+td.empty {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 10px;
+}
+
+/* ---------------- Responsive ---------------- */
+
+@media (max-width: 760px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  main {
+    padding: 0 12px 32px;
+  }
+
+  .card {
+    padding: 14px;
+  }
+
+  .filters {
+    align-items: stretch;
+  }
+
+  .filters
