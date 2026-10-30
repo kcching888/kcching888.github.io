@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.58">
+    <meta name="version" content="5.6.59">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -6979,23 +6979,48 @@ function renderGainLoss() {
     var realized = {};
     var costBasis = {};
 
+    var costBasisLanding = {};
+    var landingStarted = {};
+
  sortedTrades.forEach(function(t) {
   var symbol = String(t.symbol || '').trim();
   var currency = String(t.currency || '').trim();
   var account = String(t.account || '').trim();
   var key = symbol + currency + account;
   if (!costBasis[key]) costBasis[key] = { qty: 0, totalCost: 0 };
-  if (!realized[key]) realized[key] = { 
-    symbol: symbol, currency: currency, account: account, 
-    proceeds: 0, cost: 0, gain: 0, gainCAD: 0, type: getAssetType(t) 
-  };
+     
+ if (!realized[key]) {
+    realized[key] = {
+        symbol: symbol,
+        currency: currency,
+        account: account,
+        proceeds: 0,
+        cost: 0,
+        gain: 0,
+        gainCAD: 0,
+
+        costLanding: 0,
+        gainLanding: 0,
+        gainLandingCAD: 0,
+
+        type: getAssetType(t)
+    };
+}
+     
   var q = Math.abs(parseFloat(t.quantity) || 0);
   var a = Math.abs(parseFloat(t.amount) || 0);
   var comm = Math.abs(parseFloat(t.commission || t.comm) || 0);
   var act = String(t.action || '').toLowerCase();
 
-// Ignore Landing records in Gain/Loss calculations.
+// Start the Landing-based cost basis at the Landing record.
 if (act === 'landing') {
+    landingStarted[key] = true;
+
+    costBasisLanding[key] = {
+        qty: q,
+        totalCost: a
+    };
+
     return;
 }
 
@@ -7004,6 +7029,14 @@ if (act.includes('corporate action out')) {
     if (costBasis[key]) {
         costBasis[key].qty = Math.max(0, costBasis[key].qty - q);
     }
+
+    if (landingStarted[key] && costBasisLanding[key]) {
+        costBasisLanding[key].qty = Math.max(
+            0,
+            costBasisLanding[key].qty - q
+        );
+    }
+
     return;
 }
 
@@ -7012,6 +7045,11 @@ if (act.includes('corporate action in')) {
     if (costBasis[key]) {
         costBasis[key].qty += q;
     }
+
+     if (landingStarted[key] && costBasisLanding[key]) {
+        costBasisLanding[key].qty += q;
+    }
+    
     return;
 } 
 
@@ -7023,34 +7061,86 @@ if (act.includes('corporate action in')) {
   if (act === 'buy') {
     costBasis[key].qty += q;
     costBasis[key].totalCost += (a + comm);
+
+    if (landingStarted[key]) {
+    if (!costBasisLanding[key]) {
+        costBasisLanding[key] = {
+            qty: 0,
+            totalCost: 0
+        };
+    }
+
+    costBasisLanding[key].qty += q;
+    costBasisLanding[key].totalCost += a + comm;
+    }
     return;
   }
   if (act === 'sell') {
     if (costBasis[key].qty > 0) {
-      var avgCost = costBasis[key].totalCost / costBasis[key].qty;
-      var costOfSold = avgCost * q;
-      var proceeds = a - comm;
-      var gain = proceeds - costOfSold;
-      var gainCAD = gain * rate; // convert using this specific sell's historical rate
+        var avgCost = costBasis[key].totalCost / costBasis[key].qty;
+        var costOfSold = avgCost * q;
+        var proceeds = a - comm;
+        var gain = proceeds - costOfSold;
+        var gainCAD = gain * rate; // convert using this specific sell's historical rate
 
-      // Apply filters ONLY to what gets accumulated into the displayed totals,
-      // but always update running cost basis so subsequent sells stay accurate.
-      var matchAcct = !fAcct || (account === fAcct);
-      var matchYear = !fYear || (txYear === fYear);
-      var matchStock = !fStock || (symbol.toUpperCase() === fStock);
+        // Apply filters ONLY to what gets accumulated into the displayed totals,
+        // but always update running cost basis so subsequent sells stay accurate.
+        var matchAcct = !fAcct || (account === fAcct);
+        var matchYear = !fYear || (txYear === fYear);
+        var matchStock = !fStock || (symbol.toUpperCase() === fStock);
 
-      if (matchAcct && matchYear && matchStock) {
-        realized[key].proceeds += proceeds;
-        realized[key].cost += costOfSold;
-        realized[key].gain += gain;
-        realized[key].gainCAD += gainCAD;
-      }
+        if (matchAcct && matchYear && matchStock) {
+            realized[key].proceeds += proceeds;
+            realized[key].cost += costOfSold;
+            realized[key].gain += gain;
+            realized[key].gainCAD += gainCAD;
+        }
 
-      costBasis[key].qty -= q;
-      costBasis[key].totalCost -= costOfSold;
+        costBasis[key].qty -= q;
+        costBasis[key].totalCost -= costOfSold;
     }
-  }
 
+    // ---------------------------------------------------------
+    // Cost @ Landing calculation
+    // ---------------------------------------------------------
+    var costOfSoldLanding = 0;
+    var gainLanding = 0;
+    var gainLandingCAD = 0;
+
+    if (
+        landingStarted[key] &&
+        costBasisLanding[key] &&
+        costBasisLanding[key].qty > 0
+    ) {
+        var landingPosition = costBasisLanding[key];
+
+        // Sell only up to the number of shares available
+        // in the Landing-based cost basis.
+        var sellQtyLanding = Math.min(q, landingPosition.qty);
+
+        var avgCostLanding =
+            landingPosition.totalCost / landingPosition.qty;
+
+        costOfSoldLanding = avgCostLanding * sellQtyLanding;
+
+        gainLanding = proceeds - costOfSoldLanding;
+        gainLandingCAD = gainLanding * rate;
+
+        if (matchAcct && matchYear && matchStock) {
+            realized[key].costLanding += costOfSoldLanding;
+            realized[key].gainLanding += gainLanding;
+            realized[key].gainLandingCAD += gainLandingCAD;
+        }
+
+        landingPosition.qty -= sellQtyLanding;
+        landingPosition.totalCost -= costOfSoldLanding;
+
+        if (landingPosition.qty <= 0.000001) {
+            landingPosition.qty = 0;
+            landingPosition.totalCost = 0;
+        }
+    }
+}
 });
 
     var glArr = Object.values(realized).filter(function(r) {
@@ -7074,9 +7164,11 @@ var totalFundGain = fundGains.reduce((s, r) => s + num(r.gainCAD, r.gain, 0), 0)
 
     if (stockGains.length > 0) {
         html += '<h4 style="margin-top:15px;color:#e94560;">Stocks Realized Gain/Loss</h4>';
-        html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Currency</th></tr></thead><tbody>';
+        html += '<table><thead><tr><th>Account</th><th>Symbol</th><th>Proceeds</th><th>Cost</th><th>Gain/Loss</th><th>Cost @ Landing</th><th>Gain/Loss @ Landing</th><th>Currency</th></tr></thead><tbody>';
         stockGains.sort(function(a, b) { return b.gain - a.gain; }).forEach(function(r) {
-            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gainCAD >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) + '</td><td>' + esc(r.currency) + '</td></tr>';
+            html += '<tr><td>' + esc(r.account) + '</td><td>' + esc(r.symbol) + '</td><td>' 
+                    + fmt(r.proceeds) + '</td><td>' + fmt(r.cost) + '</td><td class="' + (r.gainCAD >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gain) 
+                + '</td><td>' + fmt(r.costLanding) + '</td><td class="' + (r.gainLandingCAD >= 0 ? 'pos-gain' : 'pos-loss') + '">' + fmt(r.gainLanding) + '</td><td>' + esc(r.currency) + '</td></tr>';
         });
         html += '</tbody></table>';
     }
