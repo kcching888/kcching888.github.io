@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.55">
+    <meta name="version" content="5.6.56">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5707,16 +5707,35 @@ async function renderHsbcPortfolio() {
     });
   }
 
-  if (result && result.success && result.data && result.data.prices) {
-        window.currentPrices = result.data.prices;
-        console.time('HSBC portfolio render2');
+  if (hasPriceChanged(window.currentPrices || {}, newPrices)) {
+   window.currentPrices = Object.assign(
+    {},
+    window.currentPrices || {},
+    result.data.prices || {}
+);
 
-         renderHsbcPortfolioAfterUTPrices();
-
-        console.timeEnd('HSBC portfolio render2');
+      scheduleHsbcRender();
     }
 });
 
+}
+
+let hsbcRenderTimer = null;
+
+function scheduleHsbcRender() {
+    clearTimeout(hsbcRenderTimer);
+    hsbcRenderTimer = setTimeout(function() {
+        renderHsbcPortfolioAfterUTPrices();
+    }, 150);
+}
+
+function hasPriceChanged(oldPrices, newPrices) {
+    return Object.keys(newPrices).some(function(symbol) {
+        const oldPrice = oldPrices[symbol] ? oldPrices[symbol].price : null;
+        const newPrice = newPrices[symbol] ? newPrices[symbol].price : null;
+
+        return oldPrice !== newPrice;
+    });
 }
 
 function calculateHsbcAcb(trades, cutoffDate) {
