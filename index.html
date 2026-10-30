@@ -623,6 +623,10 @@
             <label>Google Sheet URL</label>
             <input id="set-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
         </div>
+        <div class="form-group">
+            <label>Google ETF Sheet URL</label>
+            <input id="set-etf-sheet-url" placeholder="https://docs.google.com/spreadsheets/d/...">
+        </div>
             <div class="form-group">
                 <label>
                     <input type="checkbox" id="set-autosync" style="margin-right:8px;">
@@ -893,7 +897,7 @@
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
     var SHEET_URL = localStorage.getItem('ibkr_sheet_url') || '';
-    var ETF_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1F3N5OUAENjztwEoewbho1-ExDhH9EntU2jtg9CYhmCo/edit?gid=75153965#gid=75153965';
+    var ETF_SHEET_URL = localStorage.getItem('ibkr_etf_sheet_url') || '';
     var FRED_CRE_SPRD_URL = 'https://fred.stlouisfed.org/series/BAMLH0A0HYM2';
     var allTrades = JSON.parse(localStorage.getItem('ibkr_trades') || '[]');
     var allTransfers = JSON.parse(localStorage.getItem('ibkr_transfers') || '[]');
@@ -1231,6 +1235,7 @@ function renderLatestUploadIndicator() {
     function openSettings(){
         $('set-url').value = GAS_URL;
         if ($('set-sheet-url')) $('set-sheet-url').value = SHEET_URL;
+        if ($('set-etf-sheet-url')) $('set-etf-sheet-url').value = ETF_SHEET_URL;
         $('set-apikey').value = localStorage.getItem('ibkr_price_api_key') || '';
         openModal('modal-settings');
         var checkbox = $('set-autosync');
@@ -1326,7 +1331,7 @@ async function loadEtfTaxData() {
         if (e) e.preventDefault();
 
         if (!ETF_SHEET_URL) {
-            alert('No Google Sheet URL configured in Settings.');
+            alert('No Google ETF Sheet URL configured in Settings.');
             return;
         }
 
@@ -1350,6 +1355,9 @@ async function loadEtfTaxData() {
 
         SHEET_URL = $('set-sheet-url') ? $('set-sheet-url').value.trim() : '';
         localStorage.setItem('ibkr_sheet_url', SHEET_URL);
+
+        ETF_SHEET_URL = $('set-etf-sheet-url') ? $('set-etf-sheet-url').value.trim() : '';
+        localStorage.setItem('ibkr_etf_sheet_url', ETF_SHEET_URL);
         
         var checkbox = $('set-autosync');
         var AUTO_SYNC = checkbox ? checkbox.checked : false;
