@@ -52,34 +52,119 @@ function getCraCapitalGainsRows() {
     const year = document.getElementById('f-cra-year').value;
     const source = document.getElementById('f-cra-source').value;
 
-    return allTrades
-        .filter(function(trade) {
-            if (String(trade.action).toLowerCase() !== 'sell') {
-                return false;
+    const sortedTrades = allTrades
+        .slice()
+        .sort(function(a, b) {
+            return new Date(a.date) - new Date(b.date);
+        });
+
+    const positions = {};
+    const results = [];
+
+    sortedTrades.forEach(function(trade) {
+        const symbol = String(trade.symbol || '').trim().toUpperCase();
+        const account = String(trade.account || '').trim();
+        const currency = String(trade.currency || '').trim().toUpperCase();
+        const action = String(trade.action || '').trim().toLowerCase();
+
+        const key = symbol + '|' + currency + '|' + account;
+
+        if (!positions[key]) {
+            positions[key] = {
+                qty: 0,
+                totalCost: 0
+            };
+        }
+
+        const position = positions[key];
+
+        const quantity = Math.abs(Number(trade.quantity) || 0);
+        const amount = Math.abs(Number(trade.amount) || 0);
+        const commission = Math.abs(
+            Number(trade.commission ?? trade.comm) || 0
+        );
+
+        const rate = Number(trade.exchRate) || 1;
+
+        // Landing is ignored for the original ACB calculation.
+        if (action === 'landing') {
+            return;
+        }
+
+        // Corporate Action Out: reduce shares, preserve cost.
+        if (action.includes('corporate action out')) {
+            position.qty = Math.max(0, position.qty - quantity);
+            return;
+        }
+
+        // Corporate Action In: increase shares, preserve cost.
+        if (action.includes('corporate action in')) {
+            position.qty += quantity;
+            return;
+        }
+
+        if (action.includes('buy')) {
+            position.qty += quantity;
+            position.totalCost += amount + commission;
+            return;
+        }
+
+        if (action.includes('sell')) {
+            if (position.qty <= 0) {
+                return;
             }
+
+            const sellQuantity = Math.min(quantity, position.qty);
+
+            const averageCost = position.totalCost / position.qty;
+            const acbCad = averageCost * sellQuantity * rate;
+
+            const proceedsCad =
+                (amount - commission) * rate;
+
+            const capitalGainCad = proceedsCad - acbCad;
 
             const tradeYear = new Date(trade.date)
                 .getFullYear()
                 .toString();
 
-            if (tradeYear !== year) {
-                return false;
+            const selectedYear = document
+                .getElementById('f-cra-year')
+                .value;
+
+            const isHsbc = isHsbcAccount(account);
+
+            const matchesSource =
+                source === 'ALL' ||
+                (source === 'HSBC' && isHsbc) ||
+                (source === 'IBKR' && !isHsbc);
+
+            if (tradeYear === selectedYear && matchesSource) {
+                results.push({
+                    date: trade.date,
+                    source: isHsbc ? 'HSBC' : 'IBKR',
+                    account: account,
+                    symbol: symbol,
+                    currency: currency,
+                    quantity: sellQuantity,
+                    proceedsCad: proceedsCad,
+                    acbCad: acbCad,
+                    capitalGainCad: capitalGainCad
+                });
             }
 
-            const isHsbc = isHsbcAccount(trade.account);
+            position.qty -= sellQuantity;
+            position.totalCost -= averageCost * sellQuantity;
 
-            if (source === 'IBKR' && isHsbc) {
-                return false;
+            if (position.qty <= 0.000001) {
+                position.qty = 0;
+                position.totalCost = 0;
             }
+        }
+    });
 
-            if (source === 'HSBC' && !isHsbc) {
-                return false;
-            }
-
-            return true;
-        });
+    return results;
 }
-
 function renderCraCapitalGains() {
     const rows = getCraCapitalGainsRows();
 
@@ -90,6 +175,9 @@ function renderCraCapitalGains() {
 
         const proceedsCad = amount * rate;
 
+        const acbCad = Number(trade.acbCad) || 0;
+        const capitalGainCad = Number(trade.capitalGainCad) || 0;
+
         return `
             <tr>
                 <td>${trade.date}</td>
@@ -98,8 +186,10 @@ function renderCraCapitalGains() {
                 <td>${trade.symbol}</td>
                 <td class="text-right">${quantity}</td>
                 <td class="text-right">${proceedsCad.toFixed(2)}</td>
-                <td class="text-right">TBD</td>
-                <td class="text-right">TBD</td>
+                <td class="text-right">${acbCad.toFixed(2)}</td>
+                <td class="text-right ${capitalGainCad >= 0 ? 'pos-gain' : 'pos-loss'}">
+                    ${capitalGainCad.toFixed(2)}
+</td>
             </tr>
         `;
     }).join('');
