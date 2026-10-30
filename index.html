@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.51">
+    <meta name="version" content="5.6.52">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -6069,7 +6069,7 @@ function renderPositionRows(positions) {
             '</td>' +
 
             // Oldest-trade ACB block
-            '<td class="text-right">' +
+            '<td class="text-right" style="border-left:2px solid #444">' +
                 formatMoney(oldestAcb.averageAcb) +
             '</td>' +
             '<td class="text-right">' +
@@ -6080,7 +6080,7 @@ function renderPositionRows(positions) {
             '</td>' +
 
             // 2021-12-05 onward ACB block
-            '<td class="text-right">' +
+            '<td class="text-right" style="border-left:2px solid #444">' +
                 formatMoney(recentAcb.averageAcb) +
             '</td>' +
             '<td class="text-right">' +
@@ -6155,10 +6155,10 @@ function renderGroupTable(groupTitle, groupPositions, totalLabel) {
               <th class="text-right">Changes %</th>
               <th class="text-right">Daily P&amp;L</th>
               <th class="text-right">MV</th>
-              <th class="text-right">Avg (ACB)</th>
+              <th style="border-left:2px solid #444; color: #4caf50" class="text-right">ACB</th>
               <th class="text-right">Basis</th>
               <th class="text-right">Basis G/L</th>
-              <th class="text-right">Avg (ACB) from 5Dec2021</th>
+              <th style="border-left:2px solid #444; color: #4caf50" class="text-right">ACB since Landing</th>
               <th class="text-right">Total ACB</th>
               <th class="text-right">Basis G/L</th>
               <th>CCY</th>
@@ -6177,12 +6177,12 @@ function renderGroupTable(groupTitle, groupPositions, totalLabel) {
               </td>
               <td class="text-right">${formatMoney(marketValue)}</td>
               <td class="text-right">&mdash;</td>
-              <td class="text-right">${formatMoney(oldestBasis)}</td>
+              <td class="text-right" style="border-left:2px solid #444">${formatMoney(oldestBasis)}</td>
               <td class="text-right ${oldestClass}">
                 ${formatMoney(oldestGainLoss)}
               </td>
               <td class="text-right">&mdash;</td>
-              <td class="text-right">${formatMoney(recentBasis)}</td>
+              <td class="text-right" style="border-left:2px solid #444">${formatMoney(recentBasis)}</td>
               <td class="text-right ${recentClass}">
                 ${formatMoney(recentGainLoss)}
               </td>
