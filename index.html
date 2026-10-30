@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.53">
+    <meta name="version" content="5.6.54">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -4954,7 +4954,7 @@ async function loadHsbcPortfolio() {
 
         window.hsbcActiveTrades = hsbcActiveTrades;
 
-        invalidateHsbcTradeIndex();
+
         
         const accountNames = data.accounts.map(function(account) {
             return String(account.account || '');
@@ -5834,39 +5834,39 @@ function calculateHsbcAcb(trades, cutoffDate) {
 }
 
 
-let hsbcTradeIndex = null;
 
-function buildHsbcTradeIndex(trades) {
-    const index = {};
-
-    (trades || []).forEach(function(trade) {
-        const key = String(trade.symbol).trim().toUpperCase() + '|' +
-                    String(trade.account).trim();
-
-        if (!index[key]) {
-            index[key] = [];
-        }
-
-        index[key].push(trade);
-    });
-
-    return index;
-}
+let hsbcTradeCache = null;
+let hsbcTradeCacheSource = null;
 
 function getHsbcTradesForPosition(position) {
-    if (!hsbcTradeIndex) {
-        hsbcTradeIndex = buildHsbcTradeIndex(window.hsbcActiveTrades);
+    // Rebuild cache only when the underlying trade array changes.
+    if (hsbcTradeCacheSource !== window.hsbcActiveTrades) {
+        hsbcTradeCache = {};
+        hsbcTradeCacheSource = window.hsbcActiveTrades;
     }
 
     const key = String(position.symbol).trim().toUpperCase() + '|' +
                 String(position.account).trim();
 
-    return hsbcTradeIndex[key] || [];
+    if (!(key in hsbcTradeCache)) {
+        hsbcTradeCache[key] = window.hsbcActiveTrades.filter(function(trade) {
+            const sameSymbol =
+                String(trade.symbol).trim().toUpperCase() ===
+                String(position.symbol).trim().toUpperCase();
+
+            const sameAccount =
+                !position.account ||
+                !trade.account ||
+                String(trade.account) === String(position.account);
+
+            return sameSymbol && sameAccount;
+        });
+    }
+
+    return hsbcTradeCache[key];
 }
 
-function invalidateHsbcTradeIndex() {
-    hsbcTradeIndex = null;
-}
+
     
 function renderHsbcPortfolioAfterUTPrices() {
   const wrap = document.getElementById('port-table-wrap');
