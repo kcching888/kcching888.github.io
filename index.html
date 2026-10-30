@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.6.54">
+    <meta name="version" content="5.6.55">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -5678,6 +5678,13 @@ function buildHsbcPortfolioGrandTotal(groups) {
 }
 
 async function renderHsbcPortfolio() {
+  console.time('HSBC portfolio render');
+
+  renderHsbcPortfolioAfterUTPrices();
+
+  console.timeEnd('HSBC portfolio render');
+  
+    
   loadHsbcUnitTrustPrices().then(function(result) {
   if (
     result &&
@@ -5700,7 +5707,14 @@ async function renderHsbcPortfolio() {
     });
   }
 
-  renderHsbcPortfolioAfterUTPrices();
+  if (result && result.success && result.data && result.data.prices) {
+        window.currentPrices = result.data.prices;
+        console.time('HSBC portfolio render2');
+
+         renderHsbcPortfolioAfterUTPrices();
+
+        console.timeEnd('HSBC portfolio render2');
+    }
 });
 
 }
@@ -6018,8 +6032,11 @@ function renderPositionRows(positions) {
 
         const positionTrades = getHsbcTradesForPosition(position);
 
-        const oldestAcb = calculateHsbcAcb(positionTrades, null);
-        const recentAcb = calculateHsbcAcb(positionTrades, '2021-12-05');
+        position.oldestAcb = calculateHsbcAcb(positionTrades, null);
+        position.recentAcb = calculateHsbcAcb(positionTrades, '2021-12-05');
+
+        const oldestAcb = position.oldestAcb;
+        const recentAcb = position.recentAcb;
 
         const oldestBasis = oldestAcb.averageAcb * currentQuantity;
         const recentBasis = recentAcb.averageAcb * currentQuantity;
