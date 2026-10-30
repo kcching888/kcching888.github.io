@@ -6215,13 +6215,13 @@ function renderGroupTable(groupTitle, groupPositions, totalLabel) {
                 ${hasDailyPnl ? formatMoney(dailyPnl) : '&mdash;'}
               </td>
               <td class="text-right">${formatMoney(marketValue)}</td>
-              <td class="text-right">&mdash;</td>
-              <td class="text-right" style="border-left:2px solid #444">${formatMoney(oldestBasis)}</td>
+              <td class="text-right" style="border-left:2px solid #444">&mdash;</td>
+              <td class="text-right">${formatMoney(oldestBasis)}</td>
               <td class="text-right ${oldestClass}">
                 ${formatMoney(oldestGainLoss)}
               </td>
-              <td class="text-right">&mdash;</td>
-              <td class="text-right" style="border-left:2px solid #444">${formatMoney(recentBasis)}</td>
+              <td class="text-right" style="border-left:2px solid #444">&mdash;</td>
+              <td class="text-right">${formatMoney(recentBasis)}</td>
               <td class="text-right ${recentClass}">
                 ${formatMoney(recentGainLoss)}
               </td>
