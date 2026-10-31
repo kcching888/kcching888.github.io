@@ -4,6 +4,9 @@
 
 const GAS_URL = localStorage.getItem('ibkr_gas_url');
 
+// Confirmed by you as your Canadian tax-residency date.
+const TAX_RESIDENCY_DATE = '2021-12-05';
+
 let taxData = {
   allTrades: [],
   transfers: [],
@@ -374,6 +377,27 @@ function holdingKey(t) {
 }
 
 const landingByHolding = new Map();
+
+// Exclude pre-residency HSBC transactions from this tax-basis ledger.
+// Keep the original records in taxData.allTrades for other reports.
+rows = rows.filter(t => {
+  const source = String(t._source || '').toUpperCase();
+
+  if (source !== 'HSBC') return true;
+
+  const date = new Date(t._date);
+
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(
+      `Invalid HSBC transaction date: ` +
+      `${getTradeAccount(t)} / ${t._symbol}`
+    );
+  }
+
+  // Compare the calendar date, including the whole residency date.
+  return date.toISOString().slice(0, 10) >= TAX_RESIDENCY_DATE;
+});
+   
 console.table(
   rows
     .filter(t => isSell(t))
@@ -607,13 +631,24 @@ if (isBuy(t)) {
     );
   }
 
-  if (sellQty > pos.qty + tolerance) {
-    throw new Error(
-      `Sell quantity exceeds available quantity: ` +
-      `${getTradeAccount(t)} / ${t._symbol}. ` +
-      `Selling ${sellQty}; available ${pos.qty}.`
-    );
-  }
+ if (sellQty > pos.qty + tolerance) {
+  console.error('Sell quantity mismatch:', {
+    date: t._date,
+    account: getTradeAccount(t),
+    symbol: t._symbol,
+    action: getTradeType(t),
+    sellQty,
+    availableQty: pos.qty,
+    costNative: pos.costNative,
+    costCad: pos.costCad
+  });
+
+  throw new Error(
+    `Sell quantity exceeds available quantity: ` +
+    `${getTradeAccount(t)} / ${t._symbol} / ${fmtDate(t._date)}. ` +
+    `Selling ${sellQty}; available ${pos.qty}.`
+  );
+}
 
   // Use the same share proportion for both cost pools.
   const soldFraction = Math.min(sellQty / pos.qty, 1);
