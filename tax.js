@@ -653,21 +653,21 @@ if (isBuy(t)) {
   // Use the same share proportion for both cost pools.
   const soldFraction = Math.min(sellQty / pos.qty, 1);
 
-  // Native-currency amounts.
-  const proceedsNative = getNativeAmount(t);
-  const acbNative = pos.costNative * soldFraction;
-  const outlaysNative = getFeesNative(t);
+// Proceeds are already NET of selling commission.
+const proceedsNative = getNativeAmount(t);
+const acbNative = pos.costNative * soldFraction;
+const commissionNative = getFeesNative(t);
 
-  const gainNative =
-    proceedsNative - acbNative - outlaysNative;
+// No additional selling-fee deduction.
+const outlaysNative = 0;
+const gainNative = proceedsNative - acbNative;
 
-  // Existing CAD amounts.
-  const proceedsCad = Math.abs(t._cad);
-  const acbCad = pos.costCad * soldFraction;
-  const outlaysCad = t._feesCad;
+// CAD proceeds are also already NET of selling commission.
+const proceedsCad = Math.abs(t._cad);
+const acbCad = pos.costCad * soldFraction;
 
-  const gainCad =
-    proceedsCad - acbCad - outlaysCad;
+const outlaysCad = 0;
+const gainCad = proceedsCad - acbCad;
 
   pos.sales.push({
     date: t._date,
@@ -681,6 +681,7 @@ if (isBuy(t)) {
     currency: pos.currency,
 
     proceedsNative,
+    commissionNative,
     acbNative,
     outlaysNative,
     gainNative,
@@ -981,8 +982,8 @@ function getIbkrAccountType(account) {
 }
 
 function getNativeAmount(t) {
-  // Assumption: amount/grossAmount is the trade value before
-  // commissions. Do not use netAmount and subtract fees again.
+  // For sales, the stored amount is already net of commission.
+// Return that amount without deducting commission again.
   for (const value of [t.amount, t.grossAmount]) {
     if (
       value === undefined ||
