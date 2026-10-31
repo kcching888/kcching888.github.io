@@ -523,7 +523,13 @@ rows.forEach(t => {
   .toUpperCase();
 
 // Only validate currency for events that establish or use cost.
-if (isLanding(t) || isBuy(t) || isSell(t)) {
+if (
+  isLanding(t) ||
+  isBuy(t) ||
+  isSell(t) ||
+  isCorporateActionIn(t) ||
+  isCorporateActionOut(t)
+) {
   if (!tradeCurrency) {
     throw new Error(
       `Missing currency: ${getTradeAccount(t)} / ${t._symbol}`
@@ -583,70 +589,9 @@ pos.costCad = openingCad;
   // Landing establishes the opening basis, not a reported sale.
   return;
 }
-  if (isCorporateActionOut(t) || isCorporateActionIn(t)) {
-  const isOut = isCorporateActionOut(t);
-  const quantity = Math.abs(t._qty);
+ 
 
-  // Preserve existing quantity-adjustment behavior.
-  // This is not an ordinary cash sale/purchase calculation.
-  pos.qty += isOut ? -quantity : quantity;
-
-  const rawPrice = t.price;
-
-  const price =
-    rawPrice === undefined ||
-    rawPrice === null ||
-    String(rawPrice).trim() === ''
-      ? null
-      : Number(String(rawPrice).replace(/,/g, '').trim());
-
-  // Store a display row in the report's existing row collection.
-  pos.sales.push({
-    date: t._date,
-    source: t._source,
-    account: getTradeAccount(t),
-    symbol: t._symbol,
-    description:
-      t.description || t.name || t.securityName || '',
-
-    action: isOut
-      ? 'Corporate Action Out (Sell-direction)'
-      : 'Corporate Action In (Buy-direction)',
-
-    isCorporateAction: true,
-    includeInTotals: false,
-
-    // Existing renderer uses this field for displayed quantity.
-    qtySold: quantity,
-    price,
-
-    currency: String(
-      t.currency || pos.currency || ''
-    ).trim().toUpperCase(),
-
-    // Leave financial fields blank until the event is classified.
-    proceedsNative: null,
-    commissionNative: null,
-    acbNative: null,
-    outlaysNative: null,
-    gainNative: null,
-
-    proceedsCad: null,
-    acbCad: null,
-    outlaysCad: null,
-    gainCad: null,
-
-    fxRate: num(
-      t.exchRate || t.exchangeRate || t.fxRate || 0
-    ),
-
-    raw: t
-  });
-
-  return;
-}
-
-if (isBuy(t)) {
+if (isBuy(t) || isCorporateActionIn(t)) {
   const buyQty = Math.abs(t._qty);
 
   const buyCostNative =
@@ -662,7 +607,7 @@ if (isBuy(t)) {
   return;
 }
 
-   if (isSell(t)) {
+if (isSell(t) || isCorporateActionOut(t)) {
   const sellQty = Math.abs(t._qty);
   const tolerance = 0.0000001;
 
@@ -726,9 +671,12 @@ const gainCad = proceedsCad - acbCad;
     description:
       t.description || t.name || t.securityName || '',
 
-     action: 'Sell',
-  isCorporateAction: false,
-  includeInTotals: true,
+ action: isCorporateActionOut(t)
+  ? 'Corporate Action Out'
+  : 'Sell',
+
+isCorporateAction: isCorporateActionOut(t),
+includeInTotals: true,
 
     qtySold: sellQty,
     price:
