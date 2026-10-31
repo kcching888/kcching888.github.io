@@ -13,6 +13,7 @@ let taxData = {
 const els = {
   year: document.getElementById('f-cra-year'),
   source: document.getElementById('f-cra-source'),
+  account: document.getElementById('f-cra-account'),
   status: document.getElementById('cra-status'),
   tbody: document.querySelector('#cra-gains-table tbody'),
   proceeds: document.getElementById('sum-proceeds'),
@@ -291,6 +292,7 @@ console.log('Sample sells:', sells.slice(0, 10));
   console.log('Detected years:', years);
 
   populateYearFilter();
+  populateAccountFilter();
   setStatus(
     `Loaded ${taxData.allTrades.length.toLocaleString()} transactions; ` +
     `${sells.length.toLocaleString()} potential sales detected.`
@@ -350,9 +352,26 @@ function populateYearFilter() {
 function buildAcbLedger(sourceFilter) {
   const ledger = new Map();
 
+  const selectedSource = String(sourceFilter || 'All').toUpperCase();
+  const selectedAccount = els.account.value || 'All';
+
   const rows = taxData.allTrades
-    .filter(t => sourceFilter === 'All' || t._source === sourceFilter)
+    .filter(t => {
+      const source = String(t._source || '').toUpperCase();
+
+      const sourceMatches =
+        selectedSource === 'ALL' ||
+        source === selectedSource;
+
+      const accountMatches =
+        selectedAccount === 'All' ||
+        getTradeAccount(t) === selectedAccount;
+
+      return sourceMatches && accountMatches;
+    })
     .sort((a, b) => new Date(a._date) - new Date(b._date));
+
+  // Keep the remainder of your existing ledger function here.
 
   rows.forEach(t => {
     const key = `${t._source}||${t._symbol}`;
@@ -573,10 +592,74 @@ function csvEscape(value) {
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
+function getTradeAccount(t) {
+  return String(t.account || t.accountId || '').trim();
+}
+
+function getIbkrAccountType(account) {
+  // Accept either U10455610 or 10455610.
+  const digits = String(account)
+    .trim()
+    .toUpperCase()
+    .replace(/^U/, '');
+
+  switch (digits.charAt(0)) {
+    case '9':
+      return 'TFSA';
+    case '2':
+      return 'RRSP';
+    case '1':
+      return 'Non-registered';
+    default:
+      return 'Other';
+  }
+}
+
+function populateAccountFilter() {
+  const selectedSource = String(els.source.value).toUpperCase();
+  const previousAccount = els.account.value || 'All';
+
+  const accounts = new Map();
+
+  taxData.allTrades.forEach(t => {
+    const source = String(t._source || '').toUpperCase();
+
+    if (selectedSource !== 'ALL' && source !== selectedSource) {
+      return;
+    }
+
+    const account = getTradeAccount(t);
+    if (!account) return;
+
+    const label = source === 'IBKR'
+      ? `${account} — ${getIbkrAccountType(account)}`
+      : `${account} — ${source || 'Unknown source'}`;
+
+    accounts.set(account, label);
+  });
+
+  els.account.replaceChildren(new Option('All accounts', 'All'));
+
+  [...accounts.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([account, label]) => {
+      els.account.add(new Option(label, account));
+    });
+
+  els.account.value = accounts.has(previousAccount)
+    ? previousAccount
+    : 'All';
+}
+
 /* ---------------- Events and init ---------------- */
 
 els.year.addEventListener('change', renderCapitalGains);
-els.source.addEventListener('change', renderCapitalGains);
+els.source.addEventListener('change', () => {
+  populateAccountFilter();
+  renderCraGains();
+});
+
+els.account.addEventListener('change', renderCraGains);
 
 els.refresh.addEventListener('click', async () => {
   try {
