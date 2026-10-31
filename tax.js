@@ -355,7 +355,7 @@ function buildAcbLedger(sourceFilter) {
   const selectedSource = String(sourceFilter || 'All').toUpperCase();
   const selectedAccount = els.account.value || 'All';
 
-  const rows = taxData.allTrades
+  let rows = taxData.allTrades
     .filter(t => {
       const source = String(t._source || '').toUpperCase();
 
@@ -371,11 +371,90 @@ function buildAcbLedger(sourceFilter) {
     })
     .sort((a, b) => new Date(a._date) - new Date(b._date));
 
+// Identify opening Landing records by source + account + symbol.
+// Account is included so one account's Landing does not reset another.
+function holdingKey(t) {
+  return JSON.stringify([
+    String(t._source || '').toUpperCase(),
+    getTradeAccount(t),
+    t._symbol
+  ]);
+}
+
+const landingByHolding = new Map();
+
+rows.forEach(t => {
+  const source = String(t._source || '').toUpperCase();
+
+  if (source !== 'HSBC' || !isLanding(t)) return;
+
+  const key = holdingKey(t);
+
+  if (landingByHolding.has(key)) {
+    throw new Error(
+      `Multiple Landing records for ${getTradeAccount(t)} / ` +
+      `${t._symbol}. Review these records before calculating ACB.`
+    );
+  }
+
+  const landingTime = new Date(t._date).getTime();
+
+  if (!Number.isFinite(landingTime)) {
+    throw new Error(`Invalid Landing date for ${t._symbol}.`);
+  }
+
+  landingByHolding.set(key, {
+    record: t,
+    time: landingTime
+  });
+});
+
+// Remove transactions before the opening Landing record.
+// Retain the Landing itself and transactions on/after that date.
+rows = rows.filter(t => {
+  const opening = landingByHolding.get(holdingKey(t));
+
+  if (!opening) return true;
+
+  const time = new Date(t._date).getTime();
+
+  if (!Number.isFinite(time)) {
+    throw new Error(`Invalid transaction date for ${t._symbol}.`);
+  }
+
+  return t === opening.record || time >= opening.time;
+});
+
+// Ensure Landing is processed before other records with the same date.
+rows.sort((a, b) => {
+  const dateDifference =
+    new Date(a._date).getTime() - new Date(b._date).getTime();
+
+  if (dateDifference !== 0) return dateDifference;
+
+  const aIsOpening =
+    landingByHolding.get(holdingKey(a))?.record === a;
+
+  const bIsOpening =
+    landingByHolding.get(holdingKey(b))?.record === b;
+
+  return Number(bIsOpening) - Number(aIsOpening);
+});
+   
   // Keep the remainder of your existing ledger function here.
 
   rows.forEach(t => {
-    const key = `${t._source}||${t._symbol}`;
+    const key = holdingKey(t);
 
+     ledger.set(key, {
+  source: t._source,
+  account: getTradeAccount(t),
+  symbol: t._symbol,
+  qty: 0,
+  costCad: 0,
+  sales: []
+});
+     
     if (!ledger.has(key)) {
       ledger.set(key, {
         source: t._source,
@@ -388,9 +467,43 @@ function buildAcbLedger(sourceFilter) {
 
     const pos = ledger.get(key);
 
-    // Ignore HSBC Landing records for original ACB.
-    if (isLanding(t)) return;
+   if (isLanding(t)) {
+  const source = String(t._source || '').toUpperCase();
 
+  // This opening-balance rule applies only to HSBC Landing records.
+  if (source !== 'HSBC') return;
+
+  const openingQty = Math.abs(t._qty);
+
+  // Read the explicit stored CAD valuation, not _cad:
+  // _cad may have been calculated using a default FX rate.
+  const rawCad = t.cadAmount;
+
+  const openingCad =
+    rawCad === undefined ||
+    rawCad === null ||
+    String(rawCad).trim() === ''
+      ? NaN
+      : Number(String(rawCad).replace(/,/g, '').trim());
+
+  if (
+    !Number.isFinite(openingQty) ||
+    openingQty <= 0 ||
+    !Number.isFinite(openingCad) ||
+    openingCad < 0
+  ) {
+    throw new Error(
+      `Missing or invalid Landing quantity/CAD valuation: ` +
+      `${getTradeAccount(t)} / ${t._symbol}`
+    );
+  }
+
+  pos.qty = openingQty;
+  pos.costCad = openingCad;
+
+  // Landing establishes the opening basis, not a reported sale.
+  return;
+}
     if (isCorporateActionOut(t)) {
       // Split / corporate-action removal:
       // reduce share count but preserve remaining cost basis.
@@ -430,6 +543,7 @@ function buildAcbLedger(sourceFilter) {
       pos.sales.push({
         date: t._date,
         source: t._source,
+         account: getTradeAccount(t),
         symbol: t._symbol,
         description: t.description || t.name || t.securityName || '',
         qtySold: sellQty,
