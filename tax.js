@@ -394,7 +394,7 @@ function getCraCapitalGainsRows() {
 
 /* ---------------- Rendering ---------------- */
 
-function renderCraGains() {
+function renderCapitalGains() {
   const rows = getCraCapitalGainsRows();
 
   els.tbody.innerHTML = '';
@@ -510,13 +510,13 @@ function csvEscape(value) {
 
 /* ---------------- Events and init ---------------- */
 
-els.year.addEventListener('change', renderCraGains);
-els.source.addEventListener('change', renderCraGains);
+els.year.addEventListener('change', renderCapitalGains);
+els.source.addEventListener('change', renderCapitalGains);
 
 els.refresh.addEventListener('click', async () => {
   try {
     await loadTaxData();
-    renderCraGains();
+    renderCaptialGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to load data: ${err.message}`, true);
@@ -528,7 +528,7 @@ els.export.addEventListener('click', exportCraCsv);
 (async function initTaxPage() {
   try {
     await loadTaxData();
-    renderCraGains();
+    renderCaptialGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to initialize tax page: ${err.message}`, true);
