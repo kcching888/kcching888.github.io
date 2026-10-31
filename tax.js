@@ -674,38 +674,7 @@ if (isBuy(t)) {
 
   return;
 }
-      const avgCostCad = pos.costCad / pos.qty;
-      const acbCad = avgCostCad * sellQty;
-
-      const proceedsCad = Math.abs(t._cad);
-      const outlaysCad = t._feesCad;
-
-      const gainCad = proceedsCad - acbCad - outlaysCad;
-
-      pos.sales.push({
-        date: t._date,
-        source: t._source,
-         account: getTradeAccount(t),
-        symbol: t._symbol,
-        description: t.description || t.name || t.securityName || '',
-        qtySold: sellQty,
-        proceedsCad,
-        acbCad,
-        outlaysCad,
-        gainCad,
-        gainUsd: t._usd,
-        fxRate: num(t.exchRate || t.exchangeRate || 1),
-        raw: t
-      });
-
-      pos.qty -= sellQty;
-      pos.costCad -= acbCad;
-
-      if (pos.qty < 0.0000001) {
-        pos.qty = 0;
-        pos.costCad = 0;
-      }
-    }
+      
   });
 
 console.log('ACB ledger diagnostic:', {
