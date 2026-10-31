@@ -350,6 +350,61 @@ function buildAcbLedger(sourceFilter) {
   const selectedSource = String(sourceFilter || 'All').toUpperCase();
   const selectedAccount = els.account.value || 'All';
 
+const debugSymbol = '03GB2311R';
+
+console.log(
+  '03GB2311R raw normalized records:',
+  JSON.stringify(
+    taxData.allTrades
+      .filter(t => {
+        const values = [
+          t.symbol,
+          t._symbol,
+          t.securityId
+        ];
+
+        return values.some(value =>
+          String(value || '')
+            .trim()
+            .toUpperCase()
+            .includes(debugSymbol)
+        );
+      })
+      .map(t => ({
+        date: t.date,
+        normalizedDate: t._date,
+
+        source: t.source,
+        normalizedSource: t._source,
+
+        account: t.account,
+        accountId: t.accountId,
+        resolvedAccount: getTradeAccount(t),
+
+        symbol: t.symbol,
+        normalizedSymbol: t._symbol,
+        securityId: t.securityId,
+
+        action: t.action,
+        resolvedAction: getTradeType(t),
+        isLanding: isLanding(t),
+
+        quantity: t.quantity,
+        normalizedQuantity: t._qty,
+
+        currency: t.currency,
+        amount: t.amount,
+        cadAmount: t.cadAmount,
+
+        reference: t.reference,
+        statementKey: t.statementKey
+      })),
+    null,
+    2
+  )
+);
+
+   
   let rows = taxData.allTrades
     .filter(t => {
       const source = String(t._source || '').toUpperCase();
@@ -517,6 +572,30 @@ rows.forEach(t => {
   }
 
   const pos = ledger.get(key);
+
+   if (
+  String(t._symbol || '').trim().toUpperCase() === '03GB2311R'
+) {
+  console.log('03GB2311R ledger trace:', {
+    date: t._date,
+    action: getTradeType(t),
+    key,
+
+    quantity: t._qty,
+    isLanding: isLanding(t),
+    isBuy: isBuy(t),
+    isSell: isSell(t),
+    isCorporateActionOut: isCorporateActionOut(t),
+    isCorporateActionIn: isCorporateActionIn(t),
+
+    positionQtyBefore: pos.qty,
+    positionCostNativeBefore: pos.costNative,
+    positionCostCadBefore: pos.costCad,
+
+    matchedLandingDate:
+      landingByHolding.get(key)?.record._date || null
+  });
+}
 
    const tradeCurrency = String(t.currency || '')
   .trim()
