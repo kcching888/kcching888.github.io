@@ -526,9 +526,7 @@ rows.forEach(t => {
 if (
   isLanding(t) ||
   isBuy(t) ||
-  isSell(t) ||
-  isCorporateActionIn(t) ||
-  isCorporateActionOut(t)
+  isSell(t) 
 ) {
   if (!tradeCurrency) {
     throw new Error(
@@ -589,9 +587,21 @@ pos.costCad = openingCad;
   // Landing establishes the opening basis, not a reported sale.
   return;
 }
+
+// Corporate actions affect share quantity only.
+// Preserve both cost pools and do not create report rows.
+if (isCorporateActionOut(t)) {
+  pos.qty -= Math.abs(t._qty);
+  return;
+}
+
+if (isCorporateActionIn(t)) {
+  pos.qty += Math.abs(t._qty);
+  return;
+}
  
 
-if (isBuy(t) || isCorporateActionIn(t)) {
+if (isBuy(t)) {
   const buyQty = Math.abs(t._qty);
 
   const buyCostNative =
@@ -607,7 +617,7 @@ if (isBuy(t) || isCorporateActionIn(t)) {
   return;
 }
 
-if (isSell(t) || isCorporateActionOut(t)) {
+if (isSell(t)) {
   const sellQty = Math.abs(t._qty);
   const tolerance = 0.0000001;
 
