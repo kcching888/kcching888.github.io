@@ -1,5 +1,5 @@
 /* =========================================================
-   CRA Tax Reporting — Annual Realized Capital Gains
+   CRA Tax Reporting — Annual Realized Capital Gains 
    ========================================================= */
 
 const GAS_URL = localStorage.getItem('ibkr_gas_url');
