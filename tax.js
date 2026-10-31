@@ -678,6 +678,13 @@ const gainCad = proceedsCad - acbCad;
       t.description || t.name || t.securityName || '',
 
     qtySold: sellQty,
+    price:
+  t.price === undefined ||
+  t.price === null ||
+  String(t.price).trim() === ''
+    ? null
+    : Number(String(t.price).replace(/,/g, '').trim()),
+     
     currency: pos.currency,
 
     proceedsNative,
@@ -844,9 +851,11 @@ function CapitalGains() {
       <td>${escapeHtml(r.symbol)}</td>
       <td>${escapeHtml(r.description || '')}</td>
 
-      <td class="num">${fmtAmount(r.qtySold, 6)}</td>
+<td class="num">${fmtAmount(r.qtySold, 6)}</td>
 
- <td class="num">${fmtAmount(r.proceedsNative)}</td>
+<td class="num">${fmtAmount(r.price, 6)}</td>
+
+<td class="num">${fmtAmount(r.proceedsNative)}</td>
 
 <td class="num"
     title="Commission already included in net proceeds; not deducted again">
@@ -890,7 +899,7 @@ function CapitalGains() {
     const tr = document.createElement('tr');
 
     tr.innerHTML = `
-      <td colspan="13" class="empty">
+      <td colspan="14" class="empty">
         No realized sales for this year and account source.
       </td>
     `;
