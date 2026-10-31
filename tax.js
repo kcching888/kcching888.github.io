@@ -392,6 +392,29 @@ console.table(
       matchesCaIn: isCorporateActionIn(t)
     }))
 );
+
+console.table(
+  rows
+    .filter(t => t._symbol === 'TSM')
+    .map(t => ({
+      date: t._date,
+      source: t._source,
+      account: getTradeAccount(t),
+      symbol: t._symbol,
+      action: getTradeType(t),
+      rawQuantity: t.quantity,
+      normalizedQuantity: t._qty,
+      cadAmount: t.cadAmount,
+      normalizedCad: t._cad,
+      isBuy: isBuy(t),
+      isSell: isSell(t),
+      isLanding: isLanding(t),
+      isCaOut: isCorporateActionOut(t),
+      isCaIn: isCorporateActionIn(t),
+      ledgerKey: holdingKey(t)
+    }))
+);
+   
 rows.forEach(t => {
   const source = String(t._source || '').toUpperCase();
 
