@@ -181,7 +181,7 @@ async function loadTaxData() {
 
   setStatus('Loading investment data…');
 
-  const url = `${GAS_URL}?action=getData&t=${Date.now()}`;
+  const url = `${GAS_URL}?action=getAll&t=${Date.now()}`;
 
   const res = await fetch(url);
   const text = await res.text();
