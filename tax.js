@@ -87,19 +87,25 @@ function getTradeType(t) {
 
 function isBuy(t) {
   const type = getTradeType(t).toLowerCase();
+  const qty = num(t._qty);
+
   return (
     type.includes('buy') ||
     type.includes('purchase') ||
-    num(t.quantity) > 0 && !type.includes('sell')
+    type.includes('acquisition') ||
+    (qty > 0 && !type.includes('sell') && !type.includes('dividend'))
   );
 }
 
 function isSell(t) {
   const type = getTradeType(t).toLowerCase();
+  const qty = num(t._qty);
+
   return (
     type.includes('sell') ||
     type.includes('sale') ||
-    num(t.quantity) < 0 && !type.includes('buy')
+    type.includes('disposition') ||
+    (qty < 0 && !type.includes('buy') && !type.includes('dividend'))
   );
 }
 
@@ -182,39 +188,50 @@ async function loadTaxData() {
   setStatus('Loading investment data…');
 
   const url = `${GAS_URL}?action=getAll&t=${Date.now()}`;
-
   const res = await fetch(url);
-  const text = await res.text();
+  const json = await res.json();
 
-  let json;
+  console.log('GAS getAll response keys:', Object.keys(json));
+  console.log('GAS getAll response:', json);
 
-  try {
-    json = JSON.parse(text);
-  } catch (err) {
-    console.error('Non-JSON GAS response:', text);
-    setStatus('Apps Script returned a non-JSON response. Check browser console.', true);
-    return;
-  }
+  const data = json.data || json;
 
-  console.log('GAS response:', json);
+  taxData.allTrades = normalizeTrades(
+    data.allTrades ||
+    data.trades ||
+    data.IBKRTrades ||
+    data.HSBCTrades ||
+    []
+  );
 
-  if (json.success === false) {
-    const message =
-      json.error ||
-      json.message ||
-      json.details ||
-      JSON.stringify(json, null, 2);
+  taxData.transfers = data.transfers || [];
+  taxData.hsbcStatements = data.hsbcStatements || [];
 
-    setStatus(`Backend error: ${message}`, true);
-    return;
-  }
+  console.log('Normalized trades:', taxData.allTrades.length);
+  console.log('Sample normalized trades:', taxData.allTrades.slice(0, 10));
 
-  taxData.allTrades = normalizeTrades(json.allTrades || json.trades || []);
-  taxData.transfers = json.transfers || [];
-  taxData.hsbcStatements = json.hsbcStatements || [];
+  const sells = taxData.allTrades.filter(t => isSell(t));
+  console.log('Detected sells:', sells.length);
+  console.log('Sample sells:', sells.slice(0, 10));
+
+  const sources = [...new Set(taxData.allTrades.map(t => t._source))];
+  const years = [...new Set(
+    taxData.allTrades
+      .map(t => new Date(t._date))
+      .filter(d => !isNaN(d))
+      .map(d => d.getFullYear())
+  )].sort((a, b) => b - a);
+
+  console.log('Detected sources:', sources);
+  console.log('Detected years:', years);
 
   populateYearFilter();
-  setStatus(`Loaded ${taxData.allTrades.length.toLocaleString()} transactions.`);
+  setStatus(
+    `Loaded ${taxData.allTrades.length.toLocaleString()} transactions; ` +
+    `${sells.length.toLocaleString()} potential sales detected.`
+  );
+
+  renderCraCapitalGains();
 }
 
 /* Normalize field names so the tax engine is resilient
