@@ -516,7 +516,7 @@ els.source.addEventListener('change', renderCapitalGains);
 els.refresh.addEventListener('click', async () => {
   try {
     await loadTaxData();
-    renderCaptialGains();
+    renderCapitalGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to load data: ${err.message}`, true);
@@ -528,7 +528,7 @@ els.export.addEventListener('click', exportCraCsv);
 (async function initTaxPage() {
   try {
     await loadTaxData();
-    renderCaptialGains();
+    renderCapitalGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to initialize tax page: ${err.message}`, true);
