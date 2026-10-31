@@ -189,6 +189,38 @@ button {
   background: #276749;
 }
 
+#cra-gains-table thead th {
+  background: #14532d;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 12px 10px;
+  border-bottom: 2px solid #166534;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#cra-gains-table thead th,
+#cra-gains-table thead th * {
+  color: #ffffff !important;
+}
+
+
+#cra-gains-table tbody td {
+  color: #111827;
+  font-size: 13px;
+  padding: 10px;
+}
+
+#cra-gains-table tbody tr:nth-child(even) {
+  background: #f9fafb;
+}
+
+#cra-gains-table tbody tr:hover {
+  background: #ecfdf5;
+}
+
 /* ---------------- Status ---------------- */
 
 .status {
