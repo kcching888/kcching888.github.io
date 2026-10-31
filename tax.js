@@ -290,7 +290,7 @@ console.log('Sample sells:', sells.slice(0, 10));
     `${sells.length.toLocaleString()} potential sales detected.`
   );
 
-  renderCapitalGains();
+  CapitalGains();
 }
 
 /* Normalize field names so the tax engine is resilient
@@ -657,38 +657,109 @@ console.log('Report filter diagnostic:', {
   return rows;
 }
 
+/* ---------------- ing ---------------- */
+
 /* ---------------- Rendering ---------------- */
 
-function renderCapitalGains() {
+function CapitalGains() {
   const rows = getCraCapitalGainsRows();
 
   els.tbody.innerHTML = '';
+
+  function fmtAmount(value, maximumFractionDigits = 2) {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      return '—';
+    }
+
+    const n = Number(value);
+
+    if (!Number.isFinite(n)) return '—';
+
+    return n.toLocaleString('en-CA', {
+      minimumFractionDigits:
+        maximumFractionDigits === 2 ? 2 : 0,
+      maximumFractionDigits
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function gainClass(value) {
+    if (
+      value === undefined ||
+      value === null ||
+      value === ''
+    ) {
+      return '';
+    }
+
+    const n = Number(value);
+
+    return Number.isFinite(n)
+      ? (n >= 0 ? 'positive' : 'negative')
+      : '';
+  }
 
   let totalProceeds = 0;
   let totalAcb = 0;
   let totalGain = 0;
 
   rows.forEach(r => {
+    // Summary cards remain in CAD.
     totalProceeds += r.proceedsCad;
     totalAcb += r.acbCad;
     totalGain += r.gainCad;
 
+    const currency = String(
+      r.currency || r.raw?.currency || ''
+    ).trim().toUpperCase();
+
+    const fxRate = Number(r.fxRate);
+
     const tr = document.createElement('tr');
 
     tr.innerHTML = `
-      <td>${fmtDate(r.date)}</td>
-      <td>${r.source}</td>
-      <td>${r.symbol}</td>
-      <td>${r.description || ''}</td>
-      <td class="num">${r.qtySold.toLocaleString('en-CA')}</td>
-      <td class="num">${fmtCad(r.proceedsCad)}</td>
-      <td class="num">${fmtCad(r.acbCad)}</td>
-      <td class="num">${fmtCad(r.outlaysCad)}</td>
-      <td class="num ${r.gainCad >= 0 ? 'positive' : 'negative'}">
-        ${fmtCad(r.gainCad)}
+      <td>${escapeHtml(fmtDate(r.date))}</td>
+      <td>${escapeHtml(r.source)}</td>
+      <td>${escapeHtml(r.symbol)}</td>
+      <td>${escapeHtml(r.description || '')}</td>
+
+      <td class="num">${fmtAmount(r.qtySold, 6)}</td>
+
+      <td class="num">${fmtAmount(r.proceedsNative)}</td>
+
+      <td class="num">${fmtAmount(r.acbNative)}</td>
+
+      <td class="num ${gainClass(r.gainNative)}">
+        ${fmtAmount(r.gainNative)}
       </td>
-      <td class="num">${r.gainUsd ? r.gainUsd.toLocaleString('en-CA', { maximumFractionDigits: 2 }) : ''}</td>
-      <td class="num">${r.fxRate ? r.fxRate.toFixed(4) : ''}</td>
+
+      <td class="num">${fmtAmount(r.acbCad)}</td>
+
+      <td class="num ${gainClass(r.gainCad)}">
+        ${fmtAmount(r.gainCad)}
+      </td>
+
+      <td>${escapeHtml(currency || '—')}</td>
+
+      <td class="num">
+        ${
+          Number.isFinite(fxRate) && fxRate > 0
+            ? fxRate.toFixed(6)
+            : '—'
+        }
+      </td>
     `;
 
     els.tbody.appendChild(tr);
@@ -698,13 +769,18 @@ function renderCapitalGains() {
   els.acb.textContent = fmtCad(totalAcb);
   els.gain.textContent = fmtCad(totalGain);
 
-  // CRA generally taxes one-half of a net capital gain.
-  const taxableGain = totalGain > 0 ? totalGain / 2 : totalGain / 2;
-  els.taxable.textContent = fmtCad(taxableGain);
+  // Preserve the existing planning-summary calculation.
+  els.taxable.textContent = fmtCad(totalGain / 2);
 
   if (!rows.length) {
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td colspan="11" class="empty">No realized sales for this year and account source.</td>';
+
+    tr.innerHTML = `
+      <td colspan="12" class="empty">
+        No realized sales for this year and account source.
+      </td>
+    `;
+
     els.tbody.appendChild(tr);
   }
 }
@@ -834,18 +910,18 @@ function populateAccountFilter() {
 
 /* ---------------- Events and init ---------------- */
 
-els.year.addEventListener('change', renderCapitalGains);
+els.year.addEventListener('change', CapitalGains);
 els.source.addEventListener('change', () => {
   populateAccountFilter();
-  renderCapitalGains();
+  CapitalGains();
 });
 
-els.account.addEventListener('change', renderCapitalGains);
+els.account.addEventListener('change', CapitalGains);
 
 els.refresh.addEventListener('click', async () => {
   try {
     await loadTaxData();
-    renderCapitalGains();
+    CapitalGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to load data: ${err.message}`, true);
@@ -857,7 +933,7 @@ els.export.addEventListener('click', exportCraCsv);
 (async function initTaxPage() {
   try {
     await loadTaxData();
-    renderCapitalGains();
+    CapitalGains();
   } catch (err) {
     console.error(err);
     setStatus(`Failed to initialize tax page: ${err.message}`, true);
