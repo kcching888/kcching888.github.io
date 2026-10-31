@@ -393,3 +393,40 @@ td.empty {
   background: #dcfce7;
 }
    
+#foreign-dividend-table {
+  min-width: 2400px;
+}
+
+#foreign-dividend-table thead th {
+  background: #14532d;
+  color: #ffffff;
+  padding: 11px 10px;
+  white-space: nowrap;
+}
+
+#foreign-dividend-table tbody tr:nth-child(odd) {
+  background: #ffffff;
+}
+
+#foreign-dividend-table tbody tr:nth-child(even) {
+  background: #f1f5f9;
+}
+
+#foreign-dividend-table tbody td {
+  color: #111827;
+  padding: 9px 10px;
+  border-bottom: 1px solid #dbe2ea;
+}
+
+#foreign-dividend-table tbody tr:hover {
+  background: #dcfce7;
+}
+
+#foreign-dividend-worksheet [data-export] {
+  background: #166534;
+  color: #ffffff;
+}
+
+#foreign-dividend-worksheet [data-count] {
+  color: #cbd5e1;
+}
