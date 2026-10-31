@@ -656,10 +656,10 @@ function populateAccountFilter() {
 els.year.addEventListener('change', renderCapitalGains);
 els.source.addEventListener('change', () => {
   populateAccountFilter();
-  renderCraGains();
+  renderCapitalGains();
 });
 
-els.account.addEventListener('change', renderCraGains);
+els.account.addEventListener('change', renderCapitalGains);
 
 els.refresh.addEventListener('click', async () => {
   try {
