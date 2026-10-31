@@ -91,40 +91,32 @@ function getTradeType(t) {
 }
 
 function isBuy(t) {
-  const action = getTradeType(t).toUpperCase();
-  const qty = num(t.quantity ?? t.qty ?? t.shares ?? 0);
+  const action = getTradeType(t).trim().toUpperCase();
 
-  return (
-    action === 'BUY' ||
-    action === 'BOUGHT' ||
-    action === 'B' ||
-    action.includes('BUY') ||
-    action.includes('PURCHASE') ||
-    (qty > 0 &&
-      !action.includes('SELL') &&
-      !action.includes('LANDING') &&
-      !action.includes('CORPORATE'))
+  if (action) {
+    return /^(BUY|BOUGHT|B|PURCHASE|PURCHASED)$/.test(action);
+  }
+
+  const qty = num(
+    t._qty ?? t.quantity ?? t.qty ?? t.shares ?? 0
   );
+
+  return qty > 0;
 }
 
 function isSell(t) {
-  const action = getTradeType(t).toUpperCase();
-  const qty = num(t.quantity ?? t.qty ?? t.shares ?? 0);
+  const action = getTradeType(t).trim().toUpperCase();
 
-  return (
-    action === 'SELL' ||
-    action === 'SOLD' ||
-    action === 'S' ||
-    action.includes('SELL') ||
-    action.includes('SALE') ||
-    action.includes('DISPOSITION') ||
-    (qty < 0 &&
-      !action.includes('BUY') &&
-      !action.includes('LANDING') &&
-      !action.includes('CORPORATE'))
+  if (action) {
+    return /^(SELL|SOLD|S|SALE|DISPOSITION)$/.test(action);
+  }
+
+  const qty = num(
+    t._qty ?? t.quantity ?? t.qty ?? t.shares ?? 0
   );
-}
 
+  return qty < 0;
+}
 function isCorporateActionOut(t) {
   const type = getTradeType(t).toLowerCase();
   return type.includes('corporate action out') || type.includes('ca out');
@@ -382,7 +374,24 @@ function holdingKey(t) {
 }
 
 const landingByHolding = new Map();
-
+console.table(
+  rows
+    .filter(t => isSell(t))
+    .map(t => ({
+      date: t._date,
+      account: getTradeAccount(t),
+      symbol: t._symbol,
+      action: t.action,
+      type: t.type,
+      detectedAction: getTradeType(t),
+      quantity: t._qty,
+      matchesBuy: isBuy(t),
+      matchesSell: isSell(t),
+      matchesLanding: isLanding(t),
+      matchesCaOut: isCorporateActionOut(t),
+      matchesCaIn: isCorporateActionIn(t)
+    }))
+);
 rows.forEach(t => {
   const source = String(t._source || '').toUpperCase();
 
