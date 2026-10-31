@@ -231,7 +231,7 @@ async function loadTaxData() {
     `${sells.length.toLocaleString()} potential sales detected.`
   );
 
-  renderCraCapitalGains();
+  renderCapitalGains();
 }
 
 /* Normalize field names so the tax engine is resilient
