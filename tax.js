@@ -182,8 +182,32 @@ async function loadTaxData() {
   setStatus('Loading investment data…');
 
   const url = `${GAS_URL}?action=getData&t=${Date.now()}`;
+
   const res = await fetch(url);
-  const json = await res.json();
+  const text = await res.text();
+
+  let json;
+
+  try {
+    json = JSON.parse(text);
+  } catch (err) {
+    console.error('Non-JSON GAS response:', text);
+    setStatus('Apps Script returned a non-JSON response. Check browser console.', true);
+    return;
+  }
+
+  console.log('GAS response:', json);
+
+  if (json.success === false) {
+    const message =
+      json.error ||
+      json.message ||
+      json.details ||
+      JSON.stringify(json, null, 2);
+
+    setStatus(`Backend error: ${message}`, true);
+    return;
+  }
 
   taxData.allTrades = normalizeTrades(json.allTrades || json.trades || []);
   taxData.transfers = json.transfers || [];
