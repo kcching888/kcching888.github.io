@@ -81,31 +81,47 @@ function getQuantity(t) {
 
 function getTradeType(t) {
   return String(
-    t.type || t.action || t.transactionType || t.side || ''
+    t.action ||
+    t.tradeAction ||
+    t.type ||
+    t.transactionType ||
+    t.side ||
+    ''
   ).trim();
 }
 
 function isBuy(t) {
-  const type = getTradeType(t).toLowerCase();
-  const qty = num(t._qty);
+  const action = getTradeType(t).toUpperCase();
+  const qty = num(t.quantity ?? t.qty ?? t.shares ?? 0);
 
   return (
-    type.includes('buy') ||
-    type.includes('purchase') ||
-    type.includes('acquisition') ||
-    (qty > 0 && !type.includes('sell') && !type.includes('dividend'))
+    action === 'BUY' ||
+    action === 'BOUGHT' ||
+    action === 'B' ||
+    action.includes('BUY') ||
+    action.includes('PURCHASE') ||
+    (qty > 0 &&
+      !action.includes('SELL') &&
+      !action.includes('LANDING') &&
+      !action.includes('CORPORATE'))
   );
 }
 
 function isSell(t) {
-  const type = getTradeType(t).toLowerCase();
-  const qty = num(t._qty);
+  const action = getTradeType(t).toUpperCase();
+  const qty = num(t.quantity ?? t.qty ?? t.shares ?? 0);
 
   return (
-    type.includes('sell') ||
-    type.includes('sale') ||
-    type.includes('disposition') ||
-    (qty < 0 && !type.includes('buy') && !type.includes('dividend'))
+    action === 'SELL' ||
+    action === 'SOLD' ||
+    action === 'S' ||
+    action.includes('SELL') ||
+    action.includes('SALE') ||
+    action.includes('DISPOSITION') ||
+    (qty < 0 &&
+      !action.includes('BUY') &&
+      !action.includes('LANDING') &&
+      !action.includes('CORPORATE'))
   );
 }
 
@@ -132,14 +148,20 @@ function getCadAmount(t) {
     return num(t.cadAmount);
   }
 
-  const amount = num(
+  const qty = Math.abs(getQuantity(t));
+  const price = num(t.price ?? 0);
+  const commission = num(t.commission ?? t.fee ?? 0);
+
+  let nativeAmount = num(
     t.amount ??
     t.grossAmount ??
     t.netAmount ??
-    t.proceeds ??
-    t.cost ??
     0
   );
+
+  if (!nativeAmount && qty && price) {
+    nativeAmount = qty * price;
+  }
 
   const fx = num(
     t.exchRate ??
@@ -148,7 +170,7 @@ function getCadAmount(t) {
     1
   );
 
-  return amount * fx;
+  return nativeAmount * fx;
 }
 
 function getUsdAmount(t) {
@@ -209,6 +231,31 @@ async function loadTaxData() {
 
   console.log('Normalized trades:', taxData.allTrades.length);
   console.log('Sample normalized trades:', taxData.allTrades.slice(0, 10));
+
+  const actionCounts = {};
+
+taxData.allTrades.forEach(t => {
+  const key = String(t.action || t.type || t.tradeAction || '(blank)')
+    .trim()
+    .toUpperCase();
+  actionCounts[key] = (actionCounts[key] || 0) + 1;
+});
+
+console.log('Action counts:', actionCounts);
+
+console.table(
+  taxData.allTrades.slice(0, 15).map(t => ({
+    date: t.date,
+    account: t.account,
+    action: t.action,
+    type: t.type,
+    symbol: t.symbol,
+    quantity: t.quantity,
+    price: t.price,
+    amount: t.amount,
+    currency: t.currency
+  }))
+);
 
   const sells = taxData.allTrades.filter(t => isSell(t));
   console.log('Detected sells:', sells.length);
