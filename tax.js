@@ -530,7 +530,20 @@ rows.sort((a, b) => {
     if (isSell(t)) {
       const sellQty = Math.abs(t._qty);
 
-      if (pos.qty <= 0) return;
+     if (pos.qty <= 0) {
+  console.warn('Sale skipped: no opening quantity', {
+    date: t._date,
+    source: t._source,
+    account: getTradeAccount(t),
+    symbol: t._symbol,
+    action: getTradeType(t),
+    sellQty,
+    positionQty: pos.qty,
+    positionCostCad: pos.costCad
+  });
+
+  return;
+}
 
       const avgCostCad = pos.costCad / pos.qty;
       const acbCad = avgCostCad * sellQty;
@@ -566,6 +579,28 @@ rows.sort((a, b) => {
     }
   });
 
+console.log('ACB ledger diagnostic:', {
+  selectedSource,
+  selectedAccount,
+  transactionsAfterLandingFilter: rows.length,
+  detectedSellTransactions: rows.filter(t => isSell(t)).length,
+  landingHoldings: landingByHolding.size,
+  ledgerPositions: ledger.size,
+  generatedSales: [...ledger.values()]
+    .reduce((total, pos) => total + pos.sales.length, 0)
+});
+
+console.table(
+  [...ledger.values()].map(pos => ({
+    source: pos.source,
+    account: pos.account,
+    symbol: pos.symbol,
+    remainingQty: pos.qty,
+    remainingCostCad: pos.costCad,
+    salesCount: pos.sales.length
+  }))
+);
+   
   return ledger;
 }
 
@@ -585,7 +620,14 @@ function getCraCapitalGainsRows() {
       rows.push(sale);
     });
   });
-
+console.log('Report filter diagnostic:', {
+  year: els.year.value,
+  source: els.source.value,
+  account: els.account.value,
+  generatedSaleDates: [...ledger.values()]
+    .flatMap(pos => pos.sales)
+    .map(sale => sale.date)
+});
   rows.sort((a, b) => new Date(a.date) - new Date(b.date));
   return rows;
 }
