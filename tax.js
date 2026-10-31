@@ -54,13 +54,12 @@ function getTradeDate(t) {
 }
 
 function getTradeSource(t) {
-  const raw = String(
-    t.source || t.account || t.accountSource || t.portfolio || ''
-  ).toUpperCase();
+  const source = String(t.source || '').trim().toUpperCase();
 
-  if (raw.includes('IBKR') || raw.includes('IB')) return 'IBKR';
-  if (raw.includes('HSBC')) return 'HSBC';
-  return raw || 'UNKNOWN';
+  if (source === 'IBKR') return 'IBKR';
+  if (source === 'HSBC') return 'HSBC';
+
+  return 'UNKNOWN';
 }
 
 function getSymbol(t) {
@@ -226,26 +225,44 @@ async function loadTaxData() {
     []
   );
 
-  taxData.transfers = data.transfers || [];
-  taxData.hsbcStatements = data.hsbcStatements || [];
+taxData.transfers = data.transfers || [];
+taxData.hsbcStatements = data.hsbcStatements || [];
 
-  console.log('Normalized trades:', taxData.allTrades.length);
-  console.log('Sample normalized trades:', taxData.allTrades.slice(0, 10));
+console.log('Normalized trades:', taxData.allTrades.length);
+console.log('Sample normalized trades:', taxData.allTrades.slice(0, 10));
 
-  const actionCounts = {};
+// 1. Count normalized source values
+const sourceCounts = {};
 
 taxData.allTrades.forEach(t => {
-  const key = String(t.action || t.type || t.tradeAction || '(blank)')
-    .trim()
-    .toUpperCase();
+  const key = t._source || '(blank)';
+  sourceCounts[key] = (sourceCounts[key] || 0) + 1;
+});
+
+console.log('Source counts:', sourceCounts);
+
+// 2. Count raw action / type values
+const actionCounts = {};
+
+taxData.allTrades.forEach(t => {
+  const key = String(
+    t.action ||
+    t.type ||
+    t.tradeAction ||
+    '(blank)'
+  ).trim().toUpperCase();
+
   actionCounts[key] = (actionCounts[key] || 0) + 1;
 });
 
 console.log('Action counts:', actionCounts);
 
+// 3. Show a compact sample for checking field names
 console.table(
   taxData.allTrades.slice(0, 15).map(t => ({
     date: t.date,
+    source: t.source,
+    normalizedSource: t._source,
     account: t.account,
     action: t.action,
     type: t.type,
@@ -257,9 +274,10 @@ console.table(
   }))
 );
 
-  const sells = taxData.allTrades.filter(t => isSell(t));
-  console.log('Detected sells:', sells.length);
-  console.log('Sample sells:', sells.slice(0, 10));
+// 4. Count detected sells
+const sells = taxData.allTrades.filter(t => isSell(t));
+console.log('Detected sells:', sells.length);
+console.log('Sample sells:', sells.slice(0, 10));
 
   const sources = [...new Set(taxData.allTrades.map(t => t._source))];
   const years = [...new Set(
