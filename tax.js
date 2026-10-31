@@ -481,16 +481,41 @@ rows.forEach(t => {
   // Initialize only once for each source/account/symbol.
   if (!ledger.has(key)) {
     ledger.set(key, {
-      source: t._source,
-      account: getTradeAccount(t),
-      symbol: t._symbol,
-      qty: 0,
-      costCad: 0,
-      sales: []
+  source: t._source,
+    account: getTradeAccount(t),
+    symbol: t._symbol,
+    currency: '',
+    qty: 0,
+    costNative: 0,
+    costCad: 0,
+    sales: []
     });
   }
 
   const pos = ledger.get(key);
+
+   const tradeCurrency = String(t.currency || '')
+  .trim()
+  .toUpperCase();
+
+// Only validate currency for events that establish or use cost.
+if (isLanding(t) || isBuy(t) || isSell(t)) {
+  if (!tradeCurrency) {
+    throw new Error(
+      `Missing currency: ${getTradeAccount(t)} / ${t._symbol}`
+    );
+  }
+
+  if (pos.currency && pos.currency !== tradeCurrency) {
+    throw new Error(
+      `Mixed currencies in native ACB pool: ` +
+      `${getTradeAccount(t)} / ${t._symbol} ` +
+      `(${pos.currency} and ${tradeCurrency}).`
+    );
+  }
+
+  pos.currency = tradeCurrency;
+}
 
    if (isLanding(t)) {
   const source = String(t._source || '').toUpperCase();
@@ -523,8 +548,13 @@ rows.forEach(t => {
     );
   }
 
-  pos.qty = openingQty;
-  pos.costCad = openingCad;
+pos.qty = openingQty;
+
+// Landing amount is the native-currency opening valuation.
+// Do not add historical purchase commissions here.
+pos.costNative = getNativeAmount(t);
+
+pos.costCad = openingCad;
 
   // Landing establishes the opening basis, not a reported sale.
   return;
@@ -543,33 +573,107 @@ rows.forEach(t => {
       return;
     }
 
-    if (isBuy(t)) {
-      const buyQty = Math.abs(t._qty);
-      const buyCost = Math.abs(t._cad) + t._feesCad;
+if (isBuy(t)) {
+  const buyQty = Math.abs(t._qty);
 
-      pos.qty += buyQty;
-      pos.costCad += buyCost;
-      return;
-    }
+  const buyCostNative =
+    getNativeAmount(t) + getFeesNative(t);
 
-    if (isSell(t)) {
-      const sellQty = Math.abs(t._qty);
+  const buyCostCad =
+    Math.abs(t._cad) + t._feesCad;
 
-     if (pos.qty <= 0) {
-  console.warn('Sale skipped: no opening quantity', {
-    date: t._date,
-    source: t._source,
-    account: getTradeAccount(t),
-    symbol: t._symbol,
-    action: getTradeType(t),
-    sellQty,
-    positionQty: pos.qty,
-    positionCostCad: pos.costCad
-  });
+  pos.qty += buyQty;
+  pos.costNative += buyCostNative;
+  pos.costCad += buyCostCad;
 
   return;
 }
 
+   if (isSell(t)) {
+  const sellQty = Math.abs(t._qty);
+  const tolerance = 0.0000001;
+
+  if (!Number.isFinite(sellQty) || sellQty <= 0) {
+    throw new Error(
+      `Invalid sell quantity: ` +
+      `${getTradeAccount(t)} / ${t._symbol}`
+    );
+  }
+
+  if (pos.qty <= 0) {
+    throw new Error(
+      `Cannot calculate sale: no opening quantity for ` +
+      `${getTradeAccount(t)} / ${t._symbol} / ${fmtDate(t._date)}`
+    );
+  }
+
+  if (sellQty > pos.qty + tolerance) {
+    throw new Error(
+      `Sell quantity exceeds available quantity: ` +
+      `${getTradeAccount(t)} / ${t._symbol}. ` +
+      `Selling ${sellQty}; available ${pos.qty}.`
+    );
+  }
+
+  // Use the same share proportion for both cost pools.
+  const soldFraction = Math.min(sellQty / pos.qty, 1);
+
+  // Native-currency amounts.
+  const proceedsNative = getNativeAmount(t);
+  const acbNative = pos.costNative * soldFraction;
+  const outlaysNative = getFeesNative(t);
+
+  const gainNative =
+    proceedsNative - acbNative - outlaysNative;
+
+  // Existing CAD amounts.
+  const proceedsCad = Math.abs(t._cad);
+  const acbCad = pos.costCad * soldFraction;
+  const outlaysCad = t._feesCad;
+
+  const gainCad =
+    proceedsCad - acbCad - outlaysCad;
+
+  pos.sales.push({
+    date: t._date,
+    source: t._source,
+    account: getTradeAccount(t),
+    symbol: t._symbol,
+    description:
+      t.description || t.name || t.securityName || '',
+
+    qtySold: sellQty,
+    currency: pos.currency,
+
+    proceedsNative,
+    acbNative,
+    outlaysNative,
+    gainNative,
+
+    proceedsCad,
+    acbCad,
+    outlaysCad,
+    gainCad,
+
+    fxRate: num(
+      t.exchRate || t.exchangeRate || t.fxRate || 1
+    ),
+
+    raw: t
+  });
+
+  pos.qty -= sellQty;
+  pos.costNative -= acbNative;
+  pos.costCad -= acbCad;
+
+  if (Math.abs(pos.qty) < tolerance) {
+    pos.qty = 0;
+    pos.costNative = 0;
+    pos.costCad = 0;
+  }
+
+  return;
+}
       const avgCostCad = pos.costCad / pos.qty;
       const acbCad = avgCostCad * sellQty;
 
@@ -870,6 +974,91 @@ function getIbkrAccountType(account) {
     default:
       return 'Other';
   }
+}
+
+function getNativeAmount(t) {
+  // Assumption: amount/grossAmount is the trade value before
+  // commissions. Do not use netAmount and subtract fees again.
+  for (const value of [t.amount, t.grossAmount]) {
+    if (
+      value === undefined ||
+      value === null ||
+      String(value).trim() === ''
+    ) {
+      continue;
+    }
+
+    const parsed = Number(
+      String(value).replace(/,/g, '').trim()
+    );
+
+    if (Number.isFinite(parsed)) {
+      return Math.abs(parsed);
+    }
+  }
+
+  // Some HSBC records contain only quantity and price.
+  const quantity = Math.abs(getQuantity(t));
+
+  const price = Number(
+    String(t.price ?? '').replace(/,/g, '').trim()
+  );
+
+  if (
+    quantity > 0 &&
+    t.price !== undefined &&
+    t.price !== null &&
+    String(t.price).trim() !== '' &&
+    Number.isFinite(price)
+  ) {
+    return quantity * Math.abs(price);
+  }
+
+  throw new Error(
+    `Missing native trade amount: ` +
+    `${getTradeAccount(t)} / ${getSymbol(t)} / ${getTradeDate(t)}`
+  );
+}
+
+function getFeesNative(t) {
+  const value =
+    t.comm ??
+    t.commission ??
+    t.fee ??
+    t.fees ??
+    0;
+
+  const fee = Number(
+    String(value).replace(/,/g, '').trim()
+  );
+
+  if (!Number.isFinite(fee)) {
+    throw new Error(
+      `Invalid commission: ${getTradeAccount(t)} / ${getSymbol(t)}`
+    );
+  }
+
+  if (fee === 0) return 0;
+
+  const tradeCurrency = String(t.currency || '')
+    .trim()
+    .toUpperCase();
+
+  const feeCurrency = String(
+    t.commissionCurrency ||
+    t.feeCurrency ||
+    tradeCurrency
+  ).trim().toUpperCase();
+
+  if (feeCurrency !== tradeCurrency) {
+    throw new Error(
+      `Commission currency differs from trade currency: ` +
+      `${getSymbol(t)} (${feeCurrency} vs ${tradeCurrency}). ` +
+      `A fee conversion is required.`
+    );
+  }
+
+  return Math.abs(fee);
 }
 
 function populateAccountFilter() {
