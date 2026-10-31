@@ -466,13 +466,136 @@
       : 'All';
   }
 
-  function render() {
-    const rows = selectedRows();
+function buildSummary(rows) {
+  const sum = key => rows.reduce(
+    (total, row) =>
+      Number.isFinite(row[key])
+        ? total + row[key]
+        : total,
+    0
+  );
 
-    host.querySelector('[data-count]').textContent =
-      `${rows.length} review rows. ` +
-      'Includes Canadian/unclassified records for reconciliation. ' +
-      'No filing-ready total is calculated yet.';
+  const count = rows.length;
+
+  const foreignRows = rows.filter(row =>
+    row.classification !==
+      'Return of capital — exclude/review' &&
+    row.classification !== 'Unmatched withholding'
+  );
+
+  const unresolvedGross = rows.filter(row =>
+    row.gross === null
+  ).length;
+
+  const unresolvedTax = rows.filter(row =>
+    row.withholding === null
+  ).length;
+
+  const unmatchedTax = rows.filter(row =>
+    row.classification === 'Unmatched withholding'
+  ).length;
+
+  const reviewRows = rows.filter(row =>
+    text(row.status).length > 0
+  ).length;
+
+  return {
+    count,
+    grossCad: sum('grossCad'),
+    withholdingCad: sum('withholdingCad'),
+    feeCad: rows.reduce(
+      (total, row) =>
+        Number.isFinite(row.grossCad) &&
+        Number.isFinite(row.withholdingCad) &&
+        Number.isFinite(row.netCad)
+          ? total +
+            row.grossCad -
+            row.withholdingCad -
+            row.netCad
+          : total,
+      0
+    ),
+    netCad: sum('netCad'),
+    foreignCount: foreignRows.length,
+    unresolvedGross,
+    unresolvedTax,
+    unmatchedTax,
+    reviewRows
+  };
+}
+
+
+function renderSummary(rows) {
+  const summary = buildSummary(rows);
+
+  const cards = [
+    {
+      label: 'Review Rows',
+      value: summary.count.toLocaleString('en-CA'),
+      note: 'Dividend and unmatched withholding records'
+    },
+    {
+      label: 'Gross Dividend CAD',
+      value: format(summary.grossCad),
+      note: 'Known/reconstructed gross only'
+    },
+    {
+      label: 'Withholding CAD',
+      value: format(summary.withholdingCad),
+      note: 'Matched or unmatched tax records'
+    },
+    {
+      label: 'Bank Fee CAD',
+      value: format(summary.feeCad),
+      note: 'Derived from reconciled rows only'
+    },
+    {
+      label: 'Net Cash CAD',
+      value: format(summary.netCad),
+      note: 'Credited cash, where available'
+    },
+    {
+      label: 'Unresolved Gross',
+      value: summary.unresolvedGross.toLocaleString('en-CA'),
+      note: 'Missing or unconfirmed gross amount'
+    },
+    {
+      label: 'Unresolved Withholding',
+      value: summary.unresolvedTax.toLocaleString('en-CA'),
+      note: 'No matched or confirmed withholding'
+    },
+    {
+      label: 'Unmatched Tax',
+      value: summary.unmatchedTax.toLocaleString('en-CA'),
+      note: 'Withholding not paired to a dividend'
+    },
+    {
+      label: 'Rows Needing Review',
+      value: summary.reviewRows.toLocaleString('en-CA'),
+      note: 'Includes classification and data checks'
+    }
+  ];
+
+  host.querySelector('[data-summary]').innerHTML =
+    cards.map(card => `
+      <div class="summary-card">
+        <div class="summary-label">${escape(card.label)}</div>
+        <div class="summary-value">${escape(card.value)}</div>
+        <div class="summary-note">${escape(card.note)}</div>
+      </div>
+    `).join('');
+}
+
+   
+function render() {
+  const rows = selectedRows();
+
+  renderSummary(rows);
+
+  host.querySelector('[data-count]').textContent =
+    `${rows.length} review rows. ` +
+    'Includes Canadian/unclassified records for reconciliation. ' +
+    'No filing-ready total is calculated yet.';
 
     host.querySelector('tbody').innerHTML = rows.length
       ? rows.map(row => `
@@ -532,93 +655,65 @@
   }
 
   function createUi() {
-    host = document.createElement('section');
-    host.className = 'card';
-    host.id = 'foreign-dividend-worksheet';
+  host = document.createElement('section');
+  host.className = 'card';
+  host.id = 'foreign-dividend-worksheet';
 
-    host.innerHTML = `
-      <h2>Foreign Dividends &amp; Withholding — Review Worksheet</h2>
+  host.innerHTML = `
+    <h2>Foreign Dividends &amp; Withholding — Review Worksheet</h2>
 
-      <div class="filters">
-        <label>Year
-          <select data-year></select>
-        </label>
+    <div class="filters">
+      <label>Year
+        <select data-year></select>
+      </label>
 
-        <label>Source
-          <select data-source>
-            <option value="All">All</option>
-            <option value="IBKR">IBKR</option>
-            <option value="HSBC">HSBC</option>
-          </select>
-        </label>
+      <label>Source
+        <select data-source>
+          <option value="All">All</option>
+          <option value="IBKR">IBKR</option>
+          <option value="HSBC">HSBC</option>
+        </select>
+      </label>
 
-        <label>Account
-          <select data-account>
-            <option value="All">All accounts</option>
-          </select>
-        </label>
+      <label>Account
+        <select data-account>
+          <option value="All">All accounts</option>
+        </select>
+      </label>
 
-        <button type="button" data-export>Export Review CSV</button>
-      </div>
+      <button type="button" data-export>Export Review CSV</button>
+    </div>
 
-      <p data-count class="status"></p>
+    <div class="summary-cards" data-summary></div>
 
-      <div class="table-wrap">
-        <table id="foreign-dividend-table">
-          <thead><tr>
-            ${columns.map(([, title]) =>
-              `<th>${escape(title)}</th>`
-            ).join('')}
-          </tr></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    `;
+    <p data-count class="status"></p>
 
-    document.querySelector('main').appendChild(host);
+    <div class="table-wrap">
+      <table id="foreign-dividend-table">
+        <thead><tr>
+          ${columns.map(([, title]) =>
+            `<th>${escape(title)}</th>`
+          ).join('')}
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  `;
 
-    host.querySelector('[data-source]')
-      .addEventListener('change', () => {
-        updateAccounts();
-        render();
-      });
+  document.querySelector('main').appendChild(host);
 
-    host.querySelector('[data-year]')
-      .addEventListener('change', render);
+  host.querySelector('[data-source]')
+    .addEventListener('change', () => {
+      updateAccounts();
+      render();
+    });
 
-    host.querySelector('[data-account]')
-      .addEventListener('change', render);
+  host.querySelector('[data-year]')
+    .addEventListener('change', render);
 
-    host.querySelector('[data-export]')
-      .addEventListener('click', exportCsv);
-  }
+  host.querySelector('[data-account]')
+    .addEventListener('change', render);
 
-  window.loadForeignDividendWorksheet = function (records) {
-    worksheetRows = buildRows(
-      Array.isArray(records) ? records : []
-    );
-
-    if (!host) createUi();
-
-    const select = host.querySelector('[data-year]');
-    const previous = select.value;
-
-    const years = [...new Set(
-      worksheetRows.map(row => row.date.slice(0, 4))
-        .filter(Boolean)
-    )].sort().reverse();
-
-    select.replaceChildren(new Option('All years', 'All'));
-
-    years.forEach(year =>
-      select.add(new Option(year, year))
-    );
-
-    select.value = years.includes(previous)
-      ? previous
-      : (years[0] || 'All');
-
-    updateAccounts();
-    render();
-  };
-})();
+  host.querySelector('[data-export]')
+    .addEventListener('click', exportCsv);
+}
