@@ -7,9 +7,9 @@
   --text: #e2e8f0;
   --muted: #94a3b8;
   --border: #334155;
-  --primary: #1e3a8a;
-  --primary-hover: #1d4ed8;
-  --accent: #60a5fa;
+--primary: #14532d;
+--primary-hover: #166534;
+--accent: #15803d;
   --positive: #4ade80;
   --negative: #f87171;
   --table-head: #273449;
@@ -101,7 +101,7 @@ main {
   margin: 0 0 14px;
   font-size: 15px;
   color: var(--primary);
-  border-bottom: 2px solid #bee3f8;
+  border-bottom: 2px solid #bbf7d0;
   padding-bottom: 8px;
 }
 
