@@ -393,6 +393,58 @@ td.empty {
   background: #dcfce7;
 }
    
+#foreign-dividend-worksheet .summary-cards {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(210px, 1fr)
+  );
+  gap: 12px;
+  margin: 16px 0;
+}
+
+#foreign-dividend-worksheet .summary-card {
+  background: #ffffff;
+  border: 1px solid #dbe2ea;
+  border-left: 4px solid #14532d;
+  border-radius: 8px;
+  padding: 14px;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+#foreign-dividend-worksheet .summary-card:hover {
+  background: #dcfce7;
+  border-color: #166534;
+  border-left-color: #166534;
+  box-shadow: 0 6px 16px rgba(20, 83, 45, 0.16);
+  transform: translateY(-2px);
+}
+
+#foreign-dividend-worksheet .summary-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #14532d;
+}
+
+#foreign-dividend-worksheet .summary-value {
+  margin-top: 6px;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #111827;
+}
+
+#foreign-dividend-worksheet .summary-note {
+  margin-top: 6px;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
 #foreign-dividend-table {
   min-width: 2400px;
 }
@@ -404,12 +456,16 @@ td.empty {
   white-space: nowrap;
 }
 
-#foreign-dividend-table tbody tr:nth-child(odd) {
+#foreign-dividend-table tbody tr {
   background: #ffffff;
+  transition:
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-#foreign-dividend-table tbody tr:nth-child(even) {
-  background: #f1f5f9;
+#foreign-dividend-table tbody tr:hover {
+  background: #dcfce7;
+  box-shadow: inset 3px 0 0 #166534;
 }
 
 #foreign-dividend-table tbody td {
@@ -418,13 +474,14 @@ td.empty {
   border-bottom: 1px solid #dbe2ea;
 }
 
-#foreign-dividend-table tbody tr:hover {
-  background: #dcfce7;
-}
-
 #foreign-dividend-worksheet [data-export] {
   background: #166534;
   color: #ffffff;
+  border: 1px solid #14532d;
+}
+
+#foreign-dividend-worksheet [data-export]:hover {
+  background: #14532d;
 }
 
 #foreign-dividend-worksheet [data-count] {
