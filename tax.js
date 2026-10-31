@@ -475,29 +475,22 @@ rows.sort((a, b) => {
    
   // Keep the remainder of your existing ledger function here.
 
-  rows.forEach(t => {
-    const key = holdingKey(t);
+rows.forEach(t => {
+  const key = holdingKey(t);
 
-     ledger.set(key, {
-  source: t._source,
-  account: getTradeAccount(t),
-  symbol: t._symbol,
-  qty: 0,
-  costCad: 0,
-  sales: []
-});
-     
-    if (!ledger.has(key)) {
-      ledger.set(key, {
-        source: t._source,
-        symbol: t._symbol,
-        qty: 0,
-        costCad: 0,
-        sales: []
-      });
-    }
+  // Initialize only once for each source/account/symbol.
+  if (!ledger.has(key)) {
+    ledger.set(key, {
+      source: t._source,
+      account: getTradeAccount(t),
+      symbol: t._symbol,
+      qty: 0,
+      costCad: 0,
+      sales: []
+    });
+  }
 
-    const pos = ledger.get(key);
+  const pos = ledger.get(key);
 
    if (isLanding(t)) {
   const source = String(t._source || '').toUpperCase();
