@@ -10,7 +10,10 @@ const TAX_RESIDENCY_DATE = '2021-12-05';
 let taxData = {
   allTrades: [],
   transfers: [],
-  hsbcStatements: []
+  hsbcStatements: [],
+
+  dividends: [],
+  hsbcDividends: []
 };
 
 const els = {
@@ -212,6 +215,18 @@ async function loadTaxData() {
   console.log('GAS getAll response:', json);
 
   const data = json.data || json;
+
+  // Keep the response arrays separate for now.
+// getAll may already include HSBC records in dividends.
+taxData.dividends = Array.isArray(data.dividends)
+  ? data.dividends
+  : [];
+
+taxData.hsbcDividends = Array.isArray(data.hsbcDividends)
+  ? data.hsbcDividends
+  : [];
+
+logDividendSchema(); 
 
   taxData.allTrades = normalizeTrades(
     data.allTrades ||
@@ -1210,6 +1225,89 @@ function populateAccountFilter() {
   els.account.value = accounts.has(previousAccount)
     ? previousAccount
     : 'All';
+}
+
+function logDividendSchema() {
+  const main = taxData.dividends;
+  const hsbc = taxData.hsbcDividends;
+
+  function actionOf(row) {
+    return String(
+      row.action || row.transactionType || ''
+    ).trim().toUpperCase();
+  }
+
+  function isWithholding(row) {
+    return /WITHHOLD|WITHHELD/.test(actionOf(row));
+  }
+
+  function isDividend(row) {
+    return !isWithholding(row) &&
+      /DIV/.test(actionOf(row));
+  }
+
+  function isHsbc(row) {
+    return String(row.source || '')
+      .trim()
+      .toUpperCase() === 'HSBC';
+  }
+
+  function sample(rows, predicate) {
+    return rows.filter(predicate).slice(0, 2);
+  }
+
+  const sourceCounts = {};
+
+  main.forEach(row => {
+    const source = String(row.source || 'UNKNOWN')
+      .trim()
+      .toUpperCase();
+
+    sourceCounts[source] =
+      (sourceCounts[source] || 0) + 1;
+  });
+
+  const diagnostic = {
+    counts: {
+      dividends: main.length,
+      hsbcDividends: hsbc.length,
+      sourcesInDividends: sourceCounts
+    },
+
+    // Complete objects preserve all available field names.
+    ibkrDividend: sample(
+      main,
+      row =>
+        String(row.source || '').toUpperCase() === 'IBKR' &&
+        isDividend(row)
+    ),
+
+    ibkrWithholding: sample(
+      main,
+      row =>
+        String(row.source || '').toUpperCase() === 'IBKR' &&
+        isWithholding(row)
+    ),
+
+    hsbcDividend: sample(
+      hsbc.length ? hsbc : main.filter(isHsbc),
+      isDividend
+    ),
+
+    hsbcWithholding: sample(
+      hsbc.length ? hsbc : main.filter(isHsbc),
+      isWithholding
+    ),
+
+    // Useful if source/action labels differ from expectations.
+    firstMainRecord: main[0] || null,
+    firstHsbcRecord: hsbc[0] || null
+  };
+
+  console.log(
+    'DIVIDEND WORKSHEET SCHEMA:\n' +
+    JSON.stringify(diagnostic, null, 2)
+  );
 }
 
 /* ---------------- Events and init ---------------- */
