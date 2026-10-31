@@ -102,7 +102,8 @@ main {
 .card h2 {
   margin: 0 0 14px;
   font-size: 15px;
-  color: #166534;
+  color: #bbf7d0;
+  border-bottom-color: #527a64;
   font-weight: 600;
   border-bottom: 2px solid #bbf7d0;
   padding-bottom: 8px;
@@ -206,19 +207,40 @@ button {
   color: #ffffff !important;
 }
 
-
+/* Readable text on both dark backgrounds */
 #cra-gains-table tbody td {
-  color: #111827;
+  color: #f1f5f9;
   font-size: 13px;
-  padding: 10px;
+}
+
+
+/* Explicit dark backgrounds for BOTH row types */
+#cra-gains-table tbody tr {
+  background: #1e293b;
 }
 
 #cra-gains-table tbody tr:nth-child(even) {
-  background: #f9fafb;
+  background: #273449;
 }
 
+
+/* Hover state remains dark */
 #cra-gains-table tbody tr:hover {
-  background: #ecfdf5;
+  background: #244c3a;
+}
+
+/* Preserve gain/loss colours */
+#cra-gains-table tbody td.positive {
+  color: #86efac;
+}
+
+#cra-gains-table tbody td.negative {
+  color: #fca5a5;
+}
+
+/* Empty-state message */
+#cra-gains-table tbody td.empty {
+  color: #cbd5e1;
 }
 
 /* ---------------- Status ---------------- */
@@ -355,3 +377,19 @@ td.empty {
   }
 
   .filters
+
+/* Fix unreadable text on dark table rows */
+#cra-gains-table tbody tr,
+#cra-gains-table tbody tr:nth-child(even),
+#cra-gains-table tbody tr:nth-child(odd) {
+  background: #f8fafc;
+}
+
+#cra-gains-table tbody td {
+  color: #111827;
+}
+
+#cra-gains-table tbody tr:hover {
+  background: #dcfce7;
+}
+   
