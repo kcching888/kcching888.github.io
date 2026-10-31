@@ -846,9 +846,14 @@ function CapitalGains() {
 
       <td class="num">${fmtAmount(r.qtySold, 6)}</td>
 
-      <td class="num">${fmtAmount(r.proceedsNative)}</td>
+ <td class="num">${fmtAmount(r.proceedsNative)}</td>
 
-      <td class="num">${fmtAmount(r.acbNative)}</td>
+<td class="num"
+    title="Commission already included in net proceeds; not deducted again">
+  ${fmtAmount(r.commissionNative)}
+</td>
+
+<td class="num">${fmtAmount(r.acbNative)}</td>
 
       <td class="num ${gainClass(r.gainNative)}">
         ${fmtAmount(r.gainNative)}
@@ -885,7 +890,7 @@ function CapitalGains() {
     const tr = document.createElement('tr');
 
     tr.innerHTML = `
-      <td colspan="12" class="empty">
+      <td colspan="13" class="empty">
         No realized sales for this year and account source.
       </td>
     `;
