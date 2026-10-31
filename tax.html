@@ -90,6 +90,10 @@
     </section>
   </main>
 
-  <script src="tax.js"></script>
+  <script>
+  const taxScript = document.createElement('script');
+  taxScript.src = 'tax.js?v=' + Date.now();
+  document.body.appendChild(taxScript);
+</script>
 </body>
 </html>
