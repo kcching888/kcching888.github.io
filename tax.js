@@ -583,19 +583,68 @@ pos.costCad = openingCad;
   // Landing establishes the opening basis, not a reported sale.
   return;
 }
-    if (isCorporateActionOut(t)) {
-      // Split / corporate-action removal:
-      // reduce share count but preserve remaining cost basis.
-      pos.qty -= Math.abs(t._qty);
-      return;
-    }
+  if (isCorporateActionOut(t) || isCorporateActionIn(t)) {
+  const isOut = isCorporateActionOut(t);
+  const quantity = Math.abs(t._qty);
 
-    if (isCorporateActionIn(t)) {
-      // Split / corporate-action receipt:
-      // increase share count but preserve cost basis.
-      pos.qty += Math.abs(t._qty);
-      return;
-    }
+  // Preserve existing quantity-adjustment behavior.
+  // This is not an ordinary cash sale/purchase calculation.
+  pos.qty += isOut ? -quantity : quantity;
+
+  const rawPrice = t.price;
+
+  const price =
+    rawPrice === undefined ||
+    rawPrice === null ||
+    String(rawPrice).trim() === ''
+      ? null
+      : Number(String(rawPrice).replace(/,/g, '').trim());
+
+  // Store a display row in the report's existing row collection.
+  pos.sales.push({
+    date: t._date,
+    source: t._source,
+    account: getTradeAccount(t),
+    symbol: t._symbol,
+    description:
+      t.description || t.name || t.securityName || '',
+
+    action: isOut
+      ? 'Corporate Action Out (Sell-direction)'
+      : 'Corporate Action In (Buy-direction)',
+
+    isCorporateAction: true,
+    includeInTotals: false,
+
+    // Existing renderer uses this field for displayed quantity.
+    qtySold: quantity,
+    price,
+
+    currency: String(
+      t.currency || pos.currency || ''
+    ).trim().toUpperCase(),
+
+    // Leave financial fields blank until the event is classified.
+    proceedsNative: null,
+    commissionNative: null,
+    acbNative: null,
+    outlaysNative: null,
+    gainNative: null,
+
+    proceedsCad: null,
+    acbCad: null,
+    outlaysCad: null,
+    gainCad: null,
+
+    fxRate: num(
+      t.exchRate || t.exchangeRate || t.fxRate || 0
+    ),
+
+    raw: t
+  });
+
+  return;
+}
 
 if (isBuy(t)) {
   const buyQty = Math.abs(t._qty);
@@ -676,6 +725,10 @@ const gainCad = proceedsCad - acbCad;
     symbol: t._symbol,
     description:
       t.description || t.name || t.securityName || '',
+
+     action: 'Sell',
+  isCorporateAction: false,
+  includeInTotals: true,
 
     qtySold: sellQty,
     price:
@@ -833,9 +886,11 @@ function CapitalGains() {
 
   rows.forEach(r => {
     // Summary cards remain in CAD.
-    totalProceeds += r.proceedsCad;
-    totalAcb += r.acbCad;
-    totalGain += r.gainCad;
+ if (r.includeInTotals !== false) {
+  totalProceeds += r.proceedsCad;
+  totalAcb += r.acbCad;
+  totalGain += r.gainCad;
+}
 
     const currency = String(
       r.currency || r.raw?.currency || ''
@@ -850,6 +905,7 @@ function CapitalGains() {
       <td>${escapeHtml(r.source)}</td>
       <td>${escapeHtml(r.symbol)}</td>
       <td>${escapeHtml(r.description || '')}</td>
+      <td>${escapeHtml(r.action || 'Sell')}</td>
 
 <td class="num">${fmtAmount(r.qtySold, 6)}</td>
 
@@ -899,7 +955,7 @@ function CapitalGains() {
     const tr = document.createElement('tr');
 
     tr.innerHTML = `
-      <td colspan="14" class="empty">
+      <td colspan="15" class="empty">
         No realized sales for this year and account source.
       </td>
     `;
@@ -911,7 +967,10 @@ function CapitalGains() {
 /* ---------------- CSV export ---------------- */
 
 function exportCraCsv() {
-  const rows = getCraCapitalGainsRows();
+  const rows = getCraCapitalGainsRows()
+    .filter(r => r.includeInTotals !== false);
+
+  // Keep the remainder of the existing export function.
 
   if (!rows.length) {
     alert('No capital-gains rows to export.');
