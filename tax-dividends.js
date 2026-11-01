@@ -685,6 +685,90 @@
           </td>
         </tr>`;
   }
+ function reconciliationBreakdown(rows) {
+  const groups = {
+    fullyReconciled: [],
+    hsbcNetOnly: [],
+    ibkrGrossNoTax: [],
+    unmatchedTax: [],
+    otherIncomplete: []
+  };
+
+  rows.forEach(row => {
+    if (
+      row.classification === 'Unmatched withholding'
+    ) {
+      groups.unmatchedTax.push(row);
+      return;
+    }
+
+    const hasGross = Number.isFinite(row.grossCad);
+    const hasTax = Number.isFinite(row.withholdingCad);
+    const hasNet = Number.isFinite(row.netCad);
+
+    if (hasGross && hasTax && hasNet) {
+      groups.fullyReconciled.push(row);
+      return;
+    }
+
+    if (
+      row.source === 'HSBC' &&
+      hasNet &&
+      (!hasGross || !hasTax)
+    ) {
+      groups.hsbcNetOnly.push(row);
+      return;
+    }
+
+    if (
+      row.source === 'IBKR' &&
+      hasGross &&
+      !hasTax
+    ) {
+      groups.ibkrGrossNoTax.push(row);
+      return;
+    }
+
+    groups.otherIncomplete.push(row);
+  });
+
+  const total = key =>
+    groups[key].reduce(
+      (sum, row) =>
+        Number.isFinite(row[key])
+          ? sum + row[key]
+          : sum,
+      0
+    );
+
+  return {
+    fullyReconciled: {
+      count: groups.fullyReconciled.length,
+      grossCad: total('grossCad'),
+      taxCad: total('withholdingCad'),
+      netCad: total('netCad')
+    },
+    hsbcNetOnly: {
+      count: groups.hsbcNetOnly.length,
+      netCad: total('netCad')
+    },
+    ibkrGrossNoTax: {
+      count: groups.ibkrGrossNoTax.length,
+      grossCad: total('grossCad')
+    },
+    unmatchedTax: {
+      count: groups.unmatchedTax.length,
+      taxCad: total('withholdingCad')
+    },
+    otherIncomplete: {
+      count: groups.otherIncomplete.length,
+      grossCad: total('grossCad'),
+      taxCad: total('withholdingCad'),
+      netCad: total('netCad')
+    }
+  };
+}
+
 
   function exportCsv() {
     const rows = selectedRows();
