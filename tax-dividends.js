@@ -576,60 +576,52 @@
     const summary = buildSummary(rows);
 
     const cards = [
-      {
-        label: 'Review Rows',
-        value: summary.count.toLocaleString('en-CA'),
-        note: 'Dividend and unmatched withholding records'
-      },
-      {
-        label: 'Gross Dividend CAD',
-        value: format(summary.grossCad),
-        note: 'Known/reconstructed gross only'
-      },
-      {
-        label: 'Withholding CAD',
-        value: format(summary.withholdingCad),
-        note: 'Matched or unmatched tax records'
-      },
-      {
-        label: 'Bank Fee CAD',
-        value: format(summary.feeCad),
-        note: 'Derived from reconciled rows only'
-      },
-      {
-        label: 'Net Cash CAD',
-        value: format(summary.netCad),
-        note: 'Credited cash, where available'
-      },
-      {
-        label: 'Unresolved Gross',
-        value:
-          summary.unresolvedGross
-            .toLocaleString('en-CA'),
-        note: 'Missing or unconfirmed gross amount'
-      },
-      {
-        label: 'Unresolved Withholding',
-        value:
-          summary.unresolvedTax
-            .toLocaleString('en-CA'),
-        note: 'No matched or confirmed withholding'
-      },
-      {
-        label: 'Unmatched Tax',
-        value:
-          summary.unmatchedTax
-            .toLocaleString('en-CA'),
-        note: 'Withholding not paired to a dividend'
-      },
-      {
-        label: 'Rows Needing Review',
-        value:
-          summary.reviewRows
-            .toLocaleString('en-CA'),
-        note: 'Includes classification and data checks'
-      }
-    ];
+  {
+    label: 'Review Rows',
+    value: summary.count.toLocaleString('en-CA'),
+    note: 'Dividend and unmatched withholding records'
+  },
+  {
+    label: 'Known / Reconstructed Gross CAD',
+    value: format(summary.grossCad),
+    note: 'Incomplete: excludes unresolved gross rows'
+  },
+  {
+    label: 'Withholding Tax CAD',
+    value: format(summary.withholdingCad),
+    note: 'Matched plus unmatched tax records'
+  },
+  {
+    label: 'Known Bank Fee CAD',
+    value: format(summary.feeCad),
+    note: 'Only fully reconciled rows'
+  },
+  {
+    label: 'Net Cash CAD',
+    value: format(summary.netCad),
+    note: 'Credited cash; not comparable to gross total'
+  },
+  {
+    label: 'Unresolved Gross',
+    value: summary.unresolvedGross.toLocaleString('en-CA'),
+    note: 'Rows requiring gross reconstruction or statement review'
+  },
+  {
+    label: 'Unresolved Withholding',
+    value: summary.unresolvedTax.toLocaleString('en-CA'),
+    note: 'Rows requiring tax matching or confirmation'
+  },
+  {
+    label: 'Unmatched Tax',
+    value: summary.unmatchedTax.toLocaleString('en-CA'),
+    note: 'Withholding not paired to a dividend'
+  },
+  {
+    label: 'Rows Needing Review',
+    value: summary.reviewRows.toLocaleString('en-CA'),
+    note: 'Includes classification and data checks'
+  }
+];
 
     host.querySelector('[data-summary]').innerHTML =
       cards.map(card => `
@@ -647,6 +639,8 @@
           </div>
         </div>
       `).join('');
+
+     logDividendMatching(rows);
   }
 
   function render() {
@@ -922,3 +916,59 @@
       render();
     };
 })();
+
+
+function logDividendMatching(rows) {
+  const dividendRows = rows.filter(
+    row => row.classification !== 'Unmatched withholding'
+  );
+
+  const taxRows = rows.filter(
+    row => row.classification === 'Unmatched withholding'
+  );
+
+  const matched = dividendRows.filter(row =>
+    Number.isFinite(row.withholding)
+  );
+
+  const unmatchedDividends = dividendRows.filter(
+    row => !Number.isFinite(row.withholding)
+  );
+
+  const bySource = records => {
+    const result = {};
+
+    records.forEach(row => {
+      const source = row.source || 'UNKNOWN';
+      result[source] = (result[source] || 0) + 1;
+    });
+
+    return result;
+  };
+
+  console.log('DIVIDEND MATCHING DIAGNOSTIC', {
+    dividendRows: dividendRows.length,
+    taxRows: taxRows.length,
+
+    matchedDividends: {
+      count: matched.length,
+      bySource: bySource(matched)
+    },
+
+    unmatchedDividends: {
+      count: unmatchedDividends.length,
+      bySource: bySource(unmatchedDividends)
+    },
+
+    unmatchedTax: {
+      count: taxRows.length,
+      bySource: bySource(taxRows)
+    },
+
+    samples: {
+      matched: matched.slice(0, 5),
+      unmatchedDividends: unmatchedDividends.slice(0, 10),
+      unmatchedTax: taxRows.slice(0, 10)
+    }
+  });
+}
