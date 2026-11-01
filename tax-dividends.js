@@ -90,7 +90,6 @@
 
   function eventKey(row) {
     return JSON.stringify([
-      sourceOf(row),
       text(row.account),
       dateOf(row),
       text(row.symbol).toUpperCase(),
@@ -277,7 +276,7 @@ function perShareDividendOf(row) {
       ) {
         matched = candidates;
         issues.push(
-          'Withholding matched by date/account/symbol/CCY'
+           'Withholding matched by account/date/symbol/CCY; source excluded'
         );
       }
 
@@ -1083,7 +1082,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
     }, {})
   });
 
-  console.log('DIVIDEND TAX KEY DIAGNOSTIC', {
+  console.log('DIVIDEND TAX KEY DIAGNOSTIC — SOURCE EXCLUDED', {
     totalDividends: dividends.length,
     totalTaxRecords: taxes.length,
 
