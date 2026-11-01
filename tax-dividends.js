@@ -8,6 +8,8 @@
   let worksheetRows = [];
   let host = null;
   let activeDividendCard = 'all';
+  const annualRateCache = new Map();
+  let fxMethod = 'daily';
 
   const number = value => {
     if (
@@ -533,6 +535,11 @@ const matchingStatus =
         gross,
         withholding,
         fee: fees.native,
+        feeAmount: number(dividend.fees) === null ? null : Math.abs(number(dividend.fees)),
+        feeCurrency: text(dividend.feesCurrency || dividend.currency).toUpperCase(),
+        feeCad: fees.cad,
+        pairedTaxCount: matched.length,
+        importedFx: number(dividend.exchRate),
         net,
         currency: text(dividend.currency).toUpperCase(),
         fx: number(dividend.exchRate),
@@ -564,6 +571,11 @@ const matchingStatus =
         withholding:
           amount === null ? null : Math.abs(amount),
         fee: null,
+        feeAmount: null,
+        feeCurrency: text(tax.currency).toUpperCase(),
+        feeCad: null,
+        pairedTaxCount: 0,
+        importedFx: number(tax.exchRate),
         net: null,
         currency: text(tax.currency).toUpperCase(),
         fx: number(tax.exchRate),
@@ -662,11 +674,20 @@ console.log('POST-MATCH DIAGNOSTIC', {
     ['fee', 'Bank Fee'],
     ['net', 'Net Cash'],
     ['currency', 'CCY'],
-    ['fx', 'FX Rate'],
+    ['fx', 'Reporting FX Rate'],
     ['grossCad', 'Gross CAD'],
     ['withholdingCad', 'Withholding CAD'],
     ['netCad', 'Net Cash CAD'],
     ['reference', 'Reference'],
+    ['feeCurrency', 'Fee CCY'],
+    ['feeAmount', 'Fee Native'],
+    ['feeCad', 'Fee CAD'],
+    ['reportingFxMethod', 'Reporting FX Method'],
+    ['reportingFxYear', 'Reporting FX Year'],
+    ['importedFx', 'Imported FX Rate'],
+    ['importedGrossCad', 'Imported Gross CAD'],
+    ['importedWithholdingCad', 'Imported Withholding CAD'],
+    ['importedNetCad', 'Imported Net CAD'],
     ['status', 'Review Status']
   ];
 
@@ -678,30 +699,135 @@ console.log('POST-MATCH DIAGNOSTIC', {
     'fx',
     'grossCad',
     'withholdingCad',
-    'netCad'
+    'netCad', 'feeAmount', 'feeCad', 'importedFx',
+    'importedGrossCad', 'importedWithholdingCad', 'importedNetCad'
   ]);
 
   function selectedRows() {
-    const year = host
-      .querySelector('[data-year]')
-      .value;
+    return baseSelectedRows().map(reportingRow);
+  }
 
-    const source = host
-      .querySelector('[data-source]')
-      .value;
-
-    const account = host
-      .querySelector('[data-account]')
-      .value;
-
+  function baseSelectedRows() {
+    const year = host.querySelector('[data-year]').value;
+    const source = host.querySelector('[data-source]').value;
+    const account = host.querySelector('[data-account]').value;
     return worksheetRows.filter(row =>
-      (year === 'All' ||
-        row.date.slice(0, 4) === year) &&
-      (source === 'All' ||
-        row.source === source) &&
-      (account === 'All' ||
-        row.account === account)
+      (year === 'All' || row.date.slice(0, 4) === year) &&
+      (source === 'All' || row.source === source) &&
+      (account === 'All' || row.account === account)
     );
+  }
+
+  function annualRate(currency, year) {
+    if (currency === 'CAD') return 1;
+    return annualRateCache.get(year)?.rates?.[currency] ?? null;
+  }
+
+  function annualValue(value, currency, year) {
+    if (value === 0) return 0;
+    const rate = annualRate(currency, year);
+    return Number.isFinite(value) && Number.isFinite(rate)
+      ? value * rate : null;
+  }
+
+  function reportingRow(original) {
+    const row = { ...original,
+      importedGrossCad: original.grossCad,
+      importedWithholdingCad: original.withholdingCad,
+      importedNetCad: original.netCad,
+      reportingFxMethod: fxMethod === 'annual'
+        ? 'BOC annual average' : 'Imported transaction-date',
+      reportingFxYear: original.date.slice(0, 4)
+    };
+    if (fxMethod !== 'annual') return row;
+    const year = row.reportingFxYear;
+    row.fx = annualRate(row.currency, year);
+    row.grossCad = annualValue(row.gross, row.currency, year);
+    row.withholdingCad = annualValue(row.withholding, row.currency, year);
+    row.netCad = annualValue(row.net, row.currency, year);
+    row.feeCad = annualValue(row.feeAmount, row.feeCurrency, year);
+    // Different fee currency may prevent a native gross value,
+    // but CAD gross can still be reconstructed component by component.
+    if (row.source === 'HSBC' && row.classification !== 'Unmatched withholding') {
+      const tax = row.pairedTaxCount === 0 ? 0 : row.withholdingCad;
+      if (Number.isFinite(row.netCad) && Number.isFinite(tax) && Number.isFinite(row.feeCad)) {
+        row.grossCad = row.netCad + tax + row.feeCad;
+      }
+    }
+    return row;
+  }
+
+  async function fetchAnnualRates(year) {
+    if (annualRateCache.has(year)) return;
+    annualRateCache.set(year, { state: 'loading' });
+    try {
+      const url = 'https://www.bankofcanada.ca/valet/observations/group/' +
+        'FX_RATES_ANNUAL/json?start_date=' + year + '-01-01&end_date=' + year + '-12-31';
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('BOC HTTP ' + response.status);
+      const json = await response.json();
+      const observation = (json.observations || []).find(o => String(o.d).slice(0, 4) === year);
+      if (!observation) throw new Error('Annual rates not published for ' + year);
+      const rates = { CAD: 1 };
+      Object.entries(observation).forEach(([series, item]) => {
+        const match = series.match(/^FXA([A-Z]{3})CAD$/);
+        const rate = number(item?.v);
+        if (match && rate !== null && rate > 0) rates[match[1]] = rate;
+      });
+      annualRateCache.set(year, { state: 'ready', rates });
+    } catch (error) {
+      annualRateCache.set(year, { state: 'error', message: error.message });
+    }
+    if (host?.isConnected) render();
+  }
+
+  function updateFxAvailability() {
+    const year = host.querySelector('[data-year]').value;
+    const option = host.querySelector('[data-fx] option[value="annual"]');
+    const note = host.querySelector('[data-fx-note]');
+    let reason = '';
+    if (year === 'All') {
+      reason = 'Select one completed year to use BOC annual averages.';
+    } else if (Number(year) >= new Date().getFullYear()) {
+      reason = 'Annual averages are disabled for the current or a future year.';
+    } else {
+      if (!annualRateCache.has(year)) fetchAnnualRates(year);
+      const entry = annualRateCache.get(year);
+      if (entry?.state === 'loading') reason = 'Loading published BOC annual rates…';
+      else if (entry?.state === 'error') reason = 'BOC rates unavailable: ' + entry.message + '. Transaction-date mode retained.';
+      else {
+        const required = new Set(['CAD']);
+        baseSelectedRows().forEach(row => {
+          required.add(row.currency);
+          if (Number.isFinite(row.feeAmount) && row.feeAmount !== 0) required.add(row.feeCurrency);
+        });
+        const missing = [...required].filter(c => annualRate(c, year) === null);
+        if (missing.length) reason = 'Annual rate missing for: ' + missing.join(', ');
+      }
+    }
+    option.disabled = Boolean(reason);
+    host.querySelector('[data-fx-control]').classList.toggle('annual-unavailable', Boolean(reason));
+    const reset = reason && fxMethod === 'annual';
+    if (reason) fxMethod = 'daily';
+    host.querySelector('[data-fx]').value = fxMethod;
+    note.textContent = (reset ? 'Switched to transaction-date mode. ' : '') +
+      (reason || (fxMethod === 'annual'
+        ? 'BOC ' + year + ' annual average; CAD per unit of foreign currency. Imported values preserved.'
+        : 'Imported transaction-date CAD values/rates. BOC annual averages available for ' + year + '.'));
+  }
+
+  function currencyBreakdown(rows, amountKey, currencyKey = 'currency') {
+    const totals = new Map();
+    let missing = 0;
+    rows.forEach(row => {
+      if (!Number.isFinite(row[amountKey])) { missing++; return; }
+      const currency = row[currencyKey] || 'Unknown';
+      totals.set(currency, (totals.get(currency) || 0) + row[amountKey]);
+    });
+    return '<div class="dividend-native-breakdown">' +
+      [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amount]) =>
+        '<div><span>' + escape(currency) + '</span><span>' + format(amount) + '</span></div>'
+      ).join('') + (missing ? '<small>' + missing + ' native amounts unavailable</small>' : '') + '</div>';
   }
 
   function updateAccounts() {
@@ -861,10 +987,8 @@ function renderSummary(rows) {
     'grossCad'
   );
 
-  const net = totalAvailable(
-    dividendRows,
-    'netCad'
-  );
+  const net = totalAvailable(dividendRows, 'netCad');
+  const feeTotal = totalAvailable(dividendRows, 'feeCad');
 
   // Includes both matched and standalone unmatched tax.
   const withholding = totalAvailable(
@@ -898,10 +1022,8 @@ function renderSummary(rows) {
     },
     {
       label: 'Bank Fee CAD',
-      value: format(
-        feeRows.length ? summary.feeCad : null
-      ),
-      note: 'Derived only where gross, tax and net are available'
+      value: format(feeTotal.amount),
+      note: `${feeTotal.available} explicit fee values; ${feeTotal.missing} unavailable` 
     },
     {
       label: 'Net Cash CAD',
@@ -942,7 +1064,13 @@ function renderSummary(rows) {
     }
   ];
 
-  const amountHtml = amountCards.map(card => `
+  const nativeBreakdowns = [
+    currencyBreakdown(dividendRows, 'gross'),
+    currencyBreakdown(rows, 'withholding'),
+    currencyBreakdown(dividendRows, 'feeAmount', 'feeCurrency'),
+    currencyBreakdown(dividendRows, 'net')
+  ];
+  const amountHtml = amountCards.map((card, index) => `
     <div class="summary-card">
       <div class="summary-label">
         ${escape(card.label)}
@@ -952,6 +1080,7 @@ function renderSummary(rows) {
         ${escape(card.value)}
       </div>
 
+      ${nativeBreakdowns[index]}
       <div class="summary-note">
         ${escape(card.note)}
       </div>
@@ -1022,6 +1151,7 @@ function renderSummary(rows) {
 }
    
  function render() {
+  updateFxAvailability();
   const baseRows = selectedRows();
 
   const rows = filterRowsByDividendCard(baseRows);
@@ -1037,15 +1167,12 @@ function renderSummary(rows) {
   host.querySelector('[data-count]').textContent =
     `Showing ${rows.length} of ${baseRows.length} rows — ` +
     `${filterLabel}. ` +
-    'Click “Review Rows” to show all records. ' +
+    'Click “All Records” to show all records. ' +
     'Review worksheet only; totals are not filing-ready.';
 
   // Keep your existing table-rendering code below.
 
-    host.querySelector('[data-count]').textContent =
-      `${rows.length} review rows. ` +
-      'Includes Canadian/unclassified records for ' +
-      'reconciliation. No filing-ready total is calculated yet.';
+
 
     host.querySelector('tbody').innerHTML = rows.length
       ? rows.map(row => `
@@ -1238,11 +1365,18 @@ function renderSummary(rows) {
           </select>
         </label>
 
+        <label data-fx-control>CAD Conversion
+          <select data-fx>
+            <option value="daily">Transaction-date rates</option>
+            <option value="annual" disabled>BOC annual average</option>
+          </select>
+        </label>
         <button type="button" data-export>
           Export Review CSV
         </button>
       </div>
 
+      <p class="status dividend-fx-note" data-fx-note aria-live="polite"></p>
       <div class="summary-cards" data-summary></div>
 
       <p data-count class="status"></p>
@@ -1276,6 +1410,10 @@ function renderSummary(rows) {
     host.querySelector('[data-account]')
       .addEventListener('change', render);
 
+    host.querySelector('[data-fx]').addEventListener('change', event => {
+      fxMethod = event.target.value;
+      render();
+    });
     host.querySelector('[data-export]')
       .addEventListener('click', exportCsv);
   }
@@ -1320,6 +1458,5 @@ function renderSummary(rows) {
       render();
     };
 })();
-
 
 
