@@ -222,6 +222,21 @@ taxData.dividends = Array.isArray(data.dividends)
   ? data.dividends
   : [];
 
+if (
+  typeof window.loadForeignDividendWorksheet ===
+  'function'
+) {
+  window.loadForeignDividendWorksheet(
+    taxData.dividends
+  );
+} else {
+  console.warn(
+    'Foreign dividend worksheet unavailable: ' +
+    'loadForeignDividendWorksheet is not defined. ' +
+    'Check tax-dividends.js load order and console errors.'
+  );
+}
+
 taxData.hsbcDividends = Array.isArray(data.hsbcDividends)
   ? data.hsbcDividends
   : [];
