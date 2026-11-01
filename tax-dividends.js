@@ -7,6 +7,7 @@
 
   let worksheetRows = [];
   let host = null;
+  let activeDividendCard = 'all';
 
   const number = value => {
     if (
@@ -769,6 +770,57 @@ console.log('POST-MATCH DIAGNOSTIC', {
     };
   }
 
+const dividendCardLabels = {
+  all: 'All review rows',
+  matched: 'Tax matched',
+  withoutTax: 'Dividends without paired tax',
+  noTaxExpected: 'No tax expected — current classification',
+  taxReview: 'No tax matched — review',
+  unmatchedTax: 'Unmatched tax records',
+  unresolvedGross: 'Unresolved gross',
+  review: 'Rows needing review'
+};
+
+function filterRowsByDividendCard(rows) {
+  return rows.filter(row => {
+    const isTaxRow =
+      row.classification === 'Unmatched withholding';
+
+    const status = String(row.matchingStatus || '');
+
+    switch (activeDividendCard) {
+      case 'matched':
+        return !isTaxRow &&
+          Number.isFinite(row.withholding);
+
+      case 'withoutTax':
+        return !isTaxRow &&
+          !Number.isFinite(row.withholding);
+
+      case 'noTaxExpected':
+        return !isTaxRow &&
+          status.startsWith('No tax expected');
+
+      case 'taxReview':
+        return !isTaxRow &&
+          status === 'No tax matched — review';
+
+      case 'unmatchedTax':
+        return isTaxRow;
+
+      case 'unresolvedGross':
+        return !isTaxRow &&
+          !Number.isFinite(row.grossCad);
+
+      case 'review':
+        return String(row.status || '').trim() !== '';
+
+      default:
+        return true;
+    }
+  });
+}
+
 function renderSummary(rows) {
 
     const summaryContainer =
@@ -856,28 +908,118 @@ function renderSummary(rows) {
       note: 'Includes classification and data checks'
     }
   ];
+  const cardFilters = {
+    'Review Rows': 'all',
+    'Tax Matched': 'matched',
+    'Dividends Without Tax': 'withoutTax',
+    'Unresolved Withholding': 'withoutTax',
+    'No Tax Expected': 'noTaxExpected',
+    'Tax Unmatched': 'taxReview',
+    'Unmatched Tax Records': 'unmatchedTax',
+    'Unmatched Tax': 'unmatchedTax',
+    'Unresolved Gross': 'unresolvedGross',
+    'Rows Needing Review': 'review'
+  };
 
-  summaryContainer.innerHTML =
-    cards.map(card => `
-      <div class="summary-card">
-        <div class="summary-label">
+  const summaryContainer =
+    host.querySelector('[data-summary]');
+
+  if (!summaryContainer) return;
+
+  summaryContainer.innerHTML = cards.map(card => {
+    const filter = cardFilters[card.label];
+
+    // Amount cards remain informational.
+    if (!filter) {
+      return `
+        <div class="summary-card">
+          <div class="summary-label">
+            ${escape(card.label)}
+          </div>
+          <div class="summary-value">
+            ${escape(card.value)}
+          </div>
+          <div class="summary-note">
+            ${escape(card.note)}
+          </div>
+        </div>
+      `;
+    }
+
+    // Calculate the count using the exact table predicate.
+    const previousFilter = activeDividendCard;
+    activeDividendCard = filter;
+
+    const count = filterRowsByDividendCard(rows).length;
+
+    activeDividendCard = previousFilter;
+
+    const selected = activeDividendCard === filter;
+
+    return `
+      <button
+        type="button"
+        class="summary-card dividend-count-card${
+          selected ? ' is-active' : ''
+        }"
+        data-dividend-filter="${escape(filter)}"
+        aria-pressed="${selected}"
+        title="Show corresponding records below"
+      >
+        <span class="summary-label">
           ${escape(card.label)}
-        </div>
-
-        <div class="summary-value">
-          ${escape(card.value)}
-        </div>
-
-        <div class="summary-note">
+        </span>
+        <span class="summary-value">
+          ${count.toLocaleString('en-CA')}
+        </span>
+        <span class="summary-note">
           ${escape(card.note)}
-        </div>
-      </div>
-    `).join('');
-}
-  function render() {
-    const rows = selectedRows();
+        </span>
+      </button>
+    `;
+  }).join('');
 
-    renderSummary(rows);
+  summaryContainer.onclick = function (event) {
+    const button = event.target.closest(
+      '[data-dividend-filter]'
+    );
+
+    if (!button || !summaryContainer.contains(button)) {
+      return;
+    }
+
+    activeDividendCard = button.dataset.dividendFilter;
+
+    render();
+
+    host.querySelector('.table-wrap')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest'
+    });
+  };
+}
+
+   
+ function render() {
+  const baseRows = selectedRows();
+
+  const rows = filterRowsByDividendCard(baseRows);
+
+  // Keep summary counts based on year/source/account,
+  // not on the clicked card.
+  renderSummary(baseRows);
+
+  const filterLabel =
+    dividendCardLabels[activeDividendCard] ||
+    dividendCardLabels.all;
+
+  host.querySelector('[data-count]').textContent =
+    `Showing ${rows.length} of ${baseRows.length} rows — ` +
+    `${filterLabel}. ` +
+    'Click “Review Rows” to show all records. ' +
+    'Review worksheet only; totals are not filing-ready.';
+
+  // Keep your existing table-rendering code below.
 
     host.querySelector('[data-count]').textContent =
       `${rows.length} review rows. ` +
@@ -996,7 +1138,9 @@ function renderSummary(rows) {
 
 
   function exportCsv() {
-    const rows = selectedRows();
+    const rows = filterRowsByDividendCard(
+        selectedRows()
+      );
 
     const cell = value => {
       let output = String(value ?? '');
