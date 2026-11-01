@@ -240,6 +240,39 @@
         );
       }
 
+if (
+  matched.length === 0 &&
+  candidates.length > 0
+) {
+  const taxRate = taxRateOf(dividend);
+  const dividendPerShare =
+    perShareDividendOf(dividend);
+
+  const expectedTax = dividendPerShare !== null &&
+    taxRate !== null
+      ? dividendPerShare * taxRate
+      : null;
+
+  const amountTolerance = 0.005;
+
+  const amountMatches = expectedTax !== null
+    ? candidates.filter(tax => {
+        const taxPerShare = perShareTaxOf(tax);
+
+        return taxPerShare !== null &&
+          Math.abs(taxPerShare - expectedTax) <=
+            amountTolerance;
+      })
+    : [];
+
+  if (amountMatches.length === 1) {
+    matched = amountMatches;
+    issues.push(
+      'Withholding matched by per-share dividend × tax rate'
+    );
+  }
+}
+       
       if (
         candidates.length > 0 &&
         matched.length === 0
@@ -432,6 +465,30 @@
       });
     });
 
+console.log('POST-MATCH DIAGNOSTIC', {
+  dividendRows: output.filter(
+    row => row.classification !==
+      'Unmatched withholding'
+  ).length,
+
+  matchedWithholding: output.filter(
+    row => row.classification !==
+      'Unmatched withholding' &&
+    Number.isFinite(row.withholding)
+  ).length,
+
+  unresolvedWithholding: output.filter(
+    row => row.classification !==
+      'Unmatched withholding' &&
+    !Number.isFinite(row.withholding)
+  ).length,
+
+  unmatchedTax: output.filter(
+    row => row.classification ===
+      'Unmatched withholding'
+  ).length
+});
+     
     return output.sort((a, b) =>
       a.date.localeCompare(b.date) ||
       a.account.localeCompare(b.account) ||
