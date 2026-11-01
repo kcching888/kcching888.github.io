@@ -769,8 +769,18 @@ console.log('POST-MATCH DIAGNOSTIC', {
     };
   }
 
- function renderSummary(rows) {
+function renderSummary(rows) {
   const summary = buildSummary(rows);
+
+  const countByStatus = status =>
+    rows.filter(row =>
+      (row.matchingStatus || '') === status
+    ).length;
+
+  const countByStatusPrefix = prefix =>
+    rows.filter(row =>
+      (row.matchingStatus || '').startsWith(prefix)
+    ).length;
 
   const cards = [
     {
@@ -786,7 +796,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
     {
       label: 'Withholding Tax CAD',
       value: format(summary.withholdingCad),
-      note: 'Matched plus unmatched tax records'
+      note: 'Active matched withholding records'
     },
     {
       label: 'Known Bank Fee CAD',
@@ -799,34 +809,29 @@ console.log('POST-MATCH DIAGNOSTIC', {
       note: 'Credited cash; not comparable to gross total'
     },
     {
-      label: 'Unresolved Gross',
-      value: summary.unresolvedGross.toLocaleString('en-CA'),
-      note: 'Rows requiring gross reconstruction or statement review'
+      label: 'Dividends Without Tax',
+      value: summary.unresolvedTax.toLocaleString('en-CA'),
+      note: 'Includes Canadian, ROC, and no-withholding cases'
     },
     {
-  label: 'Tax Matched',
-  value: rows.filter(row =>
-    row.matchingStatus === 'Tax matched'
-  ).length.toLocaleString('en-CA'),
-  note: 'Dividends with paired withholding'
-},
-{
-  label: 'No Tax Expected',
-  value: rows.filter(row =>
-    (row.matchingStatus || '').startsWith(
-      'No tax expected'
-    )
-  ).length.toLocaleString('en-CA'),
-  note: 'Canadian source or return of capital'
-},
-{
-  label: 'Tax Unmatched',
-  value: rows.filter(row =>
-    (row.matchingStatus || '') ===
-      'No tax matched — review'
-  ).length.toLocaleString('en-CA'),
-  note: 'Foreign dividends requiring tax review'
-},
+      label: 'Tax Matched',
+      value: countByStatus('Tax matched')
+        .toLocaleString('en-CA'),
+      note: 'Dividends with paired withholding'
+    },
+    {
+      label: 'No Tax Expected',
+      value: countByStatusPrefix('No tax expected')
+        .toLocaleString('en-CA'),
+      note: 'Canadian source or return of capital'
+    },
+    {
+      label: 'Tax Unmatched',
+      value: countByStatus(
+        'No tax matched — review'
+      ).toLocaleString('en-CA'),
+      note: 'Foreign dividends requiring tax review'
+    },
     {
       label: 'Unmatched Tax Records',
       value: summary.unmatchedTax
@@ -835,7 +840,8 @@ console.log('POST-MATCH DIAGNOSTIC', {
     },
     {
       label: 'Rows Needing Review',
-      value: summary.reviewRows.toLocaleString('en-CA'),
+      value: summary.reviewRows
+        .toLocaleString('en-CA'),
       note: 'Includes classification and data checks'
     }
   ];
@@ -856,8 +862,6 @@ console.log('POST-MATCH DIAGNOSTIC', {
         </div>
       </div>
     `).join('');
-
-
 }
   function render() {
     const rows = selectedRows();
