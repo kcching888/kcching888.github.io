@@ -1075,58 +1075,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
   }
 
 
-   function logUnmatchedTaxBySymbol(records) {
-  const dividends = records.filter(isDividend);
-  const taxes = records.filter(isTax);
-
-  const dividendKeyCounts = new Map();
-
-  dividends.forEach(row => {
-    const key = eventKey(row);
-
-    dividendKeyCounts.set(
-      key,
-      (dividendKeyCounts.get(key) || 0) + 1
-    );
-  });
-
-  const unmatched = taxes.filter(tax => {
-    const key = eventKey(tax);
-    const count = dividendKeyCounts.get(key) || 0;
-
-    return count !== 1;
-  });
-
-  const bySymbol = {};
-  const byAccount = {};
-
-  unmatched.forEach(row => {
-    const symbol =
-      text(row.symbol).toUpperCase() || 'NO SYMBOL';
-    const account = text(row.account) || 'NO ACCOUNT';
-
-    bySymbol[symbol] = (bySymbol[symbol] || 0) + 1;
-    byAccount[account] = (byAccount[account] || 0) + 1;
-  });
-
-  console.log('REMAINING UNMATCHED TAX', {
-    count: unmatched.length,
-    bySymbol,
-    byAccount,
-    samples: unmatched.slice(0, 10).map(row => ({
-      date: dateOf(row),
-      source: sourceOf(row),
-      account: text(row.account),
-      symbol: text(row.symbol),
-      currency: text(row.currency),
-      amount: number(row.amount),
-      cadAmount: number(row.cadAmount),
-      price: number(row.price),
-      description: text(row.description),
-      reference: text(row.reference)
-    }))
-  });
-}
+   
    function logDividendTaxKeyDiagnostic(records) {
   const dividends = records.filter(isDividend);
   const taxes = records.filter(isTax);
@@ -1209,7 +1158,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
       );
 
      logDividendTaxKeyDiagnostic(records);
-       logUnmatchedTaxBySymbol(records);
+    
 
       if (!host) createUi();
 
