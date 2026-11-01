@@ -571,7 +571,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
       description: row.description,
       status: row.status
     }))
-});;
+});
 
   matchedWithholding: output.filter(
     row => row.classification !==
