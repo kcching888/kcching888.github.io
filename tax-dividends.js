@@ -1,6 +1,6 @@
-/* Foreign dividend review worksheet.
+/* Foreign Dividends & Withholding — Review Worksheet
    Reads getAll's merged dividends array only.
-   Does not change capital-gains calculations or source records. */
+   Does not modify capital-gains calculations or source records. */
 
 (function () {
   'use strict';
@@ -15,7 +15,10 @@
       String(value).trim() === ''
     ) return null;
 
-    const n = Number(String(value).replace(/,/g, '').trim());
+    const n = Number(
+      String(value).replace(/,/g, '').trim()
+    );
+
     return Number.isFinite(n) ? n : null;
   };
 
@@ -28,17 +31,17 @@
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
 
-  const format = value => value === null ||
-    value === undefined ||
-    !Number.isFinite(value)
-      ? '—'
-      : value.toLocaleString('en-CA', {
+  const format = value =>
+    Number.isFinite(value)
+      ? value.toLocaleString('en-CA', {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
-        });
+        })
+      : '—';
 
   function dateOf(row) {
     const d = new Date(row.date);
+
     return Number.isFinite(d.getTime())
       ? d.toISOString().slice(0, 10)
       : '';
@@ -59,12 +62,14 @@
 
   function cadValue(row) {
     const stored = number(row.cadAmount);
+
     if (stored !== null) return stored;
 
     const amount = number(row.amount);
     const currency = text(row.currency).toUpperCase();
 
     if (amount === null) return null;
+
     if (currency === 'CAD') return amount;
 
     const rate = number(row.exchRate);
@@ -75,8 +80,11 @@
   }
 
   function sumKnown(values) {
-    return values.every(v => v !== null)
-      ? values.reduce((sum, v) => sum + v, 0)
+    return values.every(value => value !== null)
+      ? values.reduce(
+          (sum, value) => sum + value,
+          0
+        )
       : null;
   }
 
@@ -136,15 +144,16 @@
   function feeValues(row) {
     const raw = number(row.fees);
 
-    // Blank fees are unknown, not automatically zero.
+    // Blank fees remain unknown; do not assume zero.
     if (raw === null) {
       return { native: null, cad: null };
     }
 
-    if (raw === 0) return { native: 0, cad: 0 };
+    if (raw === 0) {
+      return { native: 0, cad: 0 };
+    }
 
     const fee = Math.abs(raw);
-
     const currency = text(row.currency).toUpperCase();
 
     const feeCurrency = text(
@@ -153,7 +162,9 @@
 
     let feeCad = number(row.feesCad);
 
-    if (feeCad !== null) feeCad = Math.abs(feeCad);
+    if (feeCad !== null) {
+      feeCad = Math.abs(feeCad);
+    }
 
     if (feeCad === null && feeCurrency === 'CAD') {
       feeCad = fee;
@@ -183,6 +194,7 @@
     dividends.forEach(row => {
       const key = eventKey(row);
       const group = dividendGroups.get(key) || [];
+
       group.push(row);
       dividendGroups.set(key, group);
     });
@@ -197,7 +209,6 @@
 
       let matched = [];
 
-      // Exact reference takes priority.
       const reference = text(dividend.reference);
 
       if (reference) {
@@ -218,15 +229,15 @@
         }
       }
 
-      // No reference match: only pair a unique dividend
-      // with a unique withholding record.
       if (
         matched.length === 0 &&
         dividendGroups.get(key).length === 1 &&
         candidates.length === 1
       ) {
         matched = candidates;
-        issues.push('Withholding matched by date/account/symbol/CCY');
+        issues.push(
+          'Withholding matched by date/account/symbol/CCY'
+        );
       }
 
       if (
@@ -264,18 +275,21 @@
       let netCad = null;
 
       if (source === 'IBKR') {
-        // Working convention: IBKR dividend rows are gross.
         gross = amount;
         grossCad = amountCad;
 
         issues.push('Verify IBKR amount is gross');
 
         if (fees.native === null) {
-          issues.push('Bank fee not explicitly recorded');
+          issues.push(
+            'Bank fee not explicitly recorded'
+          );
         }
 
         if (withholding === null) {
-          issues.push('No matched withholding; not assumed zero');
+          issues.push(
+            'No matched withholding; not assumed zero'
+          );
         }
 
         if (
@@ -291,19 +305,23 @@
           withholdingCad !== null &&
           fees.cad !== null
         ) {
-          netCad = grossCad - withholdingCad - fees.cad;
+          netCad =
+            grossCad - withholdingCad - fees.cad;
         }
       } else if (source === 'HSBC') {
-        // User-confirmed convention: HSBC amount is net cash.
         net = amount;
         netCad = amountCad;
 
         if (withholding === null) {
-          issues.push('Gross unresolved: withholding not confirmed');
+          issues.push(
+            'Gross unresolved: withholding not confirmed'
+          );
         }
 
         if (fees.native === null) {
-          issues.push('Gross unresolved: native fee unavailable');
+          issues.push(
+            'Gross unresolved: native fee unavailable'
+          );
         }
 
         if (
@@ -312,7 +330,9 @@
           fees.native !== null
         ) {
           gross = net + withholding + fees.native;
-          issues.push('Gross reconstructed from net + tax + fee');
+          issues.push(
+            'Gross reconstructed from net + tax + fee'
+          );
         }
 
         if (
@@ -320,23 +340,33 @@
           withholdingCad !== null &&
           fees.cad !== null
         ) {
-          grossCad = netCad + withholdingCad + fees.cad;
+          grossCad =
+            netCad + withholdingCad + fees.cad;
         }
       } else {
         issues.push('Unknown source');
       }
 
       if (amount !== null && amount < 0) {
-        issues.push('Negative dividend: review reversal/correction');
+        issues.push(
+          'Negative dividend: review reversal/correction'
+        );
       }
 
-      if (!dateOf(dividend)) issues.push('Invalid date');
-      if (amountCad === null) issues.push('Missing CAD value/FX');
+      if (!dateOf(dividend)) {
+        issues.push('Invalid date');
+      }
 
-      if (dividend.requiresChargeReview === true ||
-          /^(true|yes|1)$/i.test(
-            text(dividend.requiresChargeReview)
-          )) {
+      if (amountCad === null) {
+        issues.push('Missing CAD value/FX');
+      }
+
+      if (
+        dividend.requiresChargeReview === true ||
+        /^(true|yes|1)$/i.test(
+          text(dividend.requiresChargeReview)
+        )
+      ) {
         issues.push('Parser flagged charge review');
       }
 
@@ -359,12 +389,12 @@
         grossCad,
         withholdingCad,
         netCad,
-        reference: reference || text(dividend.statementKey),
+        reference:
+          reference || text(dividend.statementKey),
         status: issues.join('; ')
       };
     });
 
-    // Never silently discard unmatched tax records.
     taxes.forEach(tax => {
       if (usedTaxes.has(tax)) return;
 
@@ -388,13 +418,17 @@
         fx: number(tax.exchRate),
         grossCad: null,
         withholdingCad:
-          amountCad === null ? null : Math.abs(amountCad),
+          amountCad === null
+            ? null
+            : Math.abs(amountCad),
         netCad: null,
         reference:
-          text(tax.reference) || text(tax.statementKey),
+          text(tax.reference) ||
+          text(tax.statementKey),
         status:
-          'Unmatched tax: review payment date, reference, ' +
-          'duplicate/reversal status and income classification'
+          'Unmatched tax: review payment date, ' +
+          'reference, duplicate/reversal status and ' +
+          'income classification'
       });
     });
 
@@ -427,35 +461,59 @@
   ];
 
   const numeric = new Set([
-    'gross', 'withholding', 'fee', 'net', 'fx',
-    'grossCad', 'withholdingCad', 'netCad'
+    'gross',
+    'withholding',
+    'fee',
+    'net',
+    'fx',
+    'grossCad',
+    'withholdingCad',
+    'netCad'
   ]);
 
   function selectedRows() {
-    const year = host.querySelector('[data-year]').value;
-    const source = host.querySelector('[data-source]').value;
-    const account = host.querySelector('[data-account]').value;
+    const year = host
+      .querySelector('[data-year]')
+      .value;
+
+    const source = host
+      .querySelector('[data-source]')
+      .value;
+
+    const account = host
+      .querySelector('[data-account]')
+      .value;
 
     return worksheetRows.filter(row =>
-      (year === 'All' || row.date.slice(0, 4) === year) &&
-      (source === 'All' || row.source === source) &&
-      (account === 'All' || row.account === account)
+      (year === 'All' ||
+        row.date.slice(0, 4) === year) &&
+      (source === 'All' ||
+        row.source === source) &&
+      (account === 'All' ||
+        row.account === account)
     );
   }
 
   function updateAccounts() {
     const select = host.querySelector('[data-account]');
-    const source = host.querySelector('[data-source]').value;
+    const source = host
+      .querySelector('[data-source]')
+      .value;
+
     const previous = select.value;
 
     const accounts = [...new Set(
       worksheetRows
-        .filter(row => source === 'All' || row.source === source)
+        .filter(row =>
+          source === 'All' || row.source === source
+        )
         .map(row => row.account)
         .filter(Boolean)
     )].sort();
 
-    select.replaceChildren(new Option('All accounts', 'All'));
+    select.replaceChildren(
+      new Option('All accounts', 'All')
+    );
 
     accounts.forEach(account =>
       select.add(new Option(account, account))
@@ -466,136 +524,140 @@
       : 'All';
   }
 
-function buildSummary(rows) {
-  const sum = key => rows.reduce(
-    (total, row) =>
-      Number.isFinite(row[key])
-        ? total + row[key]
-        : total,
-    0
-  );
-
-  const count = rows.length;
-
-  const foreignRows = rows.filter(row =>
-    row.classification !==
-      'Return of capital — exclude/review' &&
-    row.classification !== 'Unmatched withholding'
-  );
-
-  const unresolvedGross = rows.filter(row =>
-    row.gross === null
-  ).length;
-
-  const unresolvedTax = rows.filter(row =>
-    row.withholding === null
-  ).length;
-
-  const unmatchedTax = rows.filter(row =>
-    row.classification === 'Unmatched withholding'
-  ).length;
-
-  const reviewRows = rows.filter(row =>
-    text(row.status).length > 0
-  ).length;
-
-  return {
-    count,
-    grossCad: sum('grossCad'),
-    withholdingCad: sum('withholdingCad'),
-    feeCad: rows.reduce(
+  function buildSummary(rows) {
+    const sum = key => rows.reduce(
       (total, row) =>
-        Number.isFinite(row.grossCad) &&
-        Number.isFinite(row.withholdingCad) &&
-        Number.isFinite(row.netCad)
-          ? total +
-            row.grossCad -
-            row.withholdingCad -
-            row.netCad
+        Number.isFinite(row[key])
+          ? total + row[key]
           : total,
       0
-    ),
-    netCad: sum('netCad'),
-    foreignCount: foreignRows.length,
-    unresolvedGross,
-    unresolvedTax,
-    unmatchedTax,
-    reviewRows
-  };
-}
+    );
 
+    return {
+      count: rows.length,
 
-function renderSummary(rows) {
-  const summary = buildSummary(rows);
+      grossCad: sum('grossCad'),
+      withholdingCad: sum('withholdingCad'),
+      netCad: sum('netCad'),
 
-  const cards = [
-    {
-      label: 'Review Rows',
-      value: summary.count.toLocaleString('en-CA'),
-      note: 'Dividend and unmatched withholding records'
-    },
-    {
-      label: 'Gross Dividend CAD',
-      value: format(summary.grossCad),
-      note: 'Known/reconstructed gross only'
-    },
-    {
-      label: 'Withholding CAD',
-      value: format(summary.withholdingCad),
-      note: 'Matched or unmatched tax records'
-    },
-    {
-      label: 'Bank Fee CAD',
-      value: format(summary.feeCad),
-      note: 'Derived from reconciled rows only'
-    },
-    {
-      label: 'Net Cash CAD',
-      value: format(summary.netCad),
-      note: 'Credited cash, where available'
-    },
-    {
-      label: 'Unresolved Gross',
-      value: summary.unresolvedGross.toLocaleString('en-CA'),
-      note: 'Missing or unconfirmed gross amount'
-    },
-    {
-      label: 'Unresolved Withholding',
-      value: summary.unresolvedTax.toLocaleString('en-CA'),
-      note: 'No matched or confirmed withholding'
-    },
-    {
-      label: 'Unmatched Tax',
-      value: summary.unmatchedTax.toLocaleString('en-CA'),
-      note: 'Withholding not paired to a dividend'
-    },
-    {
-      label: 'Rows Needing Review',
-      value: summary.reviewRows.toLocaleString('en-CA'),
-      note: 'Includes classification and data checks'
-    }
-  ];
+      feeCad: rows.reduce(
+        (total, row) =>
+          Number.isFinite(row.grossCad) &&
+          Number.isFinite(row.withholdingCad) &&
+          Number.isFinite(row.netCad)
+            ? total +
+              row.grossCad -
+              row.withholdingCad -
+              row.netCad
+            : total,
+        0
+      ),
 
-  host.querySelector('[data-summary]').innerHTML =
-    cards.map(card => `
-      <div class="summary-card">
-        <div class="summary-label">${escape(card.label)}</div>
-        <div class="summary-value">${escape(card.value)}</div>
-        <div class="summary-note">${escape(card.note)}</div>
-      </div>
-    `).join('');
-}
+      unresolvedGross: rows.filter(
+        row => row.gross === null
+      ).length,
 
-   
-function render() {
-  const rows = selectedRows();
+      unresolvedTax: rows.filter(
+        row => row.withholding === null
+      ).length,
 
-  renderSummary(rows);
+      unmatchedTax: rows.filter(
+        row =>
+          row.classification === 'Unmatched withholding'
+      ).length,
 
-  host.querySelector('[data-count]').textContent =
-    `${rows.length} review rows. ` +
-    'Includes Canadian/unclassified records for reconciliation. ' +
-    'No filing-ready total is calculated yet.';
+      reviewRows: rows.filter(
+        row => text(row.status).length > 0
+      ).length
+    };
+  }
+
+  function renderSummary(rows) {
+    const summary = buildSummary(rows);
+
+    const cards = [
+      {
+        label: 'Review Rows',
+        value: summary.count.toLocaleString('en-CA'),
+        note: 'Dividend and unmatched withholding records'
+      },
+      {
+        label: 'Gross Dividend CAD',
+        value: format(summary.grossCad),
+        note: 'Known/reconstructed gross only'
+      },
+      {
+        label: 'Withholding CAD',
+        value: format(summary.withholdingCad),
+        note: 'Matched or unmatched tax records'
+      },
+      {
+        label: 'Bank Fee CAD',
+        value: format(summary.feeCad),
+        note: 'Derived from reconciled rows only'
+      },
+      {
+        label: 'Net Cash CAD',
+        value: format(summary.netCad),
+        note: 'Credited cash, where available'
+      },
+      {
+        label: 'Unresolved Gross',
+        value:
+          summary.unresolvedGross
+            .toLocaleString('en-CA'),
+        note: 'Missing or unconfirmed gross amount'
+      },
+      {
+        label: 'Unresolved Withholding',
+        value:
+          summary.unresolvedTax
+            .toLocaleString('en-CA'),
+        note: 'No matched or confirmed withholding'
+      },
+      {
+        label: 'Unmatched Tax',
+        value:
+          summary.unmatchedTax
+            .toLocaleString('en-CA'),
+        note: 'Withholding not paired to a dividend'
+      },
+      {
+        label: 'Rows Needing Review',
+        value:
+          summary.reviewRows
+            .toLocaleString('en-CA'),
+        note: 'Includes classification and data checks'
+      }
+    ];
+
+    host.querySelector('[data-summary]').innerHTML =
+      cards.map(card => `
+        <div class="summary-card">
+          <div class="summary-label">
+            ${escape(card.label)}
+          </div>
+
+          <div class="summary-value">
+            ${escape(card.value)}
+          </div>
+
+          <div class="summary-note">
+            ${escape(card.note)}
+          </div>
+        </div>
+      `).join('');
+  }
+
+  function render() {
+    const rows = selectedRows();
+
+    renderSummary(rows);
+
+    host.querySelector('[data-count]').textContent =
+      `${rows.length} review rows. ` +
+      'Includes Canadian/unclassified records for ' +
+      'reconciliation. No filing-ready total is calculated yet.';
 
     host.querySelector('tbody').innerHTML = rows.length
       ? rows.map(row => `
@@ -617,103 +679,162 @@ function render() {
             }).join('')}
           </tr>
         `).join('')
-      : `<tr><td colspan="${columns.length}" class="empty">
-           No dividend or withholding records for these filters.
-         </td></tr>`;
+      : `<tr>
+          <td colspan="${columns.length}" class="empty">
+            No dividend or withholding records for these filters.
+          </td>
+        </tr>`;
   }
 
   function exportCsv() {
     const rows = selectedRows();
 
     const cell = value => {
-      let s = String(value ?? '');
+      let output = String(value ?? '');
 
-      // Prevent text fields being interpreted as spreadsheet formulas.
-      if (typeof value === 'string' && /^[=+\-@\t\r]/.test(s)) {
-        s = "'" + s;
+      if (
+        typeof value === 'string' &&
+        /^[=+\-@\t\r]/.test(output)
+      ) {
+        output = "'" + output;
       }
 
-      return '"' + s.replace(/"/g, '""') + '"';
+      return '"' +
+        output.replace(/"/g, '""') +
+        '"';
     };
 
     const csv = [
       columns.map(([, title]) => title),
-      ...rows.map(row => columns.map(([key]) => row[key]))
-    ].map(row => row.map(cell).join(',')).join('\r\n');
+      ...rows.map(row =>
+        columns.map(([key]) => row[key])
+      )
+    ]
+      .map(row => row.map(cell).join(','))
+      .join('\r\n');
 
-    const url = URL.createObjectURL(new Blob(
-      ['\uFEFF', csv],
-      { type: 'text/csv;charset=utf-8;' }
-    ));
+    const url = URL.createObjectURL(
+      new Blob(['\uFEFF', csv], {
+        type: 'text/csv;charset=utf-8;'
+      })
+    );
 
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'Dividend_Withholding_Review.csv';
+    link.download =
+      'Dividend_Withholding_Review.csv';
     link.click();
 
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      1000
+    );
   }
 
   function createUi() {
-  host = document.createElement('section');
-  host.className = 'card';
-  host.id = 'foreign-dividend-worksheet';
+    host = document.createElement('section');
+    host.className = 'card';
+    host.id = 'foreign-dividend-worksheet';
 
-  host.innerHTML = `
-    <h2>Foreign Dividends &amp; Withholding — Review Worksheet</h2>
+    host.innerHTML = `
+      <h2>
+        Foreign Dividends &amp; Withholding —
+        Review Worksheet
+      </h2>
 
-    <div class="filters">
-      <label>Year
-        <select data-year></select>
-      </label>
+      <div class="filters">
+        <label>Year
+          <select data-year></select>
+        </label>
 
-      <label>Source
-        <select data-source>
-          <option value="All">All</option>
-          <option value="IBKR">IBKR</option>
-          <option value="HSBC">HSBC</option>
-        </select>
-      </label>
+        <label>Source
+          <select data-source>
+            <option value="All">All</option>
+            <option value="IBKR">IBKR</option>
+            <option value="HSBC">HSBC</option>
+          </select>
+        </label>
 
-      <label>Account
-        <select data-account>
-          <option value="All">All accounts</option>
-        </select>
-      </label>
+        <label>Account
+          <select data-account>
+            <option value="All">All accounts</option>
+          </select>
+        </label>
 
-      <button type="button" data-export>Export Review CSV</button>
-    </div>
+        <button type="button" data-export>
+          Export Review CSV
+        </button>
+      </div>
 
-    <div class="summary-cards" data-summary></div>
+      <div class="summary-cards" data-summary></div>
 
-    <p data-count class="status"></p>
+      <p data-count class="status"></p>
 
-    <div class="table-wrap">
-      <table id="foreign-dividend-table">
-        <thead><tr>
-          ${columns.map(([, title]) =>
-            `<th>${escape(title)}</th>`
-          ).join('')}
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  `;
+      <div class="table-wrap">
+        <table id="foreign-dividend-table">
+          <thead>
+            <tr>
+              ${columns.map(([, title]) =>
+                `<th>${escape(title)}</th>`
+              ).join('')}
+            </tr>
+          </thead>
 
-  document.querySelector('main').appendChild(host);
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
 
-  host.querySelector('[data-source]')
-    .addEventListener('change', () => {
+    document.querySelector('main').appendChild(host);
+
+    host.querySelector('[data-source]')
+      .addEventListener('change', () => {
+        updateAccounts();
+        render();
+      });
+
+    host.querySelector('[data-year]')
+      .addEventListener('change', render);
+
+    host.querySelector('[data-account]')
+      .addEventListener('change', render);
+
+    host.querySelector('[data-export]')
+      .addEventListener('click', exportCsv);
+  }
+
+  window.loadForeignDividendWorksheet =
+    function (records) {
+      worksheetRows = buildRows(
+        Array.isArray(records) ? records : []
+      );
+
+      if (!host) createUi();
+
+      const yearSelect = host
+        .querySelector('[data-year]');
+
+      const previousYear = yearSelect.value;
+
+      const years = [...new Set(
+        worksheetRows
+          .map(row => row.date.slice(0, 4))
+          .filter(Boolean)
+      )].sort().reverse();
+
+      yearSelect.replaceChildren(
+        new Option('All years', 'All')
+      );
+
+      years.forEach(year =>
+        yearSelect.add(new Option(year, year))
+      );
+
+      yearSelect.value = years.includes(previousYear)
+        ? previousYear
+        : years[0] || 'All';
+
       updateAccounts();
       render();
-    });
-
-  host.querySelector('[data-year]')
-    .addEventListener('change', render);
-
-  host.querySelector('[data-account]')
-    .addEventListener('change', render);
-
-  host.querySelector('[data-export]')
-    .addEventListener('click', exportCsv);
-}
+    };
+})();
