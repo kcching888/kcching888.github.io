@@ -94,7 +94,11 @@
     </section>
   </main>
 
-  <script defer src="tax-dividends.js?v=2"></script>
+   <script>
+  const taxScript2 = document.createElement('script');
+  taxScript.src = 'tax-dividends.js?v=' + Date.now();
+  document.body.appendChild(taxScript2);
+</script>
   <script>
   const taxScript = document.createElement('script');
   taxScript.src = 'tax.js?v=' + Date.now();
