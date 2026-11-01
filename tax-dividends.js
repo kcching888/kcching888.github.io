@@ -534,31 +534,44 @@ const unresolvedSamples = output
     status: row.status
   }));
 
+const dividendOutput = output.filter(
+  row => row.classification !==
+    'Unmatched withholding'
+);
+
+const matchedWithholding = dividendOutput.filter(
+  row => Number.isFinite(row.withholding)
+);
+
+const unresolvedWithholding =
+  dividendOutput.filter(
+    row => !Number.isFinite(row.withholding)
+  );
+
+const unmatchedTax = output.filter(
+  row => row.classification ===
+    'Unmatched withholding'
+);
+
 console.log('POST-MATCH DIAGNOSTIC', {
-  dividendRows: output.filter(
-    row => row.classification !==
-      'Unmatched withholding'
-  ).length,
-
-  matchedWithholding: output.filter(
-    row => row.classification !==
-      'Unmatched withholding' &&
-    Number.isFinite(row.withholding)
-  ).length,
-
-  unresolvedWithholding: output.filter(
-    row => row.classification !==
-      'Unmatched withholding' &&
-    !Number.isFinite(row.withholding)
-  ).length,
-
-  unmatchedTax: output.filter(
-    row => row.classification ===
-      'Unmatched withholding'
-  ).length,
-
-  unresolvedSamples
-});
+  dividendRows: dividendOutput.length,
+  matchedWithholding: matchedWithholding.length,
+  unresolvedWithholding:
+    unresolvedWithholding.length,
+  unmatchedTax: unmatchedTax.length,
+  unresolvedSamples: unresolvedWithholding
+    .slice(0, 10)
+    .map(row => ({
+      date: row.date,
+      source: row.source,
+      account: row.account,
+      symbol: row.symbol,
+      currency: row.currency,
+      gross: row.gross,
+      description: row.description,
+      status: row.status
+    }))
+});;
 
   matchedWithholding: output.filter(
     row => row.classification !==
