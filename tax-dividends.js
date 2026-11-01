@@ -770,6 +770,17 @@ console.log('POST-MATCH DIAGNOSTIC', {
   }
 
 function renderSummary(rows) {
+
+    const summaryContainer =
+    host?.querySelector('[data-summary]');
+
+  if (!summaryContainer) {
+    console.warn(
+      'Dividend summary container missing: [data-summary]'
+    );
+
+    return;
+  }
   const summary = buildSummary(rows);
 
   const countByStatus = status =>
@@ -846,7 +857,7 @@ function renderSummary(rows) {
     }
   ];
 
-  host.querySelector('[data-summary]').innerHTML =
+  summaryContainer.innerHTML =
     cards.map(card => `
       <div class="summary-card">
         <div class="summary-label">
