@@ -371,10 +371,32 @@ if (
         }
 
         if (withholding === null) {
-          issues.push(
-            'No matched withholding; not assumed zero'
-          );
-        }
+  const description = text(dividend.description);
+  const isin = description.match(
+    /\(([A-Z]{2}[A-Z0-9]{10})\)/
+  );
+
+  const isCanadian = Boolean(
+    isin && isin[1].startsWith('CA')
+  );
+
+  const isReturnOfCapital =
+    /RETURN OF CAPITAL/i.test(description);
+
+  if (isReturnOfCapital) {
+    issues.push(
+      'Return of capital: withholding not expected'
+    );
+  } else if (isCanadian) {
+    issues.push(
+      'Canadian-source distribution: withholding not expected'
+    );
+  } else {
+    issues.push(
+      'No matched withholding: confirm whether tax was expected'
+    );
+  }
+}
 
         if (
           gross !== null &&
@@ -455,6 +477,15 @@ if (
       }
 
       issues.push('Verify income classification');
+
+       matchingStatus:
+  Number.isFinite(withholding)
+    ? 'Tax matched'
+    : isReturnOfCapital
+      ? 'No tax expected — return of capital'
+      : isCanadian
+        ? 'No tax expected — Canadian source'
+        : 'No tax matched — review',
 
       return {
         date: dateOf(dividend),
@@ -588,6 +619,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
     ['symbol', 'Symbol'],
     ['description', 'Description'],
     ['classification', 'Classification'],
+    ['matchingStatus', 'Withholding Match'],
     ['gross', 'Gross'],
     ['withholding', 'Withholding'],
     ['fee', 'Bank Fee'],
@@ -747,11 +779,36 @@ console.log('POST-MATCH DIAGNOSTIC', {
     value: summary.unresolvedGross.toLocaleString('en-CA'),
     note: 'Rows requiring gross reconstruction or statement review'
   },
-  {
-    label: 'Unresolved Withholding',
-    value: summary.unresolvedTax.toLocaleString('en-CA'),
-    note: 'Rows requiring tax matching or confirmation'
-  },
+{
+  label: 'Tax Matched',
+  value: rows.filter(row =>
+    row.matchingStatus === 'Tax matched'
+  ).length.toLocaleString('en-CA'),
+  note: 'Dividends with paired withholding'
+},
+{
+  label: 'No Tax Expected',
+  value: rows.filter(row =>
+    row.matchingStatus.startsWith(
+      'No tax expected'
+    )
+  ).length.toLocaleString('en-CA'),
+  note: 'Canadian source or return of capital'
+},
+{
+  label: 'Tax Unmatched',
+  value: rows.filter(row =>
+    row.matchingStatus ===
+      'No tax matched — review'
+  ).length.toLocaleString('en-CA'),
+  note: 'Foreign dividends requiring tax review'
+},
+{
+  label: 'Unmatched Tax Records',
+  value: summary.unmatchedTax
+    .toLocaleString('en-CA'),
+  note: 'Withholding not safely paired'
+}
   {
     label: 'Unmatched Tax',
     value: summary.unmatchedTax.toLocaleString('en-CA'),
@@ -1025,6 +1082,59 @@ console.log('POST-MATCH DIAGNOSTIC', {
       .addEventListener('click', exportCsv);
   }
 
+
+   function logUnmatchedTaxBySymbol(records) {
+  const dividends = records.filter(isDividend);
+  const taxes = records.filter(isTax);
+
+  const dividendKeyCounts = new Map();
+
+  dividends.forEach(row => {
+    const key = eventKey(row);
+
+    dividendKeyCounts.set(
+      key,
+      (dividendKeyCounts.get(key) || 0) + 1
+    );
+  });
+
+  const unmatched = taxes.filter(tax => {
+    const key = eventKey(tax);
+    const count = dividendKeyCounts.get(key) || 0;
+
+    return count !== 1;
+  });
+
+  const bySymbol = {};
+  const byAccount = {};
+
+  unmatched.forEach(row => {
+    const symbol =
+      text(row.symbol).toUpperCase() || 'NO SYMBOL';
+    const account = text(row.account) || 'NO ACCOUNT';
+
+    bySymbol[symbol] = (bySymbol[symbol] || 0) + 1;
+    byAccount[account] = (byAccount[account] || 0) + 1;
+  });
+
+  console.log('REMAINING UNMATCHED TAX', {
+    count: unmatched.length,
+    bySymbol,
+    byAccount,
+    samples: unmatched.slice(0, 10).map(row => ({
+      date: dateOf(row),
+      source: sourceOf(row),
+      account: text(row.account),
+      symbol: text(row.symbol),
+      currency: text(row.currency),
+      amount: number(row.amount),
+      cadAmount: number(row.cadAmount),
+      price: number(row.price),
+      description: text(row.description),
+      reference: text(row.reference)
+    }))
+  });
+}
    function logDividendTaxKeyDiagnostic(records) {
   const dividends = records.filter(isDividend);
   const taxes = records.filter(isTax);
@@ -1107,6 +1217,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
       );
 
      logDividendTaxKeyDiagnostic(records);
+       logUnmatchedTaxBySymbol(records);
 
       if (!host) createUi();
 
