@@ -1177,27 +1177,112 @@ console.log('POST-MATCH DIAGNOSTIC', {
   });
 }
 
-   function logRemainingUnmatchedTax(records) {
+ function logRemainingUnmatchedTax(records) {
   const dividends = records.filter(isDividend);
   const taxes = records.filter(isTax);
 
-  const dividendKeyCounts = new Map();
+  const dividendGroups = new Map();
 
   dividends.forEach(row => {
     const key = eventKey(row);
+    const group = dividendGroups.get(key) || [];
 
-    dividendKeyCounts.set(
-      key,
-      (dividendKeyCounts.get(key) || 0) + 1
+    group.push(row);
+    dividendGroups.set(key, group);
+  });
+
+  const matchedTax = new Set();
+
+  dividends.forEach(dividend => {
+    const key = eventKey(dividend);
+    const candidates = taxes.filter(tax =>
+      eventKey(tax) === key
     );
+
+    if (candidates.length === 0) return;
+
+    let matched = [];
+
+    const reference = text(dividend.reference);
+
+    if (reference) {
+      const sameReference = candidates.filter(
+        tax =>
+          text(tax.reference) === reference
+      );
+
+      const sameReferenceDividends =
+        dividendGroups.get(key).filter(row =>
+          text(row.reference) === reference
+        );
+
+      if (
+        sameReferenceDividends.length === 1 &&
+        sameReference.length === 1
+      ) {
+        matched = sameReference;
+      }
+    }
+
+    if (
+      matched.length === 0 &&
+      dividendGroups.get(key).length === 1 &&
+      candidates.length === 1
+    ) {
+      matched = candidates;
+    }
+
+    if (
+      matched.length === 0 &&
+      candidates.length > 0
+    ) {
+      const dividendPerShare =
+        perShareDividendOf(dividend);
+
+      const amountTolerance = 0.005;
+
+      const amountMatches =
+        dividendPerShare === null
+          ? []
+          : candidates.filter(tax => {
+              const taxPerShare =
+                perShareTaxOf(tax);
+
+              const taxRate = taxRateOf(tax);
+
+              if (taxPerShare === null) {
+                return false;
+              }
+
+              if (taxRate !== null) {
+                return Math.abs(
+                  taxPerShare -
+                    dividendPerShare * taxRate
+                ) <= amountTolerance;
+              }
+
+              return candidates.filter(other => {
+                const otherTax =
+                  perShareTaxOf(other);
+
+                return otherTax !== null &&
+                  Math.abs(
+                    otherTax - taxPerShare
+                  ) <= amountTolerance;
+              }).length === 1;
+            });
+
+      if (amountMatches.length === 1) {
+        matched = amountMatches;
+      }
+    }
+
+    matched.forEach(tax => matchedTax.add(tax));
   });
 
-  const unmatched = taxes.filter(tax => {
-    const key = eventKey(tax);
-    const count = dividendKeyCounts.get(key) || 0;
-
-    return count !== 1;
-  });
+  const unmatched = taxes.filter(
+    tax => !matchedTax.has(tax)
+  );
 
   const bySymbol = {};
   const byAccount = {};
@@ -1239,7 +1324,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
       statementKey: text(row.statementKey)
     }));
 
-  console.log('REMAINING UNMATCHED TAX', {
+  console.log('ACTUAL UNMATCHED TAX', {
     count: unmatched.length,
     bySource,
     bySymbol,
@@ -1254,7 +1339,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
         Array.isArray(records) ? records : []
       );
 
-       logRemainingUnmatchedTax(records);
+   logRemainingUnmatchedTax(records);
      logDividendTaxKeyDiagnostic(records);
     
 
