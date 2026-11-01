@@ -376,83 +376,145 @@ td.empty {
     align-items: stretch;
   }
 
-  .filters
+  .filters label {
+    flex: 1 1 100%;
+  }
 
-/* Fix unreadable text on dark table rows */
-#cra-gains-table tbody tr,
-#cra-gains-table tbody tr:nth-child(even),
-#cra-gains-table tbody tr:nth-child(odd) {
-  background: #f8fafc;
+  .filters select {
+    width: 100%;
+    min-width: 0;
+  }
 }
 
-#cra-gains-table tbody td {
-  color: #111827;
-}
+/* The media query ENDS above.
+   Everything below applies on desktop and mobile. */
 
-#cra-gains-table tbody tr:hover {
-  background: #dcfce7;
-}
-   
-/* Dividend summary: visible cards on the dark tax page */
+
+/* ---------------- Dividend summary ---------------- */
+
+/* Match the capital-gains summary:
+   light cards, dark labels, green amounts. */
+
 #foreign-dividend-worksheet [data-summary] {
-  display: grid !important;
+  display: grid;
   grid-template-columns: repeat(
     auto-fit,
-    minmax(220px, 1fr)
+    minmax(210px, 1fr)
   );
-  gap: 12px !important;
-  margin: 18px 0 !important;
+  gap: 12px;
+  margin: 16px 0;
 }
 
 #foreign-dividend-worksheet [data-summary] .summary-card {
-  display: block !important;
-  background: #243247 !important;
-  border: 1px solid #475569 !important;
+  display: block;
+  background: #f8fafc;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 16px !important;
+  padding: 12px 14px;
   min-width: 0;
 }
 
 #foreign-dividend-worksheet .summary-label {
-  color: #cbd5e1 !important;
-  font-size: 0.8rem;
-  font-weight: 600;
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: #4b5563;
+  margin-bottom: 5px;
 }
 
 #foreign-dividend-worksheet .summary-value {
-  color: #ffffff !important;
-  font-size: 1.5rem;
+  display: block;
+  font-size: 18px;
   font-weight: 700;
-  margin-top: 8px;
+  color: #14532d;
 }
 
 #foreign-dividend-worksheet .summary-note {
-  color: #cbd5e1 !important;
-  font-size: 0.8rem;
-  margin-top: 8px;
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #475569;
 }
 
-/* Dividend table header */
+
+/* ---------------- Dividend table ---------------- */
+
+/* Match the existing capital-gains table:
+   green header, dark alternating rows,
+   dark-green hover, light text. */
+
+#foreign-dividend-table {
+  min-width: 2400px;
+}
+
 #foreign-dividend-table thead th {
-  background: #334155 !important;
-  color: #f8fafc !important;
+  background: #14532d;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 12px 10px;
+  border-bottom: 2px solid #166534;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-/* Normal dividend rows */
-#foreign-dividend-table tbody tr,
+#foreign-dividend-table thead th,
+#foreign-dividend-table thead th * {
+  color: #ffffff !important;
+}
+
+/* Clear cell backgrounds so row colours remain visible. */
 #foreign-dividend-table tbody td {
-  background: #243247 !important;
-  color: #f1f5f9 !important;
+  background: transparent;
+  color: #f1f5f9;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* Hovered dividend rows: dark highlight, readable text */
-#foreign-dividend-table tbody tr:hover,
+#foreign-dividend-table tbody tr {
+  background: #1e293b;
+}
+
+#foreign-dividend-table tbody tr:nth-child(even) {
+  background: #273449;
+}
+
+/* Same hover colour as #cra-gains-table. */
+#foreign-dividend-table tbody tr:hover {
+  background: #244c3a;
+}
+
 #foreign-dividend-table tbody tr:hover > td {
-  background: #334155 !important;
-  color: #ffffff !important;
+  background: transparent;
+  color: #f1f5f9;
 }
 
-/* Override inherited colours on nested cell content */
-#foreign-dividend-table tbody tr:hover > td * {
-  color: #ffffff !important;
+#foreign-dividend-table tbody td.positive,
+#foreign-dividend-table tbody tr:hover > td.positive {
+  color: #86efac;
+}
+
+#foreign-dividend-table tbody td.negative,
+#foreign-dividend-table tbody tr:hover > td.negative {
+  color: #fca5a5;
+}
+
+#foreign-dividend-table tbody td.empty {
+  color: #cbd5e1;
+}
+
+#foreign-dividend-worksheet [data-export] {
+  background: #2f855a;
+  color: #ffffff;
+}
+
+#foreign-dividend-worksheet [data-export]:hover {
+  background: #276749;
+}
+
+#foreign-dividend-worksheet [data-count] {
+  color: var(--muted);
 }
