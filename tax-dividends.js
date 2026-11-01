@@ -810,44 +810,6 @@
   }
 
 
-function logUnmatchedTaxDiagnostic(records) {
-  const dividends = records.filter(isDividend);
-  const taxes = records.filter(isTax);
-
-  const dividendKeys = new Set(
-    dividends.map(row => eventKey(row))
-  );
-
-  const unmatched = taxes.filter(
-    tax => !dividendKeys.has(eventKey(tax))
-  );
-
-  const bySource = {};
-  const bySymbol = {};
-  const byYear = {};
-
-  unmatched.forEach(row => {
-    const source = sourceOf(row) || 'UNKNOWN';
-    const symbol = text(row.symbol).toUpperCase() ||
-      'NO SYMBOL';
-    const year = dateOf(row).slice(0, 4) ||
-      'NO DATE';
-
-    bySource[source] = (bySource[source] || 0) + 1;
-    bySymbol[symbol] = (bySymbol[symbol] || 0) + 1;
-    byYear[year] = (byYear[year] || 0) + 1;
-  });
-
-  console.log('UNMATCHED TAX DIAGNOSTIC', {
-    totalDividends: dividends.length,
-    totalTaxRecords: taxes.length,
-    unmatchedTaxCount: unmatched.length,
-    bySource,
-    bySymbol,
-    byYear,
-    samples: unmatched.slice(0, 25)
-  });
-}
 
    
   function createUi() {
@@ -922,6 +884,46 @@ function logUnmatchedTaxDiagnostic(records) {
       .addEventListener('click', exportCsv);
   }
 
+   function logUnmatchedTaxDiagnostic(records) {
+  const dividends = records.filter(isDividend);
+  const taxes = records.filter(isTax);
+
+  const dividendKeys = new Set(
+    dividends.map(row => eventKey(row))
+  );
+
+  const unmatched = taxes.filter(
+    tax => !dividendKeys.has(eventKey(tax))
+  );
+
+  const bySource = {};
+  const bySymbol = {};
+  const byYear = {};
+
+  unmatched.forEach(row => {
+    const source = sourceOf(row) || 'UNKNOWN';
+
+    const symbol =
+      text(row.symbol).toUpperCase() || 'NO SYMBOL';
+
+    const year = dateOf(row).slice(0, 4) || 'NO DATE';
+
+    bySource[source] = (bySource[source] || 0) + 1;
+    bySymbol[symbol] = (bySymbol[symbol] || 0) + 1;
+    byYear[year] = (byYear[year] || 0) + 1;
+  });
+
+  console.log('UNMATCHED TAX DIAGNOSTIC', {
+    totalDividends: dividends.length,
+    totalTaxRecords: taxes.length,
+    unmatchedTaxCount: unmatched.length,
+    bySource,
+    bySymbol,
+    byYear,
+    samples: unmatched.slice(0, 25)
+  });
+}
+   
   window.loadForeignDividendWorksheet =
     function (records) {
       worksheetRows = buildRows(
