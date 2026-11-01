@@ -771,24 +771,22 @@ console.log('POST-MATCH DIAGNOSTIC', {
   }
 
 const dividendCardLabels = {
-  all: 'All review rows',
+  all: 'All records',
   matched: 'Tax matched',
   withoutTax: 'Dividends without paired tax',
-  noTaxExpected: 'No tax expected — current classification',
-  taxReview: 'No tax matched — review',
   unmatchedTax: 'Unmatched tax records',
-  unresolvedGross: 'Unresolved gross',
-  review: 'Rows needing review'
+  unresolvedGross: 'Gross amount missing'
 };
 
-function filterRowsByDividendCard(rows) {
+function filterRowsByDividendCard(
+  rows,
+  filter = activeDividendCard
+) {
   return rows.filter(row => {
     const isTaxRow =
       row.classification === 'Unmatched withholding';
 
-    const status = String(row.matchingStatus || '');
-
-    switch (activeDividendCard) {
+    switch (filter) {
       case 'matched':
         return !isTaxRow &&
           Number.isFinite(row.withholding);
@@ -797,14 +795,6 @@ function filterRowsByDividendCard(rows) {
         return !isTaxRow &&
           !Number.isFinite(row.withholding);
 
-      case 'noTaxExpected':
-        return !isTaxRow &&
-          status.startsWith('No tax expected');
-
-      case 'taxReview':
-        return !isTaxRow &&
-          status === 'No tax matched — review';
-
       case 'unmatchedTax':
         return isTaxRow;
 
@@ -812,9 +802,7 @@ function filterRowsByDividendCard(rows) {
         return !isTaxRow &&
           !Number.isFinite(row.grossCad);
 
-      case 'review':
-        return String(row.status || '').trim() !== '';
-
+      case 'all':
       default:
         return true;
     }
@@ -822,134 +810,150 @@ function filterRowsByDividendCard(rows) {
 }
 
 function renderSummary(rows) {
-
-    const summaryContainer =
+  const summaryContainer =
     host?.querySelector('[data-summary]');
 
-  if (!summaryContainer) {
-    console.warn(
-      'Dividend summary container missing: [data-summary]'
+  if (!summaryContainer) return;
+
+  const validFilters = Object.keys(dividendCardLabels);
+
+  if (!validFilters.includes(activeDividendCard)) {
+    activeDividendCard = 'all';
+  }
+
+  const dividendRows = rows.filter(row =>
+    row.classification !== 'Unmatched withholding'
+  );
+
+  function totalAvailable(records, key) {
+    const available = records.filter(row =>
+      Number.isFinite(row[key])
     );
 
-    return;
+    return {
+      amount: available.length
+        ? available.reduce(
+            (total, row) => total + row[key],
+            0
+          )
+        : null,
+      available: available.length,
+      missing: records.length - available.length
+    };
   }
+
+  // Include all available dividend gross amounts,
+  // whether withholding is matched or not.
+  const gross = totalAvailable(
+    dividendRows,
+    'grossCad'
+  );
+
+  const net = totalAvailable(
+    dividendRows,
+    'netCad'
+  );
+
+  // Includes both matched and standalone unmatched tax.
+  const withholding = totalAvailable(
+    rows,
+    'withholdingCad'
+  );
+
+  // Retain the existing fee calculation for now.
   const summary = buildSummary(rows);
 
-  const countByStatus = status =>
-    rows.filter(row =>
-      (row.matchingStatus || '') === status
-    ).length;
+  const feeRows = dividendRows.filter(row =>
+    Number.isFinite(row.grossCad) &&
+    Number.isFinite(row.withholdingCad) &&
+    Number.isFinite(row.netCad)
+  );
 
-  const countByStatusPrefix = prefix =>
-    rows.filter(row =>
-      (row.matchingStatus || '').startsWith(prefix)
-    ).length;
-
-  const cards = [
+  const amountCards = [
     {
-      label: 'Review Rows',
-      value: summary.count.toLocaleString('en-CA'),
-      note: 'Dividend and unmatched withholding records'
-    },
-    {
-      label: 'Known / Reconstructed Gross CAD',
-      value: format(summary.grossCad),
-      note: 'Incomplete: excludes unresolved gross rows'
+      label: 'Gross Dividend CAD',
+      value: format(gross.amount),
+      note: gross.missing
+        ? `${gross.available} of ${dividendRows.length} ` +
+          `dividends included; ${gross.missing} gross ` +
+          'amounts missing. Total incomplete.'
+        : 'All dividend rows included, regardless of tax matching'
     },
     {
       label: 'Withholding Tax CAD',
-      value: format(summary.withholdingCad),
-      note: 'Active matched withholding records'
+      value: format(withholding.amount),
+      note: 'Available withholding, including unmatched tax records'
     },
     {
-      label: 'Known Bank Fee CAD',
-      value: format(summary.feeCad),
-      note: 'Only fully reconciled rows'
+      label: 'Bank Fee CAD',
+      value: format(
+        feeRows.length ? summary.feeCad : null
+      ),
+      note: 'Derived only where gross, tax and net are available'
     },
     {
       label: 'Net Cash CAD',
-      value: format(summary.netCad),
-      note: 'Credited cash; not comparable to gross total'
-    },
+      value: format(net.amount),
+      note: net.missing
+        ? `${net.available} of ${dividendRows.length} ` +
+          `dividends included; ${net.missing} net ` +
+          'amounts missing.'
+        : 'All dividend rows included'
+    }
+  ];
+
+  const countCards = [
     {
-      label: 'Dividends Without Tax',
-      value: summary.unresolvedTax.toLocaleString('en-CA'),
-      note: 'Includes Canadian, ROC, and no-withholding cases'
+      label: 'All Records',
+      filter: 'all',
+      note: 'Reset: show all records within year, source and account'
     },
     {
       label: 'Tax Matched',
-      value: countByStatus('Tax matched')
-        .toLocaleString('en-CA'),
+      filter: 'matched',
       note: 'Dividends with paired withholding'
     },
     {
-      label: 'No Tax Expected',
-      value: countByStatusPrefix('No tax expected')
-        .toLocaleString('en-CA'),
-      note: 'Canadian source or return of capital'
-    },
-    {
-      label: 'Tax Unmatched',
-      value: countByStatus(
-        'No tax matched — review'
-      ).toLocaleString('en-CA'),
-      note: 'Foreign dividends requiring tax review'
+      label: 'Dividends Without Paired Tax',
+      filter: 'withoutTax',
+      note: 'Includes Canadian/ROC classifications and other unpaired dividends'
     },
     {
       label: 'Unmatched Tax Records',
-      value: summary.unmatchedTax
-        .toLocaleString('en-CA'),
-      note: 'Withholding not safely paired'
+      filter: 'unmatchedTax',
+      note: 'Standalone tax records not paired to a dividend'
     },
     {
-      label: 'Rows Needing Review',
-      value: summary.reviewRows
-        .toLocaleString('en-CA'),
-      note: 'Includes classification and data checks'
+      label: 'Gross Amount Missing',
+      filter: 'unresolvedGross',
+      note: 'Dividends excluded from gross total because gross CAD is unavailable'
     }
   ];
-  const cardFilters = {
-    'Review Rows': 'all',
-    'Tax Matched': 'matched',
-    'Dividends Without Tax': 'withoutTax',
-    'Unresolved Withholding': 'withoutTax',
-    'No Tax Expected': 'noTaxExpected',
-    'Tax Unmatched': 'taxReview',
-    'Unmatched Tax Records': 'unmatchedTax',
-    'Unmatched Tax': 'unmatchedTax',
-    'Unresolved Gross': 'unresolvedGross',
-    'Rows Needing Review': 'review'
-  };
 
-  summaryContainer.innerHTML = cards.map(card => {
-    const filter = cardFilters[card.label];
+  const amountHtml = amountCards.map(card => `
+    <div class="summary-card">
+      <div class="summary-label">
+        ${escape(card.label)}
+      </div>
 
-    // Amount cards remain informational.
-    if (!filter) {
-      return `
-        <div class="summary-card">
-          <div class="summary-label">
-            ${escape(card.label)}
-          </div>
-          <div class="summary-value">
-            ${escape(card.value)}
-          </div>
-          <div class="summary-note">
-            ${escape(card.note)}
-          </div>
-        </div>
-      `;
-    }
+      <div class="summary-value">
+        ${escape(card.value)}
+      </div>
 
-    // Calculate the count using the exact table predicate.
-    const previousFilter = activeDividendCard;
-    activeDividendCard = filter;
+      <div class="summary-note">
+        ${escape(card.note)}
+      </div>
+    </div>
+  `).join('');
 
-    const count = filterRowsByDividendCard(rows).length;
+  const countHtml = countCards.map(card => {
+    const count = filterRowsByDividendCard(
+      rows,
+      card.filter
+    ).length;
 
-    activeDividendCard = previousFilter;
-
-    const selected = activeDividendCard === filter;
+    const selected =
+      activeDividendCard === card.filter;
 
     return `
       <button
@@ -957,16 +961,18 @@ function renderSummary(rows) {
         class="summary-card dividend-count-card${
           selected ? ' is-active' : ''
         }"
-        data-dividend-filter="${escape(filter)}"
+        data-dividend-filter="${escape(card.filter)}"
         aria-pressed="${selected}"
         title="Show corresponding records below"
       >
         <span class="summary-label">
           ${escape(card.label)}
         </span>
+
         <span class="summary-value">
           ${count.toLocaleString('en-CA')}
         </span>
+
         <span class="summary-note">
           ${escape(card.note)}
         </span>
@@ -974,26 +980,34 @@ function renderSummary(rows) {
     `;
   }).join('');
 
+  summaryContainer.innerHTML = `
+    <div class="dividend-summary-row dividend-amount-row">
+      ${amountHtml}
+    </div>
+
+    <div class="dividend-summary-row dividend-count-row">
+      ${countHtml}
+    </div>
+  `;
+
   summaryContainer.onclick = function (event) {
     const button = event.target.closest(
       '[data-dividend-filter]'
     );
 
-    if (!button || !summaryContainer.contains(button)) {
+    if (
+      !button ||
+      !summaryContainer.contains(button)
+    ) {
       return;
     }
 
-    activeDividendCard = button.dataset.dividendFilter;
+    activeDividendCard =
+      button.dataset.dividendFilter;
 
     render();
-
-    host.querySelector('.table-wrap')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'nearest'
-    });
   };
 }
-
    
  function render() {
   const baseRows = selectedRows();
