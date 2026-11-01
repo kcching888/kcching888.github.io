@@ -478,15 +478,7 @@ if (
 
       issues.push('Verify income classification');
 
-       matchingStatus:
-  Number.isFinite(withholding)
-    ? 'Tax matched'
-    : isReturnOfCapital
-      ? 'No tax expected — return of capital'
-      : isCanadian
-        ? 'No tax expected — Canadian source'
-        : 'No tax matched — review',
-
+      
       return {
         date: dateOf(dividend),
         source,
