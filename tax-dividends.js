@@ -424,41 +424,53 @@ if (
           netCad =
             grossCad - withholdingCad - fees.cad;
         }
-      } else if (source === 'HSBC') {
-        net = amount;
-        netCad = amountCad;
+     } else if (source === 'HSBC') {
+  // HSBC amount is the net cash credited.
+  net = amount;
+  netCad = amountCad;
 
-        if (withholding === null) {
-          issues.push(
-            'Gross unresolved: withholding not confirmed'
-          );
-        }
+  // No paired tax: assume zero for gross reconstruction.
+  // A paired tax with a missing value remains unknown.
+  const taxForGross =
+    matched.length === 0 ? 0 : withholding;
 
-        if (fees.native === null) {
-          issues.push(
-            'Gross unresolved: native fee unavailable'
-          );
-        }
+  const taxCadForGross =
+    matched.length === 0 ? 0 : withholdingCad;
 
-        if (
-          net !== null &&
-          withholding !== null &&
-          fees.native !== null
-        ) {
-          gross = net + withholding + fees.native;
-          issues.push(
-            'Gross reconstructed from net + tax + fee'
-          );
-        }
+  if (matched.length === 0) {
+    issues.push(
+      'Gross uses zero assumed withholding: no tax record paired'
+    );
+  }
 
-        if (
-          netCad !== null &&
-          withholdingCad !== null &&
-          fees.cad !== null
-        ) {
-          grossCad =
-            netCad + withholdingCad + fees.cad;
-        }
+  if (fees.native === null) {
+    issues.push(
+      'Gross unresolved: native bank fee unavailable'
+    );
+  }
+
+  if (fees.cad === null) {
+    issues.push(
+      'Gross CAD unresolved: CAD bank fee unavailable'
+    );
+  }
+
+  if (
+    net !== null &&
+    taxForGross !== null &&
+    fees.native !== null
+  ) {
+    gross = net + taxForGross + fees.native;
+  }
+
+  if (
+    netCad !== null &&
+    taxCadForGross !== null &&
+    fees.cad !== null
+  ) {
+    grossCad =
+      netCad + taxCadForGross + fees.cad;
+  }
       } else {
         issues.push('Unknown source');
       }
