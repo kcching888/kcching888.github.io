@@ -409,6 +409,7 @@ td.empty {
   border-left: 4px solid #14532d;
   border-radius: 8px;
   padding: 14px;
+  cursor: default;
   transition:
     background-color 0.18s ease,
     border-color 0.18s ease,
