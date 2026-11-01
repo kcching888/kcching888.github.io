@@ -573,24 +573,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
     }))
 });
 
-  matchedWithholding: output.filter(
-    row => row.classification !==
-      'Unmatched withholding' &&
-    Number.isFinite(row.withholding)
-  ).length,
-
-  unresolvedWithholding: output.filter(
-    row => row.classification !==
-      'Unmatched withholding' &&
-    !Number.isFinite(row.withholding)
-  ).length,
-
-  unmatchedTax: output.filter(
-    row => row.classification ===
-      'Unmatched withholding'
-  ).length
-});
-     
+      
     return output.sort((a, b) =>
       a.date.localeCompare(b.date) ||
       a.account.localeCompare(b.account) ||
