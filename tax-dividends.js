@@ -887,6 +887,8 @@
         Array.isArray(records) ? records : []
       );
 
+      logUnmatchedTaxDiagnostic(records); 
+
       if (!host) createUi();
 
       const yearSelect = host
@@ -972,3 +974,4 @@ function logDividendMatching(rows) {
     }
   });
 }
+
