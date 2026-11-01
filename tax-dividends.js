@@ -1176,6 +1176,77 @@ console.log('POST-MATCH DIAGNOSTIC', {
     }
   });
 }
+
+   function logRemainingUnmatchedTax(records) {
+  const dividends = records.filter(isDividend);
+  const taxes = records.filter(isTax);
+
+  const dividendKeyCounts = new Map();
+
+  dividends.forEach(row => {
+    const key = eventKey(row);
+
+    dividendKeyCounts.set(
+      key,
+      (dividendKeyCounts.get(key) || 0) + 1
+    );
+  });
+
+  const unmatched = taxes.filter(tax => {
+    const key = eventKey(tax);
+    const count = dividendKeyCounts.get(key) || 0;
+
+    return count !== 1;
+  });
+
+  const bySymbol = {};
+  const byAccount = {};
+  const bySource = {};
+
+  unmatched.forEach(row => {
+    const symbol =
+      text(row.symbol).toUpperCase() || 'NO SYMBOL';
+
+    const account =
+      text(row.account) || 'NO ACCOUNT';
+
+    const source =
+      sourceOf(row) || 'UNKNOWN';
+
+    bySymbol[symbol] =
+      (bySymbol[symbol] || 0) + 1;
+
+    byAccount[account] =
+      (byAccount[account] || 0) + 1;
+
+    bySource[source] =
+      (bySource[source] || 0) + 1;
+  });
+
+  const samples = unmatched
+    .slice(0, 15)
+    .map(row => ({
+      date: dateOf(row),
+      source: sourceOf(row),
+      account: text(row.account),
+      symbol: text(row.symbol),
+      currency: text(row.currency),
+      amount: number(row.amount),
+      cadAmount: number(row.cadAmount),
+      price: number(row.price),
+      description: text(row.description),
+      reference: text(row.reference),
+      statementKey: text(row.statementKey)
+    }));
+
+  console.log('REMAINING UNMATCHED TAX', {
+    count: unmatched.length,
+    bySource,
+    bySymbol,
+    byAccount,
+    samples
+  });
+}
    
   window.loadForeignDividendWorksheet =
     function (records) {
@@ -1183,6 +1254,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
         Array.isArray(records) ? records : []
       );
 
+       logRemainingUnmatchedTax(records);
      logDividendTaxKeyDiagnostic(records);
     
 
