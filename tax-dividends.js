@@ -487,6 +487,27 @@ if (
 
       issues.push('Verify income classification');
 
+       const description = text(dividend.description);
+
+const isin = description.match(
+  /\(([A-Z]{2}[A-Z0-9]{10})\)/
+);
+
+const isCanadian = Boolean(
+  isin && isin[1].startsWith('CA')
+);
+
+const isReturnOfCapital =
+  /RETURN OF CAPITAL/i.test(description);
+
+const matchingStatus =
+  Number.isFinite(withholding)
+    ? 'Tax matched'
+    : isReturnOfCapital
+      ? 'No tax expected — return of capital'
+      : isCanadian
+        ? 'No tax expected — Canadian source'
+        : 'No tax matched — review';
       
       return {
         date: dateOf(dividend),
