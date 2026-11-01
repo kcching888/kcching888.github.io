@@ -560,6 +560,7 @@ const matchingStatus =
             ? null
             : Math.abs(amountCad),
         netCad: null,
+        matchingStatus: 'Unmatched tax record',
         reference:
           text(tax.reference) ||
           text(tax.statementKey),
@@ -803,29 +804,29 @@ console.log('POST-MATCH DIAGNOSTIC', {
       note: 'Rows requiring gross reconstruction or statement review'
     },
     {
-      label: 'Tax Matched',
-      value: rows.filter(row =>
-        row.matchingStatus === 'Tax matched'
-      ).length.toLocaleString('en-CA'),
-      note: 'Dividends with paired withholding'
-    },
-    {
-      label: 'No Tax Expected',
-      value: rows.filter(row =>
-        row.matchingStatus.startsWith(
-          'No tax expected'
-        )
-      ).length.toLocaleString('en-CA'),
-      note: 'Canadian source or return of capital'
-    },
-    {
-      label: 'Tax Unmatched',
-      value: rows.filter(row =>
-        row.matchingStatus ===
-          'No tax matched — review'
-      ).length.toLocaleString('en-CA'),
-      note: 'Foreign dividends requiring tax review'
-    },
+  label: 'Tax Matched',
+  value: rows.filter(row =>
+    row.matchingStatus === 'Tax matched'
+  ).length.toLocaleString('en-CA'),
+  note: 'Dividends with paired withholding'
+},
+{
+  label: 'No Tax Expected',
+  value: rows.filter(row =>
+    (row.matchingStatus || '').startsWith(
+      'No tax expected'
+    )
+  ).length.toLocaleString('en-CA'),
+  note: 'Canadian source or return of capital'
+},
+{
+  label: 'Tax Unmatched',
+  value: rows.filter(row =>
+    (row.matchingStatus || '') ===
+      'No tax matched — review'
+  ).length.toLocaleString('en-CA'),
+  note: 'Foreign dividends requiring tax review'
+},
     {
       label: 'Unmatched Tax Records',
       value: summary.unmatchedTax
