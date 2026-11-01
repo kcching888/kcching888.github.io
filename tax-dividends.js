@@ -884,43 +884,78 @@
       .addEventListener('click', exportCsv);
   }
 
-   function logUnmatchedTaxDiagnostic(records) {
+   function logDividendTaxKeyDiagnostic(records) {
   const dividends = records.filter(isDividend);
   const taxes = records.filter(isTax);
 
-  const dividendKeys = new Set(
-    dividends.map(row => eventKey(row))
-  );
+  const dividendKeyCounts = new Map();
+  const taxKeyCounts = new Map();
 
-  const unmatched = taxes.filter(
-    tax => !dividendKeys.has(eventKey(tax))
-  );
-
-  const bySource = {};
-  const bySymbol = {};
-  const byYear = {};
-
-  unmatched.forEach(row => {
-    const source = sourceOf(row) || 'UNKNOWN';
-
-    const symbol =
-      text(row.symbol).toUpperCase() || 'NO SYMBOL';
-
-    const year = dateOf(row).slice(0, 4) || 'NO DATE';
-
-    bySource[source] = (bySource[source] || 0) + 1;
-    bySymbol[symbol] = (bySymbol[symbol] || 0) + 1;
-    byYear[year] = (byYear[year] || 0) + 1;
+  dividends.forEach(row => {
+    const key = eventKey(row);
+    dividendKeyCounts.set(
+      key,
+      (dividendKeyCounts.get(key) || 0) + 1
+    );
   });
 
-  console.log('UNMATCHED TAX DIAGNOSTIC', {
+  taxes.forEach(row => {
+    const key = eventKey(row);
+    taxKeyCounts.set(
+      key,
+      (taxKeyCounts.get(key) || 0) + 1
+    );
+  });
+
+  const exactMatches = [];
+  const ambiguous = [];
+  const taxOnly = [];
+
+  taxes.forEach(tax => {
+    const key = eventKey(tax);
+    const dividendCount =
+      dividendKeyCounts.get(key) || 0;
+    const taxCount = taxKeyCounts.get(key) || 0;
+
+    if (dividendCount === 0) {
+      taxOnly.push(tax);
+    } else if (dividendCount === 1 && taxCount === 1) {
+      exactMatches.push(tax);
+    } else {
+      ambiguous.push(tax);
+    }
+  });
+
+  const summarize = rows => ({
+    count: rows.length,
+    bySource: rows.reduce((result, row) => {
+      const source = sourceOf(row) || 'UNKNOWN';
+      result[source] = (result[source] || 0) + 1;
+      return result;
+    }, {}),
+    bySymbol: rows.reduce((result, row) => {
+      const symbol =
+        text(row.symbol).toUpperCase() || 'NO SYMBOL';
+      result[symbol] = (result[symbol] || 0) + 1;
+      return result;
+    }, {})
+  });
+
+  console.log('DIVIDEND TAX KEY DIAGNOSTIC', {
     totalDividends: dividends.length,
     totalTaxRecords: taxes.length,
-    unmatchedTaxCount: unmatched.length,
-    bySource,
-    bySymbol,
-    byYear,
-    samples: unmatched.slice(0, 25)
+
+    oneToOneExactMatches:
+      summarize(exactMatches),
+
+    ambiguousGroups: summarize(ambiguous),
+
+    taxWithoutDividend: summarize(taxOnly),
+
+    samples: {
+      ambiguous: ambiguous.slice(0, 15),
+      taxOnly: taxOnly.slice(0, 15)
+    }
   });
 }
    
@@ -930,7 +965,7 @@
         Array.isArray(records) ? records : []
       );
 
-      logUnmatchedTaxDiagnostic(records); 
+     logDividendTaxKeyDiagnostic(records);
 
       if (!host) createUi();
 
@@ -953,9 +988,9 @@
         yearSelect.add(new Option(year, year))
       );
 
-      yearSelect.value = years.includes(previousYear)
-        ? previousYear
-        : years[0] || 'All';
+     yearSelect.value = years.includes(previousYear)
+  ? previousYear
+  : 'All';
 
       updateAccounts();
       render();
