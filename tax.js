@@ -241,7 +241,6 @@ taxData.hsbcDividends = Array.isArray(data.hsbcDividends)
   ? data.hsbcDividends
   : [];
 
-loadForeignDividendWorksheet(taxData.dividends);
 logDividendSchema(); 
 
   taxData.allTrades = normalizeTrades(
