@@ -184,6 +184,47 @@
     };
   }
 
+   function taxRateOf(row) {
+  const match = text(row.description).match(
+    /(\d+(?:\.\d+)?)\s*%/
+  );
+
+  return match
+    ? Number(match[1]) / 100
+    : null;
+}
+
+function perShareTaxOf(row) {
+  const n = number(row.price);
+
+  return n !== null && n > 0 ? n : null;
+}
+
+function perShareDividendOf(row) {
+  const description = text(row.description);
+
+  const patterns = [
+    /Cash Dividend\s+[A-Z]{3}\s+([\d.,]+)\s+per Share/i,
+    /DIVIDEND\s+[A-Z]{3}\s+([\d.,]+)\s+PER SHARE/i
+  ];
+
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+
+    if (match) {
+      const value = Number(
+        match[1].replace(/,/g, '')
+      );
+
+      if (Number.isFinite(value) && value > 0) {
+        return value;
+      }
+    }
+  }
+
+  return null;
+}
+
   function buildRows(records) {
     const dividends = records.filter(isDividend);
     const taxes = records.filter(isTax);
