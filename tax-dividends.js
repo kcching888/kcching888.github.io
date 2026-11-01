@@ -921,11 +921,6 @@ function renderSummary(rows) {
     'Rows Needing Review': 'review'
   };
 
-  const summaryContainer =
-    host.querySelector('[data-summary]');
-
-  if (!summaryContainer) return;
-
   summaryContainer.innerHTML = cards.map(card => {
     const filter = cardFilters[card.label];
 
