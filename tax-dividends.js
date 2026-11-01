@@ -285,35 +285,46 @@ if (
   matched.length === 0 &&
   candidates.length > 0
 ) {
-  const taxRate = taxRateOf(dividend);
   const dividendPerShare =
     perShareDividendOf(dividend);
 
-  const expectedTax = dividendPerShare !== null &&
-    taxRate !== null
-      ? dividendPerShare * taxRate
-      : null;
-
   const amountTolerance = 0.005;
 
-  const amountMatches = expectedTax !== null
-    ? candidates.filter(tax => {
+  const amountMatches = dividendPerShare === null
+    ? []
+    : candidates.filter(tax => {
         const taxPerShare = perShareTaxOf(tax);
+        const taxRate = taxRateOf(tax);
 
-        return taxPerShare !== null &&
-          Math.abs(taxPerShare - expectedTax) <=
-            amountTolerance;
-      })
-    : [];
+        if (taxPerShare === null) return false;
+
+        // If the tax row states a rate, use it.
+        if (taxRate !== null) {
+          return Math.abs(
+            taxPerShare -
+              dividendPerShare * taxRate
+          ) <= amountTolerance;
+        }
+
+        // Otherwise, accept only if this tax amount
+        // is unique among the candidate tax rows.
+        return candidates.filter(other => {
+          const otherTax =
+            perShareTaxOf(other);
+
+          return otherTax !== null &&
+            Math.abs(otherTax - taxPerShare) <=
+              amountTolerance;
+        }).length === 1;
+      });
 
   if (amountMatches.length === 1) {
     matched = amountMatches;
     issues.push(
-      'Withholding matched by per-share dividend × tax rate'
+      'Withholding matched by per-share tax amount'
     );
   }
-}
-       
+}   
       if (
         candidates.length > 0 &&
         matched.length === 0
@@ -505,12 +516,49 @@ if (
           'income classification'
       });
     });
+const unresolvedSamples = output
+  .filter(row =>
+    row.classification !==
+      'Unmatched withholding' &&
+    !Number.isFinite(row.withholding)
+  )
+  .slice(0, 10)
+  .map(row => ({
+    date: row.date,
+    source: row.source,
+    account: row.account,
+    symbol: row.symbol,
+    currency: row.currency,
+    gross: row.gross,
+    description: row.description,
+    status: row.status
+  }));
 
 console.log('POST-MATCH DIAGNOSTIC', {
   dividendRows: output.filter(
     row => row.classification !==
       'Unmatched withholding'
   ).length,
+
+  matchedWithholding: output.filter(
+    row => row.classification !==
+      'Unmatched withholding' &&
+    Number.isFinite(row.withholding)
+  ).length,
+
+  unresolvedWithholding: output.filter(
+    row => row.classification !==
+      'Unmatched withholding' &&
+    !Number.isFinite(row.withholding)
+  ).length,
+
+  unmatchedTax: output.filter(
+    row => row.classification ===
+      'Unmatched withholding'
+  ).length,
+
+  unresolvedSamples
+});
 
   matchedWithholding: output.filter(
     row => row.classification !==
