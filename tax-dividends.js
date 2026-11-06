@@ -674,7 +674,7 @@ console.log('POST-MATCH DIAGNOSTIC', {
     ['fee', 'Bank Fee'],
     ['net', 'Net Cash'],
     ['currency', 'CCY'],
-    ['fx', 'Reporting FX Rate'],
+    ['fx', 'FX Rate'],
     ['grossCad', 'Gross CAD'],
     ['withholdingCad', 'Withholding CAD'],
     ['netCad', 'Net Cash CAD'],
@@ -731,103 +731,219 @@ console.log('POST-MATCH DIAGNOSTIC', {
   }
 
   function reportingRow(original) {
-    const row = { ...original,
+    const row = {
+      ...original,
       importedGrossCad: original.grossCad,
       importedWithholdingCad: original.withholdingCad,
       importedNetCad: original.netCad,
       reportingFxMethod: fxMethod === 'annual'
-        ? 'BOC annual average' : 'Imported transaction-date',
+        ? 'BOC annual average'
+        : 'Imported transaction-date',
       reportingFxYear: original.date.slice(0, 4)
     };
+
     if (fxMethod !== 'annual') return row;
+
     const year = row.reportingFxYear;
     row.fx = annualRate(row.currency, year);
     row.grossCad = annualValue(row.gross, row.currency, year);
-    row.withholdingCad = annualValue(row.withholding, row.currency, year);
+    row.withholdingCad = annualValue(
+      row.withholding,
+      row.currency,
+      year
+    );
     row.netCad = annualValue(row.net, row.currency, year);
-    row.feeCad = annualValue(row.feeAmount, row.feeCurrency, year);
-    // Different fee currency may prevent a native gross value,
-    // but CAD gross can still be reconstructed component by component.
-    if (row.source === 'HSBC' && row.classification !== 'Unmatched withholding') {
-      const tax = row.pairedTaxCount === 0 ? 0 : row.withholdingCad;
-      if (Number.isFinite(row.netCad) && Number.isFinite(tax) && Number.isFinite(row.feeCad)) {
+    row.feeCad = annualValue(
+      row.feeAmount,
+      row.feeCurrency,
+      year
+    );
+
+    if (
+      row.source === 'HSBC' &&
+      row.classification !== 'Unmatched withholding'
+    ) {
+      const tax = row.pairedTaxCount === 0
+        ? 0
+        : row.withholdingCad;
+
+      if (
+        Number.isFinite(row.netCad) &&
+        Number.isFinite(tax) &&
+        Number.isFinite(row.feeCad)
+      ) {
         row.grossCad = row.netCad + tax + row.feeCad;
       }
     }
+
     return row;
   }
 
   async function fetchAnnualRates(year) {
     if (annualRateCache.has(year)) return;
     annualRateCache.set(year, { state: 'loading' });
+
     try {
-      const url = 'https://www.bankofcanada.ca/valet/observations/group/' +
-        'FX_RATES_ANNUAL/json?start_date=' + year + '-01-01&end_date=' + year + '-12-31';
+      const url =
+        'https://www.bankofcanada.ca/valet/observations/group/' +
+        'FX_RATES_ANNUAL/json?start_date=' + year +
+        '-01-01&end_date=' + year + '-12-31';
+
       const response = await fetch(url);
-      if (!response.ok) throw new Error('BOC HTTP ' + response.status);
+
+      if (!response.ok) {
+        throw new Error('BOC HTTP ' + response.status);
+      }
+
       const json = await response.json();
-      const observation = (json.observations || []).find(o => String(o.d).slice(0, 4) === year);
-      if (!observation) throw new Error('Annual rates not published for ' + year);
+      const observation = (json.observations || []).find(
+        item => String(item.d).slice(0, 4) === year
+      );
+
+      if (!observation) {
+        throw new Error(
+          'Annual rates not published for ' + year
+        );
+      }
+
       const rates = { CAD: 1 };
+
       Object.entries(observation).forEach(([series, item]) => {
         const match = series.match(/^FXA([A-Z]{3})CAD$/);
         const rate = number(item?.v);
-        if (match && rate !== null && rate > 0) rates[match[1]] = rate;
+
+        if (match && rate !== null && rate > 0) {
+          rates[match[1]] = rate;
+        }
       });
-      annualRateCache.set(year, { state: 'ready', rates });
+
+      annualRateCache.set(year, {
+        state: 'ready',
+        rates
+      });
     } catch (error) {
-      annualRateCache.set(year, { state: 'error', message: error.message });
+      annualRateCache.set(year, {
+        state: 'error',
+        message: error.message
+      });
     }
+
     if (host?.isConnected) render();
   }
 
   function updateFxAvailability() {
     const year = host.querySelector('[data-year]').value;
-    const option = host.querySelector('[data-fx] option[value="annual"]');
+    const option = host.querySelector(
+      '[data-fx] option[value="annual"]'
+    );
     const note = host.querySelector('[data-fx-note]');
     let reason = '';
+
     if (year === 'All') {
-      reason = 'Select one completed year to use BOC annual averages.';
+      reason =
+        'Select one completed year to use BOC annual averages.';
     } else if (Number(year) >= new Date().getFullYear()) {
-      reason = 'Annual averages are disabled for the current or a future year.';
+      reason =
+        'Annual averages are disabled for the current or a future year.';
     } else {
       if (!annualRateCache.has(year)) fetchAnnualRates(year);
+
       const entry = annualRateCache.get(year);
-      if (entry?.state === 'loading') reason = 'Loading published BOC annual rates…';
-      else if (entry?.state === 'error') reason = 'BOC rates unavailable: ' + entry.message + '. Transaction-date mode retained.';
-      else {
+
+      if (entry?.state === 'loading') {
+        reason = 'Loading published BOC annual rates…';
+      } else if (entry?.state === 'error') {
+        reason =
+          'BOC rates unavailable: ' + entry.message +
+          '. Transaction-date mode retained.';
+      } else {
         const required = new Set(['CAD']);
+
         baseSelectedRows().forEach(row => {
           required.add(row.currency);
-          if (Number.isFinite(row.feeAmount) && row.feeAmount !== 0) required.add(row.feeCurrency);
+
+          if (
+            Number.isFinite(row.feeAmount) &&
+            row.feeAmount !== 0
+          ) {
+            required.add(row.feeCurrency);
+          }
         });
-        const missing = [...required].filter(c => annualRate(c, year) === null);
-        if (missing.length) reason = 'Annual rate missing for: ' + missing.join(', ');
+
+        const missing = [...required].filter(
+          currency => annualRate(currency, year) === null
+        );
+
+        if (missing.length) {
+          reason =
+            'Annual rate missing for: ' +
+            missing.join(', ');
+        }
       }
     }
+
     option.disabled = Boolean(reason);
-    host.querySelector('[data-fx-control]').classList.toggle('annual-unavailable', Boolean(reason));
-    const reset = reason && fxMethod === 'annual';
+    host.querySelector('[data-fx-control]')
+      .classList.toggle(
+        'annual-unavailable',
+        Boolean(reason)
+      );
+
+    const reset =
+      reason && fxMethod === 'annual';
+
     if (reason) fxMethod = 'daily';
     host.querySelector('[data-fx]').value = fxMethod;
-    note.textContent = (reset ? 'Switched to transaction-date mode. ' : '') +
-      (reason || (fxMethod === 'annual'
-        ? 'BOC ' + year + ' annual average; CAD per unit of foreign currency. Imported values preserved.'
-        : 'Imported transaction-date CAD values/rates. BOC annual averages available for ' + year + '.'));
+
+    note.textContent =
+      (reset
+        ? 'Switched to transaction-date mode. '
+        : '') +
+      (reason ||
+        (fxMethod === 'annual'
+          ? 'BOC ' + year +
+            ' annual average; CAD per unit of foreign currency. Imported values preserved.'
+          : 'Imported transaction-date CAD values/rates. BOC annual averages available for ' +
+            year + '.'));
   }
 
-  function currencyBreakdown(rows, amountKey, currencyKey = 'currency') {
+  function currencyBreakdown(
+    rows,
+    amountKey,
+    currencyKey = 'currency'
+  ) {
     const totals = new Map();
     let missing = 0;
+
     rows.forEach(row => {
-      if (!Number.isFinite(row[amountKey])) { missing++; return; }
-      const currency = row[currencyKey] || 'Unknown';
-      totals.set(currency, (totals.get(currency) || 0) + row[amountKey]);
+      if (!Number.isFinite(row[amountKey])) {
+        missing++;
+        return;
+      }
+
+      const currency =
+        row[currencyKey] || 'Unknown';
+
+      totals.set(
+        currency,
+        (totals.get(currency) || 0) +
+          row[amountKey]
+      );
     });
+
     return '<div class="dividend-native-breakdown">' +
-      [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([currency, amount]) =>
-        '<div><span>' + escape(currency) + '</span><span>' + format(amount) + '</span></div>'
-      ).join('') + (missing ? '<small>' + missing + ' native amounts unavailable</small>' : '') + '</div>';
+      [...totals.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([currency, amount]) =>
+          '<div><span>' + escape(currency) +
+          '</span><span>' + format(amount) +
+          '</span></div>'
+        ).join('') +
+      (missing
+        ? '<small>' + missing +
+          ' native amounts unavailable</small>'
+        : '') +
+      '</div>';
   }
 
   function updateAccounts() {
@@ -1023,7 +1139,7 @@ function renderSummary(rows) {
     {
       label: 'Bank Fee CAD',
       value: format(feeTotal.amount),
-      note: `${feeTotal.available} explicit fee values; ${feeTotal.missing} unavailable` 
+      note: `${feeTotal.available} explicit fee values; ${feeTotal.missing} unavailable`
     },
     {
       label: 'Net Cash CAD',
@@ -1283,6 +1399,186 @@ function renderSummary(rows) {
     }
   };
 }
+
+
+  function exportCsv() {
+    const rows = filterRowsByDividendCard(
+        selectedRows()
+      );
+
+    const cell = value => {
+      let output = String(value ?? '');
+
+      if (
+        typeof value === 'string' &&
+        /^[=+\-@\t\r]/.test(output)
+      ) {
+        output = "'" + output;
+      }
+
+      return '"' +
+        output.replace(/"/g, '""') +
+        '"';
+    };
+
+    const csv = [
+      columns.map(([, title]) => title),
+      ...rows.map(row =>
+        columns.map(([key]) => row[key])
+      )
+    ]
+      .map(row => row.map(cell).join(','))
+      .join('\r\n');
+
+    const url = URL.createObjectURL(
+      new Blob(['\uFEFF', csv], {
+        type: 'text/csv;charset=utf-8;'
+      })
+    );
+
+    const link = document.createElement('a');
+    link.href = url;
+    link.download =
+      'Dividend_Withholding_Review.csv';
+    link.click();
+
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      1000
+    );
+  }
+
+
+
+   
+  function createUi() {
+    host = document.createElement('section');
+    host.className = 'card';
+    host.id = 'foreign-dividend-worksheet';
+
+    host.innerHTML = `
+      <h2>
+        Foreign Dividends &amp; Withholding —
+        Review Worksheet
+      </h2>
+
+      <div class="filters">
+        <label>Year
+          <select data-year></select>
+        </label>
+
+        <label>Source
+          <select data-source>
+            <option value="All">All</option>
+            <option value="IBKR">IBKR</option>
+            <option value="HSBC">HSBC</option>
+          </select>
+        </label>
+
+        <label>Account
+          <select data-account>
+            <option value="All">All accounts</option>
+          </select>
+        </label>
+
+        <label data-fx-control>CAD Conversion
+          <select data-fx>
+            <option value="daily">Transaction-date rates</option>
+            <option value="annual" disabled>BOC annual average</option>
+          </select>
+        </label>
+        <button type="button" data-export>
+          Export Review CSV
+        </button>
+      </div>
+
+      <p class="status dividend-fx-note" data-fx-note aria-live="polite"></p>
+      <div class="summary-cards" data-summary></div>
+
+      <p data-count class="status"></p>
+
+      <div class="table-wrap">
+        <table id="foreign-dividend-table">
+          <thead>
+            <tr>
+              ${columns.map(([, title]) =>
+                `<th>${escape(title)}</th>`
+              ).join('')}
+            </tr>
+          </thead>
+
+          <tbody></tbody>
+        </table>
+      </div>
+    `;
+
+    document.querySelector('main').appendChild(host);
+
+    host.querySelector('[data-source]')
+      .addEventListener('change', () => {
+        updateAccounts();
+        render();
+      });
+
+    host.querySelector('[data-year]')
+      .addEventListener('change', render);
+
+    host.querySelector('[data-account]')
+      .addEventListener('change', render);
+
+    host.querySelector('[data-fx]')
+      .addEventListener('change', event => {
+        fxMethod = event.target.value;
+        render();
+      });
+    host.querySelector('[data-export]')
+      .addEventListener('click', exportCsv);
+  }
+
+
+   
+  
+  window.loadForeignDividendWorksheet =
+    function (records) {
+      worksheetRows = buildRows(
+        Array.isArray(records) ? records : []
+      );
+
+     
+
+      if (!host) createUi();
+
+      const yearSelect = host
+        .querySelector('[data-year]');
+
+      const previousYear = yearSelect.value;
+
+      const years = [...new Set(
+        worksheetRows
+          .map(row => row.date.slice(0, 4))
+          .filter(Boolean)
+      )].sort().reverse();
+
+      yearSelect.replaceChildren(
+        new Option('All years', 'All')
+      );
+
+      years.forEach(year =>
+        yearSelect.add(new Option(year, year))
+      );
+
+     yearSelect.value = years.includes(previousYear)
+  ? previousYear
+  : 'All';
+
+      updateAccounts();
+      render();
+    };
+})();
+
+
+
+
 
 
   function exportCsv() {
