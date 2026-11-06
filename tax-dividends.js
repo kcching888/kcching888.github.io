@@ -1396,7 +1396,7 @@
       const count = filterRowsByDividendCard(
         rows,
         card.filter
-      );
+      ).length;
 
       const selected =
         activeDividendCard === card.filter;
