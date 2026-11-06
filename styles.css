@@ -611,3 +611,44 @@ td.empty {
   }
 }
 
+/* Dividend FX selector and native-currency breakdowns */
+#foreign-dividend-worksheet .dividend-native-breakdown {
+  margin: 9px 0 6px;
+  padding-top: 7px;
+  border-top: 1px solid #cbd5e1;
+  font-size: 11px;
+  font-weight: 400;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+#foreign-dividend-worksheet
+.dividend-native-breakdown > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 2px 0;
+}
+
+#foreign-dividend-worksheet
+.dividend-native-breakdown small {
+  display: block;
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+#foreign-dividend-worksheet
+[data-fx-control].annual-unavailable {
+  opacity: 0.6;
+}
+
+#foreign-dividend-worksheet
+[data-fx] option:disabled {
+  color: #94a3b8;
+}
+
+#foreign-dividend-worksheet .dividend-fx-note {
+  margin: 6px 0 12px;
+  color: #cbd5e1;
+}
