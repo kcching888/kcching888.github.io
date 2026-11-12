@@ -652,3 +652,466 @@ td.empty {
   margin: 6px 0 12px;
   color: #cbd5e1;
 }
+
+/* Read-only dividend reconciliation panel */
+#foreign-dividend-worksheet .dividend-reconciliation { margin:18px 0; padding:16px; border:1px solid var(--border); border-radius:8px; }
+#foreign-dividend-worksheet .dividend-reconciliation h3 { margin:0 0 8px; color:#bbf7d0; }
+#foreign-dividend-worksheet .dividend-reconciliation p { color:#cbd5e1; font-size:12px; }
+#foreign-dividend-worksheet .reconciliation-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(215px,1fr)); gap:12px; margin-top:12px; }
+#foreign-dividend-worksheet .reconciliation-card { display:flex; flex-direction:column; align-items:stretch; text-align:left; background:#f8fafc; color:#334155; padding:14px; border:2px solid transparent; border-radius:8px; font-family:inherit; min-width:0; }
+#foreign-dividend-worksheet .reconciliation-card.is-active { border-color:#15803d; background:#dcfce7; }
+#foreign-dividend-worksheet .reconciliation-card:focus-visible { outline:3px solid #60a5fa; outline-offset:2px; }
+#foreign-dividend-worksheet .reconciliation-title { font-size:12px; min-height:34px; }
+#foreign-dividend-worksheet .reconciliation-card strong { font-size:22px; color:#14532d; margin:6px 0; }
+#foreign-dividend-worksheet .reconciliation-totals { display:block; font-size:11px; font-weight:400; font-variant-numeric:tabular-nums; }
+#foreign-dividend-worksheet .reconciliation-totals > div { display:flex; justify-content:space-between; gap:8px; margin:4px 0; }
+#foreign-dividend-worksheet .reconciliation-note { display:block; font-weight:400; font-size:11px; margin-top:10px; }
+
+/* Annual dividend summary */
+#foreign-dividend-worksheet .annual-income-panel { margin:16px 0; padding:16px; border:1px solid var(--border); border-radius:8px; }
+#foreign-dividend-worksheet .annual-income-panel h3 { margin:0 0 10px; color:#bbf7d0; }
+#foreign-dividend-worksheet .annual-income-panel h4 { margin:18px 0 10px; }
+#foreign-dividend-worksheet .annual-income-panel p { font-size:12px; color:#cbd5e1; }
+#foreign-dividend-worksheet .annual-income-panel details { margin-top:14px; }
+#foreign-dividend-worksheet .annual-income-panel summary { cursor:pointer; padding:8px 0; }
+#foreign-dividend-worksheet .annual-income-table table { min-width:1400px; }
+#foreign-dividend-worksheet .annual-income-table th { background:#14532d; color:white; }
+#foreign-dividend-worksheet .annual-income-table td { color:#f1f5f9; border-bottom:1px solid var(--border); }
+#foreign-dividend-worksheet .annual-income-table tr:hover { background:#244c3a; }
+#foreign-dividend-worksheet .annual-income-table small { display:block; color:#fcd34d; }
+#foreign-dividend-worksheet [data-export-annual] { background:#2f855a; color:white; }
+/* Dividend worksheet: compact totals and reconciliation tables */
+
+#foreign-dividend-worksheet [data-summary] {
+  display: block;
+}
+
+#foreign-dividend-worksheet .dividend-summary-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table,
+#foreign-dividend-worksheet .dividend-reconciliation-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  color: #172b3a;
+  font-size: 0.85rem;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table {
+  min-width: 650px;
+}
+
+#foreign-dividend-worksheet .dividend-reconciliation-table {
+  min-width: 760px;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table th,
+#foreign-dividend-worksheet .dividend-overview-table td,
+#foreign-dividend-worksheet .dividend-reconciliation-table th,
+#foreign-dividend-worksheet .dividend-reconciliation-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #dbe3ea;
+  text-align: left;
+  vertical-align: top;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table thead th,
+#foreign-dividend-worksheet .dividend-reconciliation-table thead th {
+  background: #14532d;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table tbody th,
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody th {
+  font-weight: 500;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table tbody tr,
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr {
+  background: #f8fafc;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table tbody tr:nth-child(even),
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr:nth-child(even) {
+  background: #edf2f7;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table tbody tr:last-child > *,
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr:last-child > * {
+  border-bottom: 0;
+}
+
+#foreign-dividend-worksheet .dividend-overview-table .num,
+#foreign-dividend-worksheet .dividend-reconciliation-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+#foreign-dividend-worksheet .dividend-native-cell {
+  min-width: 220px;
+}
+
+#foreign-dividend-worksheet .dividend-native-cell .dividend-native-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  color: inherit;
+  font-size: 0.82rem;
+}
+
+#foreign-dividend-worksheet .dividend-native-cell .dividend-native-breakdown > div {
+  display: inline-flex;
+  gap: 8px;
+  min-width: 125px;
+}
+
+#foreign-dividend-worksheet .dividend-native-cell .dividend-native-breakdown > small {
+  flex-basis: 100%;
+  color: #64748b;
+}
+
+#foreign-dividend-worksheet .dividend-compact-note {
+  margin: 9px 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+#foreign-dividend-worksheet .dividend-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0 18px;
+}
+
+#foreign-dividend-worksheet .dividend-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #243746;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+#foreign-dividend-worksheet .dividend-filter-chip.is-active {
+  border-color: #15803d;
+  background: #dcfce7;
+  color: #14532d;
+}
+
+#foreign-dividend-worksheet .dividend-filter-count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+#foreign-dividend-worksheet .dividend-recon-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+#foreign-dividend-worksheet .dividend-recon-heading h3 {
+  margin: 0;
+}
+
+#foreign-dividend-worksheet .dividend-reset-button {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  background: #f8fafc;
+  color: #243746;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+#foreign-dividend-worksheet .dividend-recon-controls {
+  margin: 10px 0;
+  font-size: 0.8rem;
+}
+
+#foreign-dividend-worksheet .dividend-recon-controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+
+#foreign-dividend-worksheet .dividend-recon-controls input {
+  width: auto;
+  margin: 0;
+}
+
+#foreign-dividend-worksheet .dividend-category-button,
+#foreign-dividend-worksheet .dividend-record-count {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #166534;
+  font: inherit;
+  font-weight: 600;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+#foreign-dividend-worksheet .dividend-category-button:hover,
+#foreign-dividend-worksheet .dividend-record-count:hover {
+  text-decoration: underline;
+}
+
+#foreign-dividend-worksheet .dividend-category-description {
+  display: block;
+  max-width: 350px;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+#foreign-dividend-worksheet .dividend-missing-count {
+  display: block;
+  margin-top: 3px;
+  color: #92400e;
+  font-size: 0.72rem;
+}
+
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr.is-active {
+  background: #dcfce7;
+}
+
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr:hover {
+  background: #e2e8f0;
+}
+
+#foreign-dividend-worksheet .dividend-reconciliation-table tbody tr.is-active:hover {
+  background: #bbf7d0;
+}
+
+#foreign-dividend-worksheet .dividend-calculation-details {
+  margin-top: 12px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+#foreign-dividend-worksheet .dividend-calculation-details summary {
+  cursor: pointer;
+}
+
+#foreign-dividend-worksheet .dividend-calculation-details p {
+  margin: 8px 0;
+}
+
+#foreign-dividend-worksheet .dividend-filter-chip:focus-visible,
+#foreign-dividend-worksheet .dividend-category-button:focus-visible,
+#foreign-dividend-worksheet .dividend-record-count:focus-visible,
+#foreign-dividend-worksheet .dividend-reset-button:focus-visible {
+  outline: 2px solid #16a34a;
+  outline-offset: 3px;
+}
+
+
+/* Scoped annual matrix styles */
+#foreign-dividend-worksheet [hidden] { display:none !important; }
+#foreign-dividend-worksheet .ym-tabs, #foreign-dividend-worksheet .ym-controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:12px 0; }
+#foreign-dividend-worksheet .ym-tabs button, #foreign-dividend-worksheet .ym-controls button { padding:8px 12px; cursor:pointer; }
+#foreign-dividend-worksheet .ym-tabs button[aria-pressed="true"] { background:#14532d; color:white; }
+#foreign-dividend-worksheet .ym-controls label { display:flex; gap:6px; align-items:center; font-size:.82rem; }
+#foreign-dividend-worksheet .ym-controls input[type="checkbox"] { width:auto; }
+#foreign-dividend-worksheet .ym-controls input[type="number"] { width:90px; }
+#foreign-dividend-worksheet .ym-note, #foreign-dividend-worksheet .ym-assumptions { font-size:.8rem; line-height:1.5; margin:12px 0; }
+#foreign-dividend-worksheet .ym-assumptions summary { cursor:pointer; }
+#foreign-dividend-worksheet .ym-totals { display:flex; flex-wrap:wrap; gap:8px 20px; font-size:.8rem; margin:12px 0; }
+#foreign-dividend-worksheet .ym-scroll { overflow:auto; max-height:65vh; border:1px solid #cbd5e1; margin:12px 0; }
+#foreign-dividend-worksheet .ym-table { width:100%; border-collapse:separate; border-spacing:0; background:#f8fafc; color:#172b3a; font-size:.82rem; }
+#foreign-dividend-worksheet .ym-table th, #foreign-dividend-worksheet .ym-table td { padding:10px 12px; border-bottom:1px solid #dbe3ea; white-space:nowrap; text-align:left; }
+#foreign-dividend-worksheet .ym-table thead th { position:sticky; top:0; z-index:2; background:#14532d; color:white; }
+#foreign-dividend-worksheet .ym-table tbody th { position:sticky; left:0; z-index:1; background:#edf2f7; min-width:230px; font-weight:500; }
+#foreign-dividend-worksheet .ym-table thead th:first-child { left:0; z-index:3; }
+#foreign-dividend-worksheet .ym-table .ym-num { text-align:right; font-variant-numeric:tabular-nums; }
+#foreign-dividend-worksheet .ym-table td.ym-forecast { background:#fff3cd; }
+#foreign-dividend-worksheet .ym-table thead th.ym-forecast { background:#785b16; }
+#foreign-dividend-worksheet .ym-table button { border:0; padding:0; margin:0; background:transparent; color:#166534; font:inherit; cursor:pointer; }
+#foreign-dividend-worksheet .ym-table button:hover { text-decoration:underline; }
+#foreign-dividend-worksheet .ym-table small { display:block; color:#92400e; font-size:.7rem; }
+#foreign-dividend-worksheet .ym-table button:focus-visible { outline:2px solid #15803d; outline-offset:3px; }
+/* Yearly review: readable row highlighting */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > td,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > td {
+  background: #29483e !important;
+  color: #f1f5f9 !important;
+}
+
+/* Keep clickable amounts and labels readable on highlight */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > * button,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > * button {
+  background: transparent !important;
+  color: #dcfce7 !important;
+}
+
+/* Missing-value notes on highlighted rows */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > * small,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > * small {
+  color: #fde68a !important;
+}
+
+/* Improve year and supporting-record header contrast */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table thead th {
+  background: #14532d !important;
+  color: #f8fafc !important;
+}
+
+/* Preserve a distinct forecast header */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table thead th.ym-forecast {
+  background: #71551b !important;
+  color: #fff7df !important;
+}
+
+/* Yearly review tables: consistent dark theme */
+
+/* Default table surface */
+#foreign-dividend-worksheet [data-year-matrix] .ym-table {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+/* Explicitly style every body cell, including sticky labels */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > td {
+  background: #1e293b !important;
+  color: #f1f5f9 !important;
+  border-bottom: 1px solid #475569 !important;
+}
+
+/* Subtle alternating rows */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:nth-child(even) > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:nth-child(even) > td {
+  background: #263449 !important;
+}
+
+/* Readable clickable amounts and expansion labels */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > th button,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > td button {
+  background: transparent !important;
+  color: #d1fae5 !important;
+  opacity: 1 !important;
+}
+
+/* Missing-value and empty-record notes */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > th small,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > td small {
+  color: #fde68a !important;
+}
+
+/* Forecast cells remain distinct, but also use a dark surface */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr > td.ym-forecast {
+  background: #44391f !important;
+  color: #fff7df !important;
+}
+
+/* Hover and keyboard-focus highlight */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > td,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > th,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > td {
+  background: #29483e !important;
+  color: #f8fafc !important;
+}
+
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:hover > * button,
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table tbody tr:focus-within > * button {
+  color: #ecfdf5 !important;
+}
+
+/* Table headers */
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table thead th {
+  background: #14532d !important;
+  color: #f8fafc !important;
+}
+
+#foreign-dividend-worksheet [data-year-matrix]
+.ym-table thead th.ym-forecast {
+  background: #71551b !important;
+  color: #fff7df !important;
+}
+
+/* Capital gains: isolated yearly matrix and forecast styling */
+.capital-year-card > .cgy-nav {display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+.capital-year-card > .cgy-nav button {padding:8px 12px;cursor:pointer;}
+.capital-year-card > .cgy-nav button[aria-pressed="true"] {background:#14532d;color:#f8fafc;}
+.capital-year-card [hidden] {display:none !important;}
+#capital-year-review .cgy-controls {display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0;}
+#capital-year-review .cgy-controls label {display:flex;align-items:center;gap:6px;font-size:.82rem;}
+#capital-year-review .cgy-controls input {width:110px;}
+#capital-year-review .cgy-controls input[type="date"] {width:150px;}
+#capital-year-review .cgy-controls select {max-width:420px;}
+#capital-year-review .cgy-controls button {padding:7px 10px;cursor:pointer;}
+#capital-year-review .cgy-note {font-size:.8rem;line-height:1.5;}
+#capital-year-review .cgy-warning {color:#fde68a;font-size:.85rem;}
+#capital-year-review .cgy-scroll {overflow:auto;max-height:65vh;border:1px solid #475569;margin:12px 0;}
+#capital-year-review .cgy-table {width:100%;border-collapse:separate;border-spacing:0;background:#1e293b!important;color:#f1f5f9!important;font-size:.82rem;}
+#capital-year-review .cgy-table th,#capital-year-review .cgy-table td {padding:10px 12px;white-space:nowrap;border-bottom:1px solid #475569;text-align:left;}
+#capital-year-review .cgy-table tbody tr > th,#capital-year-review .cgy-table tbody tr > td {background:#1e293b!important;color:#f1f5f9!important;}
+#capital-year-review .cgy-table tbody tr:nth-child(even) > th,#capital-year-review .cgy-table tbody tr:nth-child(even) > td {background:#263449!important;}
+#capital-year-review .cgy-table thead th {position:sticky;top:0;z-index:2;background:#14532d!important;color:#f8fafc!important;}
+#capital-year-review .cgy-table tbody th {position:sticky;left:0;z-index:1;min-width:220px;font-weight:500;}
+#capital-year-review .cgy-table thead th:first-child {left:0;z-index:3;}
+#capital-year-review .cgy-table .cgy-num {text-align:right;font-variant-numeric:tabular-nums;}
+#capital-year-review .cgy-table tbody td.cgy-plan {background:#44391f!important;}
+#capital-year-review .cgy-table thead th.cgy-plan {background:#71551b!important;}
+#capital-year-review .cgy-table tbody tr > th button,#capital-year-review .cgy-table tbody tr > td button {background:transparent!important;color:#d1fae5!important;border:0;padding:0;margin:0;font:inherit;cursor:pointer;}
+#capital-year-review .cgy-table tbody small {display:block;color:#fde68a!important;font-size:.7rem;}
+#capital-year-review .cgy-table tbody tr:hover > th,#capital-year-review .cgy-table tbody tr:hover > td,#capital-year-review .cgy-table tbody tr:focus-within > th,#capital-year-review .cgy-table tbody tr:focus-within > td {background:#29483e!important;color:#f8fafc!important;}
+#capital-year-review .cgy-table button:focus-visible {outline:2px solid #86efac;outline-offset:3px;}
+#capital-year-review .cgy-planning {margin:16px 0;font-size:.85rem;}
+#capital-year-review .cgy-planning summary {cursor:pointer;}

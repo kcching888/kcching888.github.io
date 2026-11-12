@@ -216,6 +216,9 @@ async function loadTaxData() {
 
   const data = json.data || json;
 
+  taxData.stockTaxRules = Array.isArray(data.stockTaxRules)
+    ? data.stockTaxRules : [];
+
   // Keep the response arrays separate for now.
 // getAll may already include HSBC records in dividends.
 taxData.dividends = Array.isArray(data.dividends)
@@ -227,7 +230,10 @@ if (
   'function'
 ) {
   window.loadForeignDividendWorksheet(
-    taxData.dividends
+    taxData.dividends,
+    Array.isArray(data.stockTaxRules)
+      ? data.stockTaxRules
+      : []
   );
 } else {
   console.warn(
@@ -324,6 +330,7 @@ console.log('Sample sells:', sells.slice(0, 10));
   );
 
   CapitalGains();
+  capitalYear.refresh();
 }
 
 /* Normalize field names so the tax engine is resilient
@@ -374,11 +381,13 @@ function populateYearFilter() {
 
 /* ---------------- ACB engine ---------------- */
 
-function buildAcbLedger(sourceFilter) {
+function buildAcbLedger(sourceFilter, accountFilter) {
   const ledger = new Map();
 
   const selectedSource = String(sourceFilter || 'All').toUpperCase();
-  const selectedAccount = els.account.value || 'All';
+  const selectedAccount = accountFilter === undefined
+    ? (els.account.value || 'All')
+    : (accountFilter || 'All');
 
 const debugSymbol = '03GB2311R';
 
@@ -1324,6 +1333,188 @@ function logDividendSchema() {
     JSON.stringify(diagnostic, null, 2)
   );
 }
+
+
+/* Capital-gains yearly review: presentation and isolated planning scenarios. */
+const capitalYear = {
+  root: null, detail: null, tab: 'detail', ledger: new Map(), sales: [], error: '',
+  source: 'All', account: 'All', category: 'All', measure: 'gainCad',
+  expanded: new Set(), scenarios: [], sequence: 0, cutoff: '',
+  measures: {proceedsCad:'Net sale proceeds',acbCad:'ACB sold',gainCad:'Realized gain / loss',count:'Dispositions'},
+  esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  },
+  fmt(value) { return Number.isFinite(value) ? value.toLocaleString('en-CA',{minimumFractionDigits:2,maximumFractionDigits:2}) : '—'; },
+  normalize(symbol) {
+    const s=String(symbol || '').trim().toUpperCase(); const m=s.match(/^(\d{1,5})\.HK$/);
+    return m ? m[1].padStart(5,'0')+'.HK' : s;
+  },
+  key(row) { return JSON.stringify([row.source,row.account,row.symbol]); },
+  categoryOf(row) {
+    const related=taxData.allTrades.filter(t => t._source===row.source && getTradeAccount(t)===row.account && t._symbol===row.symbol);
+    if(row.source==='IBKR') {
+      for(const record of [row.raw || {},...related]) {
+        for(const field of ['isin','ISIN','securityId','description']) {
+          const m=String(record[field] || '').toUpperCase().match(/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/);
+          if(m) return m[1].startsWith('CA') ? 'Canadian security — inferred' : m[1].startsWith('US') ? 'US security — inferred' : 'Other security — review';
+        }
+      }
+      return 'UNKNOWN';
+    }
+    const rule=(taxData.stockTaxRules || []).find(r => this.normalize(r.symbol)===this.normalize(row.symbol));
+    return String(rule?.shareType || row.raw?.shareType || 'UNKNOWN').toUpperCase();
+  },
+  ensureUI() {
+    if(this.root) return;
+    const card=document.getElementById('cra-gains-table')?.closest('.card');
+    if(!card) return;
+    const detail=document.createElement('div');
+    while(card.firstChild) detail.appendChild(card.firstChild);
+    const nav=document.createElement('div');nav.className='cgy-nav';
+    nav.innerHTML='<button type="button" data-cgy-tab="detail">Detailed Capital Gains</button><button type="button" data-cgy-tab="year">Yearly Review & Forecast</button>';
+    const root=document.createElement('section');root.id='capital-year-review';
+    card.append(nav,detail,root);this.root=root;this.detail=detail;
+    card.classList.add('capital-year-card');
+    nav.onclick=e => {const b=e.target.closest('[data-cgy-tab]');if(b){this.tab=b.dataset.cgyTab;this.render();}};
+  },
+  refresh() {
+    this.ensureUI(); if(!this.root) return;
+    this.error='';this.ledger=new Map();this.sales=[];
+    try {
+      this.ledger=buildAcbLedger('All','All');
+      this.sales=[...this.ledger.values()].flatMap(p => p.sales).filter(r => r.includeInTotals!==false)
+        .map(r => ({...r,category:this.categoryOf(r)}));
+      for(const p of this.ledger.values()) p.yearCategory=this.categoryOf(p);
+      this.cutoff=taxData.allTrades.map(t => fmtDate(t._date)).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().at(-1) || '';
+      if(this.scenarios.length) this.error='Data refreshed: planned sales were cleared. Re-enter scenarios against the refreshed remaining positions.';
+      this.scenarios=[];
+    } catch(e) { this.error='Yearly ledger unavailable: '+e.message; }
+    this.render();
+  },
+  planRows() {
+    const pools=new Map([...this.ledger.values()].map(p => [this.key(p),{qty:p.qty,cad:p.costCad,native:p.costNative}]));
+    return [...this.scenarios].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id).map(s => {
+      const p=this.ledger.get(s.positionKey); const pool=pools.get(s.positionKey);
+      if(!p || !pool || s.qty>pool.qty+1e-7 || pool.qty<=0) throw new Error('Planned quantity exceeds the remaining position.');
+      const fraction=Math.min(s.qty/pool.qty,1);
+      const acbCad=pool.cad*fraction, acbNative=pool.native*fraction;
+      const proceedsNative=s.qty*s.price-s.fee;
+      const proceedsCad=proceedsNative*s.fx;
+      pool.qty-=s.qty;pool.cad-=acbCad;pool.native-=acbNative;
+      return {date:s.date,source:p.source,account:p.account,symbol:p.symbol,category:p.yearCategory,currency:p.currency,
+        qtySold:s.qty,proceedsNative,proceedsCad,acbNative,acbCad,gainNative:proceedsNative-acbNative,gainCad:proceedsCad-acbCad,
+        forecast:true,scenarioId:s.id};
+    });
+  },
+  render() {
+    if(!this.root) return;
+    const root=this.root,E=v=>this.esc(v),s=this;
+    this.detail.hidden=this.tab!=='detail';root.hidden=this.tab!=='year';
+    root.parentElement.querySelectorAll('[data-cgy-tab]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.cgyTab===this.tab)));
+    let plans=[];try{plans=this.planRows();}catch(e){this.error=e.message;}
+    const all=this.sales.concat(plans);
+    const unique=a=>[...new Set(a)].sort();
+    const sources=unique(all.map(r=>r.source));
+    if(this.source!=='All'&&!sources.includes(this.source))this.source='All';
+    const sr=all.filter(r=>this.source==='All'||r.source===this.source);
+    const accounts=unique(sr.map(r=>r.account));
+    if(this.account!=='All'&&!accounts.includes(this.account))this.account='All';
+    const ar=sr.filter(r=>this.account==='All'||r.account===this.account);
+    const categories=unique(ar.map(r=>r.category));
+    if(this.category!=='All'&&!categories.includes(this.category))this.category='All';
+    const scoped=ar.filter(r=>this.category==='All'||r.category===this.category);
+    const years=unique(this.sales.map(r=>fmtDate(r.date).slice(0,4)));
+    const current=String(new Date().getFullYear());
+    const columns=years.map(y=>({year:y,basis:'actual',label:y+(y===current?' YTD':' loaded')}));
+    unique(plans.map(r=>r.date.slice(0,4))).forEach(y=>{
+      columns.push({year:y,basis:'plan',label:y+' planned sales'});
+      columns.push({year:y,basis:'combined',label:y+' actual + planned'});
+    });
+    const tree=[{path:[],label:'All selected sources — total',rows:scoped,level:0,children:false}];
+    for(const source of unique(scoped.map(r=>r.source))){
+      const a=scoped.filter(r=>r.source===source);tree.push({path:[source],label:source,rows:a,level:0,children:true});
+      for(const account of unique(a.map(r=>r.account))){
+        const b=a.filter(r=>r.account===account);tree.push({path:[source,account],label:account,rows:b,level:1,children:true});
+        for(const category of unique(b.map(r=>r.category)))tree.push({path:[source,account,category],label:category,rows:b.filter(r=>r.category===category),level:2,children:false});
+      }
+    }
+    const visible=tree.filter(n=>n.path.length<2||(this.expanded.has(JSON.stringify(n.path.slice(0,1)))&&(n.path.length<3||this.expanded.has(JSON.stringify(n.path.slice(0,2))))));
+    const select=(key,label,values)=>`<label>${label}<select data-cgy-filter="${key}"><option value="All">All</option>${values.map(v=>`<option value="${E(v)}" ${this[key]===v?'selected':''}>${E(v)}</option>`).join('')}</select></label>`;
+    const positions=[...this.ledger.values()].filter(p=>p.qty>1e-7);
+    const cells=[];
+    const renderCell=(node,c)=>{
+      const rows=node.rows.filter(r=>fmtDate(r.date).slice(0,4)===c.year&&(c.basis==='combined'||(c.basis==='plan'?r.forecast:!r.forecast)));
+      const known=rows.filter(r=>Number.isFinite(r[this.measure]));
+      const value=this.measure==='count'?rows.length:known.length?known.reduce((a,r)=>a+r[this.measure],0):null;
+      const missing=this.measure==='count'?0:rows.length-known.length;
+      cells.push({node,column:c,rows,value,missing});
+      return `<td class="cgy-num ${c.basis!=='actual'?'cgy-plan':''}"><button type="button" data-cgy-cell="${cells.length-1}">${this.measure==='count'?value:this.fmt(value)}</button>${missing?`<small>${missing} missing</small>`:''}</td>`;
+    };
+    root.innerHTML=`<h3>Capital Gains — Yearly Review & Forecast</h3>
+      <p class="cgy-note">CAD · Existing ACB ledger · Independent of the detailed report's year/source/account filters. Historical totals cover loaded sale records only, not proof of complete reporting. IBKR categories are identifier-based groupings, not tax-domicile determinations.</p>
+      ${this.error?`<p class="cgy-warning">${E(this.error)}</p>`:''}
+      <div class="cgy-controls">${select('source','Source',sources)}${select('account','Account',accounts)}${select('category','Category',categories)}
+      <label>Measure<select data-cgy-filter="measure">${Object.entries(this.measures).map(([k,v])=>`<option value="${k}" ${this.measure===k?'selected':''}>${E(v)}</option>`).join('')}</select></label>
+      <button type="button" data-cgy-action="expand">Expand all</button><button type="button" data-cgy-action="collapse">Collapse all</button><button type="button" data-cgy-action="export">Export matrix CSV</button></div>
+      <div class="cgy-scroll"><table class="cgy-table"><thead><tr><th>Source → Account → Category</th>${columns.map(c=>`<th class="${c.basis!=='actual'?'cgy-plan':''}">${E(c.label)}</th>`).join('')}</tr></thead><tbody>${visible.map(n=>`<tr><th style="padding-left:${12+n.level*20}px">${n.children?`<button type="button" data-cgy-node="${E(JSON.stringify(n.path))}" aria-expanded="${this.expanded.has(JSON.stringify(n.path))}">${this.expanded.has(JSON.stringify(n.path))?'−':'+'} ${E(n.label)}</button>`:E(n.label)}</th>${columns.map(c=>renderCell(n,c)).join('')}</tr>`).join('')}</tbody></table></div>
+      ${!columns.length?'<p>No loaded sales or planned-sale scenarios.</p>':''}
+      <details class="cgy-planning"><summary>Planned-sale forecast — manual assumptions</summary>
+      <p class="cgy-note">Remaining positions are the existing engine's end-of-loaded-ledger positions (latest loaded transaction: ${E(this.cutoff||'unavailable')}). This is not a live holdings feed. Scenarios must be dated after that snapshot, assume no intervening purchases or corporate actions, and allocate the existing remaining ACB proportionally. Multiple plans for one position consume its quantity in date order. Plans stay in memory only and are cleared on data refresh. This is not a final tax-payable calculation.</p>
+      <form data-cgy-form class="cgy-controls">
+      <label>Remaining position<select name="position" required>${positions.map(p=>`<option value="${E(this.key(p))}">${E(p.source+' / '+p.account+' / '+p.symbol+' · '+p.qty+' '+p.currency)}</option>`).join('')}</select></label>
+      <label>Sale date<input name="date" type="date" min="${E(this.minimumPlanDate())}" required></label>
+      <label>Quantity<input name="qty" type="number" min="0.00000001" step="any" required></label>
+      <label>Price / unit (position CCY)<input name="price" type="number" min="0" step="any" required></label>
+      <label>Selling fee (same CCY)<input name="fee" type="number" min="0" step="any" value="0" required></label>
+      <label>CAD per 1 native unit<input name="fx" type="number" min="0.00000001" step="any" required></label>
+      <button type="submit" ${!positions.length?'disabled':''}>Add planned sale</button></form>
+      <p class="cgy-note">CAD positions require FX = 1. Estimated proceeds = quantity × price − selling fee; estimated gain = CAD proceeds − allocated existing CAD ACB. Historical selling fees remain handled by the original engine and are not deducted twice.</p>
+      <ul>${this.scenarios.map(p=>{const row=plans.find(r=>r.scenarioId===p.id);return `<li>${E(p.date)} · ${E(row?.symbol)} · ${p.qty} units · estimated gain CAD ${this.fmt(row?.gainCad)} <button type="button" data-cgy-remove="${p.id}">Remove</button></li>`;}).join('')}</ul>
+      <button type="button" data-cgy-action="clear">Clear planned sales</button>
+      </details><div data-cgy-records></div>`;
+    root.onchange=e=>{
+      const k=e.target.dataset.cgyFilter;if(!k)return;
+      this[k]=e.target.value;if(k==='source'){this.account='All';this.category='All';}if(k==='account')this.category='All';this.render();
+    };
+    root.onsubmit=e=>{
+      if(!e.target.matches('[data-cgy-form]'))return;e.preventDefault();
+      const f=new FormData(e.target),positionKey=f.get('position'),p=this.ledger.get(positionKey);
+      const entry={id:++this.sequence,positionKey,date:String(f.get('date')),qty:Number(f.get('qty')),price:Number(f.get('price')),fee:Number(f.get('fee')),fx:Number(f.get('fx'))};
+      try{
+        if(!p)throw new Error('Select a remaining position.');
+        if(entry.date<this.minimumPlanDate()||!/^\d{4}-\d{2}-\d{2}$/.test(entry.date))throw new Error('Choose a sale date on or after '+this.minimumPlanDate()+'.');
+        if(![entry.qty,entry.price,entry.fee,entry.fx].every(Number.isFinite)||entry.qty<=0||entry.price<0||entry.fee<0||entry.fx<=0)throw new Error('Enter valid quantity, price, fee and FX assumptions.');
+        if(p.currency==='CAD'&&entry.fx!==1)throw new Error('Use FX = 1 for CAD positions.');
+        if(entry.fee>entry.qty*entry.price)throw new Error('Selling fee exceeds gross proceeds.');
+        this.scenarios.push(entry);
+        try{this.planRows();}catch(err){this.scenarios=this.scenarios.filter(r=>r.id!==entry.id);throw err;}
+        this.error='';this.render();this.root.querySelector('.cgy-planning').open=true;
+      }catch(err){alert(err.message);}
+    };
+    root.onclick=e=>{
+      const node=e.target.closest('[data-cgy-node]');if(node){const k=node.dataset.cgyNode;if(this.expanded.has(k))this.expanded.delete(k);else this.expanded.add(k);this.render();return;}
+      const remove=e.target.closest('[data-cgy-remove]');if(remove){this.scenarios=this.scenarios.filter(p=>p.id!==Number(remove.dataset.cgyRemove));this.render();this.root.querySelector('.cgy-planning').open=true;return;}
+      const action=e.target.closest('[data-cgy-action]')?.dataset.cgyAction;
+      if(action==='expand'||action==='collapse'){this.expanded.clear();if(action==='expand')tree.filter(n=>n.children).forEach(n=>this.expanded.add(JSON.stringify(n.path)));this.render();return;}
+      if(action==='clear'){this.scenarios=[];this.render();return;}
+      if(action==='export'){
+        const lines=[['Measure','Source','Account','Category','Year','Basis','Value CAD or count','Missing','Records']];
+        cells.forEach(c=>lines.push([this.measures[this.measure],...Array.from({length:3},(_,i)=>c.node.path[i]||''),c.column.year,c.column.basis,c.value??'',c.missing,c.rows.length]));
+        const quote=v=>{let t=String(v);if(typeof v==='string'&&/^[=+\-@\t\r\n]/.test(t))t="'"+t;return '"'+t.replace(/"/g,'""')+'"';};
+        const url=URL.createObjectURL(new Blob(['\uFEFF',lines.map(r=>r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8;'}));
+        const a=document.createElement('a');a.href=url;a.download='Capital_Gains_Yearly_Matrix.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return;
+      }
+      const b=e.target.closest('[data-cgy-cell]');if(!b)return;const c=cells[Number(b.dataset.cgyCell)];
+      const nativeKey={proceedsCad:'proceedsNative',acbCad:'acbNative',gainCad:'gainNative'}[this.measure];
+      root.querySelector('[data-cgy-records]').innerHTML=`<h4>${E(c.node.label)} · ${E(c.column.label)} — ${E(this.measures[this.measure])}</h4><div class="cgy-scroll"><table class="cgy-table"><thead><tr>${['Date','Source','Account','Symbol','Category','CCY','Native amount','Amount CAD','Quantity','Basis'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r=>`<tr><td>${E(fmtDate(r.date))}</td><td>${E(r.source)}</td><td>${E(r.account)}</td><td>${E(r.symbol)}</td><td>${E(r.category)}</td><td>${E(r.currency)}</td><td class="cgy-num">${this.fmt(nativeKey?r[nativeKey]:null)}</td><td class="cgy-num">${this.fmt(this.measure==='count'?null:r[this.measure])}</td><td class="cgy-num">${E(r.qtySold)}</td><td>${r.forecast?'Planned-sale estimate':'Loaded ledger sale'}</td></tr>`).join('')||'<tr><td colspan="10">—</td></tr>'}</tbody></table></div>`;
+    };
+  },
+  minimumPlanDate() {
+    const today=new Date();const local=[today.getFullYear(),String(today.getMonth()+1).padStart(2,'0'),String(today.getDate()).padStart(2,'0')].join('-');
+    if(!this.cutoff||this.cutoff<local)return local;
+    const next=new Date(this.cutoff+'T12:00:00Z');next.setUTCDate(next.getUTCDate()+1);return next.toISOString().slice(0,10);
+  }
+};
 
 /* ---------------- Events and init ---------------- */
 
