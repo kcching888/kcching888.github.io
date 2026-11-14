@@ -329,8 +329,42 @@ console.log('Sample sells:', sells.slice(0, 10));
     `${sells.length.toLocaleString()} potential sales detected.`
   );
 
-  CapitalGains();
-  capitalYear.refresh();
+  let readinessCapitalError = '';
+  try {
+    CapitalGains();
+    capitalYear.refresh();
+    readinessCapitalError = capitalYear.error || '';
+  } catch (err) {
+    readinessCapitalError = String(err.message || err);
+    throw err;
+  } finally {
+    if (typeof window.loadTaxReadiness === 'function') {
+      let dividendRows = [];
+      let dividendError = '';
+      try {
+        if (typeof window.getDividendReadinessSnapshot !== 'function') {
+          throw new Error('Dividend review snapshot unavailable.');
+        }
+        dividendRows = window.getDividendReadinessSnapshot();
+      } catch (err) {
+        dividendError = String(err.message || err);
+      }
+      try {
+        await window.loadTaxReadiness({
+          url: GAS_URL,
+          trades: taxData.allTrades,
+          dividends: taxData.dividends,
+          capitalSales: capitalYear.sales || [],
+          capitalError: readinessCapitalError,
+          dividendRows: dividendRows,
+          dividendError: dividendError,
+          state: data.taxReadiness || null
+        });
+      } catch (err) {
+        console.error('Readiness workspace initialization failed:', err);
+      }
+    }
+  }
 }
 
 /* Normalize field names so the tax engine is resilient
@@ -1337,7 +1371,7 @@ function logDividendSchema() {
 
 /* Capital-gains yearly review: presentation and isolated planning scenarios. */
 const capitalYear = {
-  root: null, detail: null, tab: 'detail', ledger: new Map(), sales: [], error: '',
+  root: null, detail: null, tab: 'year', ledger: new Map(), sales: [], error: '',
   source: 'All', account: 'All', category: 'All', measure: 'gainCad',
   expanded: new Set(), scenarios: [], sequence: 0, cutoff: '',
   measures: {proceedsCad:'Net sale proceeds',acbCad:'ACB sold',gainCad:'Realized gain / loss',count:'Dispositions'},
@@ -1425,7 +1459,7 @@ const capitalYear = {
     const scoped=ar.filter(r=>this.category==='All'||r.category===this.category);
     const years=unique(this.sales.map(r=>fmtDate(r.date).slice(0,4)));
     const current=String(new Date().getFullYear());
-    const columns=years.map(y=>({year:y,basis:'actual',label:y+(y===current?' YTD':' loaded')}));
+    const columns=years.map(y=>({year:y,basis:'actual',label:y+(y===current?' YTD':' Actual')}));
     unique(plans.map(r=>r.date.slice(0,4))).forEach(y=>{
       columns.push({year:y,basis:'plan',label:y+' planned sales'});
       columns.push({year:y,basis:'combined',label:y+' actual + planned'});
@@ -1505,8 +1539,106 @@ const capitalYear = {
         const a=document.createElement('a');a.href=url;a.download='Capital_Gains_Yearly_Matrix.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);return;
       }
       const b=e.target.closest('[data-cgy-cell]');if(!b)return;const c=cells[Number(b.dataset.cgyCell)];
-      const nativeKey={proceedsCad:'proceedsNative',acbCad:'acbNative',gainCad:'gainNative'}[this.measure];
-      root.querySelector('[data-cgy-records]').innerHTML=`<h4>${E(c.node.label)} · ${E(c.column.label)} — ${E(this.measures[this.measure])}</h4><div class="cgy-scroll"><table class="cgy-table"><thead><tr>${['Date','Source','Account','Symbol','Category','CCY','Native amount','Amount CAD','Quantity','Basis'].map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${c.rows.map(r=>`<tr><td>${E(fmtDate(r.date))}</td><td>${E(r.source)}</td><td>${E(r.account)}</td><td>${E(r.symbol)}</td><td>${E(r.category)}</td><td>${E(r.currency)}</td><td class="cgy-num">${this.fmt(nativeKey?r[nativeKey]:null)}</td><td class="cgy-num">${this.fmt(this.measure==='count'?null:r[this.measure])}</td><td class="cgy-num">${E(r.qtySold)}</td><td>${r.forecast?'Planned-sale estimate':'Loaded ledger sale'}</td></tr>`).join('')||'<tr><td colspan="10">—</td></tr>'}</tbody></table></div>`;
+      const supportingRows = [...c.rows].sort(
+        (a, b) => new Date(a.date) - new Date(b.date)
+      );
+
+      root.querySelector('[data-cgy-records]').innerHTML = `
+        <h4>
+          ${E(c.node.label)}
+          · ${E(c.column.label)}
+          — Capital-gains supporting records
+        </h4>
+
+        <p class="cgy-note">
+          Proceeds, ACB and gain/loss are shown in both
+          native currency and CAD. Proceeds are net of
+          selling fees under the existing ledger calculation;
+          selling fees are not deducted again.
+        </p>
+
+        <div class="cgy-scroll">
+          <table class="cgy-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Source</th>
+                <th>Account</th>
+                <th>Symbol</th>
+                <th>Category</th>
+                <th class="cgy-num">Quantity</th>
+                <th>CCY</th>
+
+                <th class="cgy-num">Proceeds Native</th>
+                <th class="cgy-num">ACB Native</th>
+                <th class="cgy-num">Gain/Loss Native</th>
+
+                <th class="cgy-num">Proceeds CAD</th>
+                <th class="cgy-num">ACB CAD</th>
+                <th class="cgy-num">Gain/Loss CAD</th>
+
+                <th>Basis</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              ${
+                supportingRows.map(row => `
+                  <tr>
+                    <td>${E(fmtDate(row.date))}</td>
+                    <td>${E(row.source)}</td>
+                    <td>${E(row.account)}</td>
+                    <td>${E(row.symbol)}</td>
+                    <td>${E(row.category)}</td>
+
+                    <td class="cgy-num">
+                      ${E(row.qtySold)}
+                    </td>
+
+                    <td>${E(row.currency || '—')}</td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.proceedsNative)}
+                    </td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.acbNative)}
+                    </td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.gainNative)}
+                    </td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.proceedsCad)}
+                    </td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.acbCad)}
+                    </td>
+
+                    <td class="cgy-num">
+                      ${this.fmt(row.gainCad)}
+                    </td>
+
+                    <td>
+                      ${
+                        row.forecast
+                          ? 'Planned-sale estimate'
+                          : 'Actual ledger sale'
+                      }
+                    </td>
+                  </tr>
+                `).join('') || `
+                  <tr>
+                    <td colspan="14">—</td>
+                  </tr>
+                `
+              }
+            </tbody>
+          </table>
+        </div>
+      `;
     };
   },
   minimumPlanDate() {

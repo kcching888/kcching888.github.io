@@ -1115,3 +1115,126 @@ td.empty {
 #capital-year-review .cgy-table button:focus-visible {outline:2px solid #86efac;outline-offset:3px;}
 #capital-year-review .cgy-planning {margin:16px 0;font-size:.85rem;}
 #capital-year-review .cgy-planning summary {cursor:pointer;}
+
+
+/* Tax Return Readiness — isolated dark-theme presentation */
+#tax-readiness {color:#f1f5f9;}
+#tax-readiness p,#tax-readiness label {font-size:.82rem;line-height:1.5;}
+#tax-readiness .tr-controls {display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0;}
+#tax-readiness button {padding:6px 10px;cursor:pointer;}
+#tax-readiness .tr-scroll {overflow:auto;max-height:55vh;margin:12px 0;border:1px solid #475569;}
+#tax-readiness table {width:100%;border-collapse:separate;border-spacing:0;font-size:.8rem;}
+#tax-readiness table th,#tax-readiness table td {padding:9px 12px;text-align:left;border-bottom:1px solid #475569;}
+#tax-readiness table thead th {position:sticky;top:0;background:#14532d!important;color:#f8fafc!important;}
+#tax-readiness table tbody tr > * {background:#1e293b!important;color:#f1f5f9!important;}
+#tax-readiness table tbody tr:nth-child(even) > * {background:#263449!important;}
+#tax-readiness table tbody tr:hover > *,#tax-readiness table tbody tr:focus-within > * {background:#29483e!important;}
+#tax-readiness details {margin:14px 0;}
+#tax-readiness summary {cursor:pointer;}
+#tax-readiness form {display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;padding:14px;border:1px solid #475569;}
+#tax-readiness form label {display:flex;flex-direction:column;gap:5px;}
+#tax-readiness input,#tax-readiness select,#tax-readiness textarea {padding:6px;max-width:100%;}
+#tax-readiness textarea {min-width:280px;}
+#tax-readiness pre {white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;font-size:.75rem;background:#162133;padding:12px;}
+#tax-readiness [data-tr-message] {color:#fde68a;}
+
+/* Dividend yearly matrix: align year headers with amounts */
+#foreign-dividend-worksheet [data-year-matrix]
+> .ym-scroll > .ym-table
+> thead > tr > th:not(:first-child) {
+  text-align: right !important;
+  padding-right: 12px !important;
+}
+
+/* Capital-gains yearly matrix: same alignment */
+#capital-year-review
+> .cgy-scroll > .cgy-table
+> thead > tr > th:not(:first-child) {
+  text-align: right !important;
+  padding-right: 12px !important;
+}
+
+/* Keep hierarchy headings left-aligned */
+#foreign-dividend-worksheet [data-year-matrix]
+> .ym-scroll > .ym-table
+> thead > tr > th:first-child,
+#capital-year-review
+> .cgy-scroll > .cgy-table
+> thead > tr > th:first-child {
+  text-align: left !important;
+}
+/* Right-align year headers with amounts; supporting-record labels stay unchanged. */
+#foreign-dividend-worksheet [data-year-matrix] > .ym-scroll > .ym-table > thead > tr > th:not(:first-child),
+#capital-year-review > .cgy-scroll > .cgy-table > thead > tr > th:not(:first-child) {
+  text-align: right !important;
+  padding-right: 12px !important;
+}
+#foreign-dividend-worksheet [data-year-matrix] > .ym-scroll > .ym-table > thead > tr > th:first-child,
+#capital-year-review > .cgy-scroll > .cgy-table > thead > tr > th:first-child {
+  text-align: left !important;
+}
+
+/* Dividend yearly matrix: static FX legend */
+#foreign-dividend-worksheet .ym-fx-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 24px;
+  margin: 12px 0;
+  color: #e2e8f0;
+  font-size: 12px;
+}
+
+#foreign-dividend-worksheet .ym-fx-legend-title {
+  color: #cbd5e1;
+}
+
+#foreign-dividend-worksheet .ym-fx-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+/* Shared boxes: colour plus a visible letter */
+#foreign-dividend-worksheet .ym-fx-box {
+  display: inline-flex;
+  flex: 0 0 18px;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  text-transform: none;
+  vertical-align: middle;
+}
+
+#foreign-dividend-worksheet .ym-fx-annual {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+#foreign-dividend-worksheet .ym-fx-payment {
+  background: #fbbf24;
+  color: #172033;
+}
+
+/* Keep each box and year together, aligned with the figures */
+#foreign-dividend-worksheet .ym-fx-year-heading {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+#foreign-dividend-worksheet [data-year-matrix]
+> .ym-scroll > .ym-table
+> thead > tr > th:not(:first-child) {
+  text-align: right !important;
+  padding-right: 12px !important;
+}

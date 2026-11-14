@@ -765,6 +765,8 @@
     ['shareType', 'Share Type'],
     ['expectedWithholdingPct', 'Expected Withholding %'],
     ['withholdingBasis', 'Withholding Basis'],
+    ['withholdingExpectationSource', 'Expectation Source'],
+    ['withholdingExpectationEvidence', 'Automatic Expectation Evidence'],
     ['withholdingReview', 'Withholding Review'],
     ['expectedWithholdingNative', 'Expected Tax Native (Check Only)'],
     ['withholdingVarianceNative', 'Recorded Minus Expected Tax Native'],
@@ -783,6 +785,9 @@
     ['reportingFxMethod', 'Reporting FX Method'],
     ['reportingFxYear', 'Reporting FX Year'],
     ['importedFx', 'Imported FX Rate'],
+    ['reportingFeeFxRate', 'Reporting Fee FX Rate'],
+    ['importedFeeCad', 'Imported Fee CAD'],
+    ['reportingFxReason', 'FX Fallback / Review Note'],
     ['importedGrossCad', 'Imported Gross CAD'],
     [
       'importedWithholdingCad',
@@ -809,6 +814,8 @@
     'feeAmount',
     'feeCad',
     'importedFx',
+    'reportingFeeFxRate',
+    'importedFeeCad',
     'importedGrossCad',
     'importedWithholdingCad',
     'importedNetCad',
@@ -860,11 +867,41 @@
     return map;
   }
 
+  // Automatic Canadian-source expectations v1: inference, never statement verification.
+  // Project assumption supplied by the owner; revisit if Canadian tax residency changes.
+  const canadianDividendExpectationPolicy = {
+    enabled: true, residentFrom: '2021-12-05', residentThrough: ''
+  };
+
+  function inferredCanadianZeroExpectation(row, rule) {
+    if (!canadianDividendExpectationPolicy.enabled) return null;
+    if (text(row.source).toUpperCase() !== 'IBKR') return null;
+    if (text(rule?.shareType || row.shareType).toUpperCase() !== 'CAN_SHARES') return null;
+    const day = text(row.date).slice(0,10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < canadianDividendExpectationPolicy.residentFrom ||
+        (canadianDividendExpectationPolicy.residentThrough && day > canadianDividendExpectationPolicy.residentThrough)) return null;
+    const description = text(row.description).toUpperCase();
+    if (!/\bCA[A-Z0-9]{9}[0-9]\b/.test(description)) return null;
+    if (!/CASH DIVIDEND/.test(description) || /RETURN OF CAPITAL|REINVEST|NON.RESIDENT|\bNR4\b/.test(description)) return null;
+    if (row.classification === 'Unmatched withholding') return null;
+    return {
+      rate:0, source:'INFERRED_CA_IBKR',
+      evidence:'IBKR cash-dividend description with CA ISIN + configured CAN_SHARES + project Canadian-residency date range. Currency and TFSA label are not eligibility tests. Fund-level foreign tax is not inferred.'
+    };
+  }
+
   function applyStockTaxRule(original) {
     const row = { ...original };
     const rule = stockTaxRuleMap.get(normalizeRuleSymbol(row.symbol));
     row.shareType = rule?.shareType || 'UNKNOWN';
-    row.expectedWithholdingPct = rule?.rate ?? null;
+    // An explicit configured rate always takes precedence over inference.
+    const configured = Number.isFinite(rule?.rate);
+    const inference = configured ? null : inferredCanadianZeroExpectation(row,rule);
+    const rate = configured ? rule.rate : inference?.rate ?? null;
+    row.expectedWithholdingPct = rate;
+    row.withholdingExpectationSource = configured ? 'STOCK_LIST' : inference?.source || 'UNCONFIGURED';
+    row.withholdingExpectationEvidence = inference?.evidence || '';
+    row.withholdingExpectationInferred = Boolean(inference);
     row.withholdingBasis = 'Unknown';
     row.withholdingReview = 'No configured rate; review';
     row.expectedWithholdingNative = null;
@@ -876,43 +913,49 @@
     }
     const paired = row.pairedTaxCount > 0;
     const validTax = Number.isFinite(row.withholding);
-    if (paired) {
-      row.withholdingBasis = 'Paired tax record';
+    const recorded = validTax && !original.withholdingWasDerivedZero;
+    const ambiguous = /Ambiguous withholding match/i.test(text(row.status)+' '+text(row.matchingStatus));
+    if (paired || recorded) {
+      row.withholdingBasis = paired ? 'Paired tax record' : 'Recorded tax amount';
       row.withholdingReview = validTax ? 'Recorded tax; no configured rate' : 'Paired tax amount unavailable';
-    } else if (rule?.rate === 0) {
+    } else if (ambiguous) {
+      row.withholdingReview = 'Ambiguous withholding match; review required';
+    } else if (rate === 0) {
       row.withholding = 0;
       row.withholdingCad = 0;
-      row.withholdingBasis = 'Configured zero (Stock_list)';
-      row.withholdingReview = 'Zero withholding — configured rule';
-      row.matchingStatus = 'Zero withholding — configured rule; no paired tax';
+      row.withholdingWasDerivedZero = true;
+      row.withholdingBasis = inference
+        ? 'Automatic zero expectation (Canadian-source inference)'
+        : 'Configured zero (Stock_list)';
+      row.withholdingReview = inference
+        ? 'Zero withholding — inferred Canadian-source expectation; verify evidence'
+        : 'Zero withholding — configured rule';
+      row.matchingStatus = inference
+        ? 'No paired tax — automatic Canadian-source zero expectation'
+        : 'Zero withholding — configured rule; no paired tax';
       if (row.source === 'HSBC') {
-        row.gross = Number.isFinite(row.net) && Number.isFinite(row.fee)
-          ? row.net + row.fee : null;
-        row.grossCad = Number.isFinite(row.netCad) && Number.isFinite(row.feeCad)
-          ? row.netCad + row.feeCad : null;
+        row.gross = Number.isFinite(row.net) && Number.isFinite(row.fee) ? row.net + row.fee : null;
+        row.grossCad = Number.isFinite(row.netCad) && Number.isFinite(row.feeCad) ? row.netCad + row.feeCad : null;
       } else if (row.source === 'IBKR') {
-        row.net = Number.isFinite(row.gross) && Number.isFinite(row.fee)
-          ? row.gross - row.fee : null;
-        row.netCad = Number.isFinite(row.grossCad) && Number.isFinite(row.feeCad)
-          ? row.grossCad - row.feeCad : null;
+        row.net = Number.isFinite(row.gross) && Number.isFinite(row.fee) ? row.gross - row.fee : null;
+        row.netCad = Number.isFinite(row.grossCad) && Number.isFinite(row.feeCad) ? row.grossCad - row.feeCad : null;
       }
-      row.status = text(row.status).split('; ')
-        .filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired' &&
-          v !== 'No matched withholding: confirm whether tax was expected').join('; ');
-      row.status += '; Zero tax uses Stock_list rule, not a statement-confirmed tax record';
-    } else if (rule && rule.rate !== null && rule.rate > 0) {
+      row.status = text(row.status).split('; ').filter(v =>
+        v !== 'Gross uses zero assumed withholding: no tax record paired' &&
+        v !== 'No matched withholding: confirm whether tax was expected').join('; ');
+      const note = inference
+        ? 'Automatic account-level zero expectation, not statement-confirmed tax; verify Canadian residence/source and fund tax reporting separately'
+        : 'Zero tax uses Stock_list rule, not a statement-confirmed tax record';
+      if (!row.status.includes(note)) row.status += '; '+note;
+    } else if (rate !== null && rate > 0) {
       row.withholdingReview = 'Expected withholding missing';
-      row.matchingStatus = 'Expected withholding missing (' + rule.rate + '% rule)';
-      if (row.source === 'HSBC') {
-        row.gross = null;
-        row.grossCad = null;
-      }
-      row.status = text(row.status).split('; ')
-        .filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired').join('; ');
+      row.matchingStatus = 'Expected withholding missing (' + rate + '% rule)';
+      if (row.source === 'HSBC') { row.gross = null; row.grossCad = null; }
+      row.status = text(row.status).split('; ').filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired').join('; ');
       row.status += '; Expected withholding missing; no estimated tax included';
     }
-    if (paired && validTax && rule && rule.rate !== null && Number.isFinite(row.gross) && row.gross > 0) {
-      row.expectedWithholdingNative = row.gross * rule.rate / 100;
+    if ((paired || recorded) && validTax && rate !== null && Number.isFinite(row.gross) && row.gross > 0) {
+      row.expectedWithholdingNative = row.gross * rate / 100;
       row.withholdingVarianceNative = row.withholding - row.expectedWithholdingNative;
       row.withholdingReview = Math.abs(row.withholdingVarianceNative) <= 0.02 + 1e-9
         ? 'Recorded tax matches configured rate (native tolerance 0.02)'
@@ -922,7 +965,7 @@
   }
 
   function selectedRows() {
-    return baseSelectedRows().map(reportingRow).map(applyStockTaxRule).map(annotateReconciliation);
+    return baseSelectedRows().map(reportingRow).map(annotateReconciliation);
   }
 
   function annualRate(currency, year) {
@@ -943,71 +986,71 @@
       : null;
   }
 
-  function reportingRow(original) {
-    const row = {
-      ...original,
-      importedGrossCad: original.grossCad,
-      importedWithholdingCad:
-        original.withholdingCad,
-      importedNetCad: original.netCad,
-      reportingFxMethod:
-        fxMethod === 'annual'
-          ? 'BOC annual average'
-          : 'Imported transaction-date',
-      reportingFxYear:
-        original.date.slice(0, 4)
+
+  // Dividend FX v2: copies only; never overwrite imported records.
+  function dividendFxRequirements(rows) {
+    const required = new Set();
+    rows.forEach(original => {
+      const row = applyStockTaxRule(original);
+      [['gross','currency'],['withholding','currency'],['net','currency'],['feeAmount','feeCurrency']].forEach(([amount,currency]) => {
+        if (Number.isFinite(row[amount]) && row[amount] !== 0) required.add(text(row[currency]).toUpperCase() || '(unknown currency)');
+      });
+    });
+    return [...required];
+  }
+  function dividendYearFxPlan(rows, year, requested, startFetch = true) {
+    const daily = reason => ({method:'daily', requested, year, reason, rates:null});
+    if (requested !== 'annual') return daily('');
+    if (Number(year) >= new Date().getFullYear()) return daily('Current/future year: final annual average is not used.');
+    const required = dividendFxRequirements(rows);
+    if (required.every(currency => currency === 'CAD')) return {method:'annual', requested, year, reason:'', rates:{CAD:1}};
+    if (!annualRateCache.has(year) && startFetch) fetchAnnualRates(year);
+    const entry = annualRateCache.get(year);
+    if (!entry || entry.state === 'loading') return daily('Annual rates loading; payment-date values temporarily retained.');
+    if (entry.state === 'error') return daily('Annual-rate request failed: '+entry.message);
+    const missing = required.filter(currency => !Number.isFinite(annualRate(currency,year)) || annualRate(currency,year) <= 0);
+    if (missing.length) return daily('Annual rate unavailable for '+missing.join(', ')+'.');
+    return {method:'annual', requested, year, reason:'', rates:Object.fromEntries(['CAD',...required].map(c => [c,annualRate(c,year)]))};
+  }
+  function dividendFxRow(original, method = 'daily', reason = '') {
+    const base = applyStockTaxRule(original);
+    const year = text(base.date).slice(0,4);
+    const currency = text(base.currency).toUpperCase();
+    const feeCurrency = text(base.feeCurrency || base.currency).toUpperCase();
+    const row = {...base,
+      importedGrossCad: original.grossCad, importedWithholdingCad: original.withholdingCad,
+      importedFeeCad: original.feeCad, importedNetCad: original.netCad,
+      importedFx: original.importedFx ?? original.fx,
+      reportingFxMethod: method === 'annual' ? 'BOC annual average' : 'Imported payment-date',
+      reportingFxYear: year, reportingFxReason: reason, reportingFeeFxRate: null
     };
-
-    if (fxMethod !== 'annual') return row;
-
-    const year = row.reportingFxYear;
-
-    row.fx = annualRate(row.currency, year);
-    row.grossCad = annualValue(
-      row.gross,
-      row.currency,
-      year
-    );
-
-    row.withholdingCad = annualValue(
-      row.withholding,
-      row.currency,
-      year
-    );
-
-    row.netCad = annualValue(
-      row.net,
-      row.currency,
-      year
-    );
-
-    row.feeCad = annualValue(
-      row.feeAmount,
-      row.feeCurrency,
-      year
-    );
-
-    if (
-      row.source === 'HSBC' &&
-      row.classification !==
-        'Unmatched withholding'
-    ) {
-      const tax =
-        row.pairedTaxCount === 0
-          ? 0
-          : row.withholdingCad;
-
-      if (
-        Number.isFinite(row.netCad) &&
-        Number.isFinite(tax) &&
-        Number.isFinite(row.feeCad)
-      ) {
-        row.grossCad =
-          row.netCad + tax + row.feeCad;
+    if (method !== 'annual') {
+      row.reportingFeeFxRate = feeCurrency === 'CAD' ? 1 :
+        (Number.isFinite(row.feeAmount) && row.feeAmount !== 0 && Number.isFinite(row.feeCad)
+          ? row.feeCad / row.feeAmount : feeCurrency === currency ? number(row.fx) : null);
+      return row;
+    }
+    row.fx = annualRate(currency,year);
+    row.reportingFeeFxRate = annualRate(feeCurrency,year);
+    row.grossCad = annualValue(base.gross,currency,year);
+    row.withholdingCad = annualValue(base.withholding,currency,year);
+    row.feeCad = annualValue(base.feeAmount,feeCurrency,year);
+    row.netCad = annualValue(base.net,currency,year);
+    if (base.classification !== 'Unmatched withholding') {
+      if (base.source === 'HSBC') {
+        const tax = Number.isFinite(row.withholdingCad) ? row.withholdingCad :
+          base.pairedTaxCount === 0 && base.withholdingReview !== 'Expected withholding missing' ? 0 : null;
+        row.grossCad = [row.netCad,tax,row.feeCad].every(Number.isFinite) ? row.netCad + tax + row.feeCad : null;
+      } else if (base.source === 'IBKR') {
+        row.netCad = [row.grossCad,row.withholdingCad,row.feeCad].every(Number.isFinite) ? row.grossCad - row.withholdingCad - row.feeCad : null;
       }
     }
-
     return row;
+  }
+  function reportingRow(original) {
+    const year = text(original.date).slice(0,4);
+    const plan = dividendYearFxPlan(baseSelectedRows(),year,fxMethod);
+    return dividendFxRow(original,plan.method,plan.reason);
   }
 
   async function fetchAnnualRates(year) {
@@ -1923,8 +1966,8 @@
     if (!host) return;
     if (!yearMatrixState) {
       yearMatrixState = {
-        tab: 'detail', source: 'All', account: 'All', category: 'All',
-        measure: 'grossCad', forecast: false, baseline: '', growth: 0,
+        tab: 'year', source: 'All', account: 'All', category: 'All',
+        measure: 'grossCad', fxMode: 'annual', forecast: false, baseline: '', growth: 0,
         expanded: new Set(), drill: null
       };
       const detail = document.createElement('div');
@@ -2043,8 +2086,16 @@
     const accountRows = sourceRows.filter(r => s.account === 'All' || account(r) === s.account);
     const categories = unique(accountRows.map(category));
     if (s.category !== 'All' && !categories.includes(s.category)) s.category = 'All';
-    const scoped = accountRows.filter(r => s.category === 'All' || category(r) === s.category);
+    const scopedOriginal = accountRows.filter(r => s.category === 'All' || category(r) === s.category);
     const years = unique(validRows.map(r => r.date.slice(0, 4)));
+    const requestedFx = s.fxMode || 'annual';
+    const yearFx = new Map(years.map(year => [year, dividendYearFxPlan(
+      scopedOriginal.filter(r => r.date.slice(0,4) === year), year, requestedFx
+    )]));
+    const scoped = scopedOriginal.map(row => {
+      const plan = yearFx.get(row.date.slice(0,4));
+      return annotateReconciliation(dividendFxRow(row,plan.method,plan.reason));
+    });
     const completed = years.filter(y => Number(y) < current);
     if (!completed.includes(s.baseline)) s.baseline = completed.at(-1) || '';
     if (!s.baseline) s.forecast = false;
@@ -2068,7 +2119,8 @@
     }
     const cutoff = scoped.filter(r => Number(r.date.slice(0,4)) === current && r.date <= [current, String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-')).map(r => r.date).sort().at(-1) || '';
     const columns = years.map(year => ({
-      id: year, label: year + (Number(year) === current ? ' YTD' : ' loaded'),
+      id: year,
+      label: year + (Number(year) === current ? ' YTD' : ' Actual'),
       forecast: false, year
     }));
     if (s.forecast && s.measure !== 'issues') {
@@ -2123,11 +2175,57 @@
       const a = stat(scoped,key);
       return `<span>${escape(measureLabels[key])}: ${escape(format(a.value))}${a.missing ? ` (${a.missing} missing)` : ''}</span>`;
     }).join('');
+
+        function renderFxYearHeading(column) {
+      // Forecast headings retain their existing scenario labels.
+      if (column.forecast) {
+        return escape(column.label);
+      }
+
+      const plan = yearFx.get(column.year);
+
+      if (!plan) {
+        return escape(column.label);
+      }
+
+      // Show the APPLIED method, not merely the requested method.
+      const annual = plan.method === 'annual';
+
+      const method = annual
+        ? 'BOC annual average'
+        : 'Imported payment-date rates';
+
+      const description = method +
+        (plan.reason ? ' — ' + plan.reason : '');
+
+      return `
+        <span class="ym-fx-year-heading">
+          <span
+            class="ym-fx-box ${
+              annual ? 'ym-fx-annual' : 'ym-fx-payment'
+            }"
+            title="${escape(description)}"
+            role="img"
+            aria-label="${escape(description)}"
+          >${annual ? 'A' : 'P'}</span>
+
+          <span>${escape(column.label)}</span>
+        </span>
+      `;
+    }
+
     panel.innerHTML = `
       <h3>Yearly Review & Forecast</h3>
       <div class="ym-controls">
         ${select('source','Source',sources)}${select('account','Account',accounts)}${select('category','Category / ShareType',categories)}
         <label>Measure<select data-ym-field="measure">${Object.entries(measureLabels).map(([k,v]) => `<option value="${k}" ${s.measure === k ? 'selected' : ''}>${escape(v)}</option>`).join('')}</select></label>
+        <label>Dividend CAD conversion
+          <select data-ym-field="fxMode">
+            <option value="daily" ${requestedFx === 'daily' ? 'selected' : ''}>Payment-date rates (imported)</option>
+            <option value="annual" ${requestedFx === 'annual' ? 'selected' : ''}>BOC annual average — completed years</option>
+          </select>
+        </label>
+        <button type="button" data-ym-action="retryFx">Reload annual rates</button>
         <label><input type="checkbox" data-ym-field="forecast" ${s.forecast ? 'checked' : ''} ${!s.baseline ? 'disabled' : ''}> Include forecasts</label>
         <button type="button" data-ym-action="expand">Expand all</button><button type="button" data-ym-action="collapse">Collapse all</button><button type="button" data-ym-action="export">Export matrix CSV</button>
       </div>
@@ -2138,9 +2236,51 @@
         <p>Baseline-repeat cash-flow scenario, not a holdings-based or tax-liability calculation. The percentage scales baseline gross, tax, fees and net equally; it does not recalculate current Stock_list tax rates. Historical CAD conversion is carried forward as a scenario assumption, not a future FX prediction. Missing baseline values remain missing.</p>
         <p>Current-year scenario = recorded amounts through the scope's latest loaded date + baseline payments after the same month/day. Cutoff: ${escape(cutoff || 'unavailable — current-year scenario disabled')}. Loaded records may be incomplete, and forecasts cannot establish completeness. Confirm baseline coverage before relying on estimates.</p>
       </details>
-      <p class="ym-note">CAD · Imported transaction-date values, independent of the detailed worksheet FX/year filters. Category means ShareType, not a verified tax classification. Review issues count records outside the numerically balanced reconciliation category.</p>
+      <p class="ym-note">CAD · This tab has its own FX selector. ${requestedFx === 'annual' ? 'Completed years use annual averages only when all required rates for that year are available. Current/future years and unavailable-rate years retain imported payment-date values.' : 'Using imported payment-date CAD amounts; imported rates are not revalidated against BOC daily rates.'} Category is a grouping, not a verified tax classification. Existing withholding-review rules apply in both modes.</p>
+            <div
+        class="ym-fx-legend"
+        role="group"
+        aria-label="Dividend exchange-rate legend"
+      >
+        <span class="ym-fx-legend-title">FX basis:</span>
+
+        <span class="ym-fx-legend-item">
+          <span
+            class="ym-fx-box ym-fx-annual"
+            aria-hidden="true"
+          >A</span>
+          <span>BOC annual average</span>
+        </span>
+
+        <span class="ym-fx-legend-item">
+          <span
+            class="ym-fx-box ym-fx-payment"
+            aria-hidden="true"
+          >P</span>
+          <span>Imported payment-date rates</span>
+        </span>
+      </div>
+
+      ${
+        requestedFx === 'annual' &&
+        [...yearFx.values()].some(
+          plan =>
+            plan.method !== 'annual' &&
+            Number(plan.year) < current &&
+            plan.reason
+        )
+          ? `
+            <p class="ym-note" role="status">
+              Some completed years are temporarily using
+              payment-date values because annual rates are
+              loading or unavailable. Hover over their
+              P boxes for details.
+            </p>
+          `
+          : ''
+      }
       <div class="ym-totals">Loaded-record totals across all displayed years: ${totals}</div>
-      <div class="ym-scroll"><table class="ym-table"><thead><tr><th>Source → Account → Category</th>${columns.map(c => `<th class="${c.forecast ? 'ym-forecast' : ''}">${escape(c.label)}</th>`).join('')}</tr></thead><tbody>
+      <div class="ym-scroll"><table class="ym-table"><thead><tr><th>Source → Account → Category</th>${columns.map(c => `<th class="${c.forecast ? 'ym-forecast' : ''}">${renderFxYearHeading(c)}</th>`).join('')}</tr></thead><tbody>
       ${visible.map(node => `<tr><th style="padding-left:${12 + node.level * 22}px">${node.children ? `<button type="button" data-ym-node="${escape(JSON.stringify(node.path))}" aria-expanded="${s.expanded.has(JSON.stringify(node.path))}">${s.expanded.has(JSON.stringify(node.path)) ? '−' : '+'} ${escape(node.label)}</button>` : escape(node.label)}</th>${columns.map(c => cell(node,c)).join('')}</tr>`).join('') || '<tr><td>No records</td></tr>'}
       </tbody></table></div><div data-ym-drill></div>`;
     panel.onchange = e => {
@@ -2163,14 +2303,23 @@
         renderYearMatrix(); return;
       }
       const action = e.target.closest('[data-ym-action]')?.dataset.ymAction;
+      if (action === 'retryFx') {
+        completed.forEach(year => annualRateCache.delete(year));
+        if (requestedFx === 'annual') renderYearMatrix();
+        else { completed.forEach(year => fetchAnnualRates(year)); renderYearMatrix(); }
+        return;
+      }
       if (action === 'expand' || action === 'collapse') {
         s.expanded.clear();
         if (action === 'expand') tree.filter(n => n.children).forEach(n => s.expanded.add(JSON.stringify(n.path)));
         renderYearMatrix(); return;
       }
       if (action === 'export') {
-        const lines = [['Measure','Source','Account','Category','Column','Basis','Value','Missing','Records','Baseline','Change %','Cutoff']];
-        data.forEach(d => lines.push([measureLabels[s.measure],...Array.from({length:3},(_,i) => d.node.path[i] || ''),d.column.label,d.column.forecast ? 'Baseline-repeat scenario' : 'Loaded records',d.stat.value ?? '',d.stat.missing,d.stat.count,s.baseline,s.growth,cutoff]));
+        const lines = [['Measure','Source','Account','Category','Column','Basis','Value','Missing','Records','Baseline','Change %','Cutoff','Requested FX','Applied FX','Year/Rate Details']];
+        data.forEach(d => lines.push([measureLabels[s.measure],...Array.from({length:3},(_,i) => d.node.path[i] || ''),d.column.label,d.column.forecast ? 'Baseline-repeat scenario' : 'Loaded records',d.stat.value ?? '',d.stat.missing,d.stat.count,s.baseline,s.growth,cutoff,requestedFx,
+          [...new Set((d.records || []).map(r => r.reportingFxMethod))].join(' + '),
+          JSON.stringify([...new Set((d.records || []).map(r => r.reportingFxYear))].map(year => ({year,...yearFx.get(year)})))
+        ]));
         const quote = v => {let t=String(v); if(typeof v === 'string' && /^[=+\-@\t\r\n]/.test(t)) t="'"+t; return '"'+t.replace(/"/g,'""')+'"';};
         const url = URL.createObjectURL(new Blob(['\uFEFF',lines.map(r => r.map(quote).join(',')).join('\r\n')],{type:'text/csv;charset=utf-8;'}));
         const a=document.createElement('a'); a.href=url; a.download='Yearly_Dividend_Matrix.csv'; a.click(); setTimeout(() => URL.revokeObjectURL(url),1000); return;
@@ -2248,6 +2397,9 @@
               ${escape(format(cadAmount))}
             </td>
 
+            <td>${escape(row.reportingFxMethod || '—')}</td>
+            <td class="ym-num">${Number.isFinite(s.measure === 'feeCad' ? row.reportingFeeFxRate : row.fx) ? (s.measure === 'feeCad' ? row.reportingFeeFxRate : row.fx).toFixed(6) : '—'}</td>
+            <td class="ym-num">${escape(format(row[({grossCad:'importedGrossCad',withholdingCad:'importedWithholdingCad',feeCad:'importedFeeCad',netCad:'importedNetCad'})[s.measure]]))}</td>
             <td>
               ${escape(
                 reviewed.reconciliationLabel ||
@@ -2286,6 +2438,9 @@
                 <th>CCY</th>
                 <th class="ym-num">Native amount</th>
                 <th class="ym-num">Amount CAD</th>
+                <th>Reporting FX method</th>
+                <th class="ym-num">CAD per CCY unit</th>
+                <th class="ym-num">Imported CAD</th>
                 <th>Review</th>
               </tr>
             </thead>
@@ -2295,7 +2450,7 @@
                 recordRows ||
                 `
                   <tr>
-                    <td colspan="9">
+                    <td colspan="12">
                       No supporting records.
                     </td>
                   </tr>
@@ -2338,7 +2493,7 @@
             ${columns.map(([key]) => {
               let value = row[key];
 
-              if (key === 'fx') {
+              if (key === 'fx' || key === 'reportingFeeFxRate') {
                 value = Number.isFinite(value)
                   ? value.toFixed(6)
                   : '—';
@@ -2503,6 +2658,12 @@
     host.querySelector('[data-export]')
       .addEventListener('click', exportCsv);
   }
+
+  window.getDividendReadinessSnapshot = function () {
+    return worksheetRows.map(row =>
+      annotateReconciliation(applyStockTaxRule({ ...row }))
+    );
+  };
 
   window.loadForeignDividendWorksheet =
     function (records, stockTaxRules) {
