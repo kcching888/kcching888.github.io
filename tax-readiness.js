@@ -12,7 +12,28 @@
   const sourceOf=r=>text(r.source||r._source).toUpperCase()||'UNKNOWN';
   const symbolOf=r=>text(r.symbol||r._symbol).toUpperCase();
   const yearOf=r=>date(r.date||r._date||r.tradeDate).slice(0,4);
-  const settings=(source,account)=>records.get(key('account',[Number(year),source,account]))?.payload||{};
+  // Account confirmation inheritance v1. No new backend record kind/key required.
+  function resolveAccountSettings(source,account){
+    const explicit=records.get(key('account',[Number(year),source,account]));
+    if(explicit)return {payload:explicit.payload||{},scope:'YEAR_OVERRIDE',fromYear:Number(year),recordKey:explicit.key,conflict:false};
+    const candidates=[];
+    for(const record of records.values()){
+      if(!text(record.key).startsWith('account|'))continue;
+      let parts;try{parts=JSON.parse(record.key.slice(record.key.indexOf('|')+1));}catch(error){continue;}
+      if(!Array.isArray(parts)||parts.length!==3||!Number.isInteger(Number(parts[0]))||parts[1]!==source||parts[2]!==account)continue;
+      const p=record.payload||{};
+      if(!text(p.owner)||!registrations.includes(p.registration)||['UNCONFIRMED','OTHER_REVIEW'].includes(p.registration))continue;
+      candidates.push({record,fromYear:Number(parts[0])});
+    }
+    const signatures=new Set(candidates.map(({record})=>JSON.stringify([text(record.payload.owner),record.payload.registration])));
+    if(signatures.size>1)return {payload:{},scope:'CONFLICT',fromYear:null,recordKey:null,conflict:true};
+    if(!candidates.length)return {payload:{},scope:'UNCONFIRMED',fromYear:null,recordKey:null,conflict:false};
+    candidates.sort((a,b)=>b.fromYear-a.fromYear);
+    const chosen=candidates[0];
+    return {payload:chosen.record.payload,scope:'INHERITED',fromYear:chosen.fromYear,recordKey:chosen.record.key,conflict:false};
+  }
+  const settings=(source,account)=>resolveAccountSettings(source,account).payload;
+
   const registrations=['UNCONFIRMED','NON_REGISTERED','RRSP','TFSA','RRIF','FHSA','OTHER_REGISTERED','OTHER_REVIEW'];
   const statuses=['OPEN','EVIDENCE_REVIEWED','ADJUSTMENT_REQUIRED','RESOLVED','NOT_APPLICABLE'];
   const metrics={grossCad:'Gross dividends',withholdingCad:'Withholding',feeCad:'Collection fees',netCad:'Net dividend cash',proceedsCad:'Net sale proceeds',acbCad:'ACB sold',gainCad:'Realized gain/loss'};
@@ -54,27 +75,10 @@
         else if(actual.unavailable||actual.missing||actual.value===null||Math.abs(actual.value-ref.referenceAmount)>.02)add('reconciliation','Statement/slip comparison unresolved',[...id,m],metrics[m]+': app '+fmt(actual.value)+', reference '+fmt(ref.referenceAmount)+', missing '+actual.missing);
       }
     }
-    const inferredExpectationGroups=new Map();
     for(const r of input.dividendRows.filter(r=>yearOf(r)===year)){
       const identity=[sourceOf(r),accountOf(r),r.date,symbolOf(r),r.currency,r.reference,r.gross,r.withholding,r.net,r.grossCad,r.withholdingCad,r.feeCad,r.netCad,r.expectedWithholdingPct];
-      if(r.reconciliationCategory!=='balanced')add('dividend',r.reconciliationLabel||'Dividend requires review',identity,JSON.stringify(r));
-      if(r.expectedWithholdingPct===null&&r.classification!=='Unmatched withholding')add('classification','Withholding expectation not configured',identity,JSON.stringify(r));
-      if (
-  r.withholdingExpectationInferred &&
-  r.withholdingExpectationSource !== 'INFERRED_CA_IBKR'
-) {
-        const groupId=JSON.stringify([sourceOf(r),accountOf(r),symbolOf(r)]);
-        if(!inferredExpectationGroups.has(groupId))inferredExpectationGroups.set(groupId,[]);
-        inferredExpectationGroups.get(groupId).push(r);
-      }
-    }
-    for(const [groupId,rows] of inferredExpectationGroups){
-      add('classification','Automatic zero expectation — verify Canadian-source evidence',JSON.parse(groupId),JSON.stringify({
-        scope:JSON.parse(groupId),records:rows.length,firstDate:rows.map(r=>r.date).sort()[0],lastDate:rows.map(r=>r.date).sort().at(-1),
-        expectation:0,basis:rows[0].withholdingExpectationEvidence,
-        review:'Inference only. Confirm account holder Canadian tax residency for these dates, source/product identity, statement deductions and any fund-level reporting. Account registration and statement coverage are separate checks. Saved review is an annotation, not statement certification.',
-        examples:rows.slice(0,3)
-      }));
+      if(!['balanced','recordedTax'].includes(r.reconciliationCategory)&&!(sourceOf(r)==='IBKR'&&r.classification==='Unmatched withholding'&&Number.isFinite(r.withholdingCad)))add('dividend',r.reconciliationLabel||'Dividend requires review',identity,JSON.stringify(r));
+      if(sourceOf(r)==='HSBC'&&r.expectedWithholdingPct===null&&r.classification!=='Unmatched withholding')add('classification','Withholding expectation not configured',identity,JSON.stringify(r));
     }
     const pools=new Map();
     for(const r of input.trades){
@@ -113,14 +117,14 @@
     if(!root)return;issues=buildIssues();
     const years=[...new Set([...input.trades,...input.dividends].map(yearOf).filter(Boolean).concat(String(new Date().getFullYear())))].sort().reverse();
     const groups=[['account','Account setup'],['coverage','Statement coverage'],['dividend','Dividend reconciliation'],['classification','Withholding expectations'],['acb','Cross-account ACB candidates'],['adjustment','Adjustments'],['opening','Residency opening evidence'],['reconciliation','Statement/slip comparisons'],['calculation','Calculation availability']];
-    const accountRows=accounts().map((a,i)=>{const p=settings(a.source,a.account);return `<tr><td>${E(a.source)}</td><td>${E(a.account)}</td><td>${E(p.owner||'Not confirmed')}</td><td>${E(p.registration||'UNCONFIRMED')}</td><td><button data-tr-account="${i}" type="button">Edit</button> <button data-tr-coverage="${i}" type="button">Coverage</button></td></tr>`;}).join('');
+    const accountRows=accounts().map((a,i)=>{const resolved=resolveAccountSettings(a.source,a.account),p=resolved.payload;return `<tr><td>${E(a.source)}</td><td>${E(a.account)}</td><td>${E(p.owner||'Not confirmed')}<small style="display:block">${E(resolved.scope==='INHERITED'?'Shared confirmation from '+resolved.fromYear:resolved.scope==='YEAR_OVERRIDE'?'Saved for selected year':resolved.conflict?'Conflicting yearly confirmations — confirm this year':'Confirmation required')}</small></td><td>${E(p.registration||'UNCONFIRMED')}</td><td><button data-tr-account="${i}" type="button">Edit</button> <button data-tr-coverage="${i}" type="button">Coverage</button></td></tr>`;}).join('');
     const stateStatus=input.stateError?'Review state unavailable: '+input.stateError:input.stateAvailable?'Google Sheets review state loaded.':'Backend readiness extension not detected: review workspace is read-only.';
     root.innerHTML=`<h2>Tax Return Readiness</h2><p>Review workspace only. No change to imported transactions, ACB pools, withholding, registration treatment or tax calculations. Saved decisions document review; they do not repair source amounts or certify a return as filing-ready.</p>
       <div class="tr-controls"><label>Tax year<select data-tr-year>${years.map(y=>`<option ${y===year?'selected':''}>${y}</option>`).join('')}</select></label><button data-tr-action="reload" type="button">Reload review state</button><button data-tr-action="csv" type="button">Export checklist CSV</button><button data-tr-action="package" type="button">Export review package JSON</button></div>
       <details><summary>Google Sheets save authorization</summary><p>${E(stateStatus)} ${input.tokenConfigured?'Write-token setting detected.':'Write token is not configured on the backend.'}</p><label>Readiness write token <input type="password" autocomplete="off" data-tr-token placeholder="Enter private write token; kept in memory only"></label><button type="button" data-tr-action="forget">Forget token</button><p>Use only on your trusted tax page. Token is never included in exports. Saves affect only the dedicated readiness sheets. Do not put the token in GitHub.</p></details>
       <div class="tr-scroll"><table><thead><tr><th>Check</th><th>Detected items</th><th>Open / action required</th></tr></thead><tbody>${groups.map(([type,label])=>{const rows=issues.filter(i=>i.type===type);const open=rows.filter(i=>['account','coverage','reconciliation','calculation'].includes(i.type)||!['RESOLVED','NOT_APPLICABLE','EVIDENCE_REVIEWED'].includes(records.get(i.key)?.payload.status)).length;return `<tr><td>${E(label)}</td><td>${rows.length}</td><td>${open}</td></tr>`;}).join('')}</tbody></table></div>
       <p>No detected issue is not proof of complete data. Manual review statuses never remove the underlying detected checks. Account, coverage, comparison and calculation checks stay open until their underlying conditions change; a queue note cannot clear them. Other review decisions remain annotations, not calculation adjustments.</p>
-      <details open><summary>Account ownership and registration — selected year, metadata only</summary><div class="tr-scroll"><table><thead><tr><th>Source</th><th>Account</th><th>Owner / taxpayer</th><th>Registration</th><th>Actions</th></tr></thead><tbody>${accountRows}</tbody></table></div><p>All detected accounts remain in existing reports. This release does not implement ownership allocation, registered-account exclusions or tax ACB pooling.</p></details>
+      <details open><summary>Account ownership and registration — shared confirmations / yearly overrides</summary><div class="tr-scroll"><table><thead><tr><th>Source</th><th>Account</th><th>Owner / taxpayer</th><th>Registration</th><th>Actions</th></tr></thead><tbody>${accountRows}</tbody></table></div><p>Confirm once to reuse these details in years with no saved account settings. Existing year-specific settings take priority. Conflicting confirmed owners/registrations block inheritance; use Edit to save the correct selected-year override. Inheritance applies backward and forward without effective-date limits: use only where details were unchanged. Statement coverage and comparisons remain annual. All detected accounts remain in existing reports. This release does not implement ownership allocation, registered-account exclusions or tax ACB pooling.</p></details>
       <details><summary>Statement/slip comparisons — selected year</summary><div class="tr-scroll"><table><thead><tr><th>Source / Account</th><th>Measure</th><th>App CAD</th><th>Reference CAD</th><th>Difference CAD</th><th>Action</th></tr></thead><tbody>${accounts().map((a,i)=>Object.keys(metrics).map(m=>{const t=total(a.source,a.account,m);if(!t.count&&!t.unavailable)return '';const p=records.get(key('reconcile',[Number(year),a.source,a.account,m]))?.payload;const delta=p&&t.value!==null&&!t.unavailable&&!t.missing?t.value-p.referenceAmount:null;return `<tr><td>${E(a.source+' / '+a.account)}</td><td>${E(metrics[m])}</td><td>${fmt(t.value)}${t.missing?` · ${t.missing} missing`:''}${t.unavailable?' · calculation unavailable':''}</td><td>${fmt(p?.referenceAmount)}</td><td>${fmt(delta)}</td><td><button type="button" data-tr-compare="${i}" data-metric="${m}">Edit reference</button></td></tr>`;}).join('')).join('')}</tbody></table></div></details>
       <details open><summary>Review queue (${issues.length} detected items)</summary><div class="tr-scroll"><table><thead><tr><th>Type</th><th>Issue</th><th>Review status</th><th>Details / review</th></tr></thead><tbody>${issues.map((issue,i)=>`<tr><td>${E(issue.type)}</td><td>${E(issue.label)}</td><td>${E(records.get(issue.key)?.payload.status||'OPEN')}</td><td><button type="button" data-tr-issue="${i}">Open</button></td></tr>`).join('')||'<tr><td colspan="4">No detected issues; verify scope and evidence manually.</td></tr>'}</tbody></table></div></details>
       <div data-tr-details></div><div data-tr-editor></div><p data-tr-message role="status"></p>`;
@@ -153,11 +157,11 @@
           download('Tax_Review_Checklist_'+year+'.csv','\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8;');return;
         }
         if(action==='package'){
-          const snapshot={schemaVersion:1,createdAt:new Date().toISOString(),year,scope:'Investment review preparation only; not a filed return',basis:'Existing transaction-date calculations; no new tax pooling or registration exclusions',settingsAndReviews:[...records.values()].filter(r=>{try{return Number(JSON.parse(r.key.slice(r.key.indexOf('|')+1))[0])===Number(year);}catch(e){return false;}}),detectedIssues:issues,capitalError:input.capitalError||'',dividendError:input.dividendError||'',loadedCapitalSales:input.capitalSales.filter(r=>yearOf(r)===year),loadedDividendReview:input.dividendRows.filter(r=>yearOf(r)===year)};
+          const snapshot={schemaVersion:1,createdAt:new Date().toISOString(),year,scope:'Investment review preparation only; not a filed return',basis:'Existing transaction-date calculations; no new tax pooling or registration exclusions',resolvedAccountSettings:accounts().map(a=>({...a,...resolveAccountSettings(a.source,a.account)})),inheritedAccountEvidence:[...new Set(accounts().map(a=>resolveAccountSettings(a.source,a.account)).filter(x=>x.scope==='INHERITED').map(x=>x.recordKey))].map(k=>records.get(k)),settingsAndReviews:[...records.values()].filter(r=>{try{return Number(JSON.parse(r.key.slice(r.key.indexOf('|')+1))[0])===Number(year);}catch(e){return false;}}),detectedIssues:issues,capitalError:input.capitalError||'',dividendError:input.dividendError||'',loadedCapitalSales:input.capitalSales.filter(r=>yearOf(r)===year),loadedDividendReview:input.dividendRows.filter(r=>yearOf(r)===year)};
           download('Tax_Review_Package_'+year+'.json',JSON.stringify(snapshot,null,2),'application/json');return;
         }
         const list=accounts();
-        if(b.dataset.trAccount!==undefined){const a=list[Number(b.dataset.trAccount)];openEditor('account',key('account',[Number(year),a.source,a.account]),{year:Number(year),...a},'Account settings: '+year+' / '+a.source+' / '+a.account);return;}
+        if(b.dataset.trAccount!==undefined){const a=list[Number(b.dataset.trAccount)];openEditor('account',key('account',[Number(year),a.source,a.account]),{...settings(a.source,a.account),year:Number(year),...a},'Account settings: '+year+' / '+a.source+' / '+a.account);return;}
         if(b.dataset.trCoverage!==undefined){const a=list[Number(b.dataset.trCoverage)];openEditor('coverage',key('coverage',[Number(year),a.source,a.account]),{year:Number(year),...a},'Statement coverage: '+year+' / '+a.source+' / '+a.account);return;}
         if(b.dataset.trCompare!==undefined){const a=list[Number(b.dataset.trCompare)],metric=b.dataset.metric;openEditor('reconcile',key('reconcile',[Number(year),a.source,a.account,metric]),{year:Number(year),...a,metric},'Reference amount: '+year+' / '+a.account+' / '+metrics[metric]);return;}
         if(b.dataset.trIssue!==undefined){const i=issues[Number(b.dataset.trIssue)];root.querySelector('[data-tr-details]').innerHTML='<h4>'+E(i.label)+'</h4><pre>'+E(i.details)+'</pre>';openEditor('review',i.key,{},i.label);}

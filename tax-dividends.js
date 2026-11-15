@@ -105,6 +105,7 @@
 
   function eventKey(row) {
     return JSON.stringify([
+      sourceOf(row),
       text(row.account),
       dateOf(row),
       text(row.symbol).toUpperCase(),
@@ -289,7 +290,7 @@
       const key = eventKey(dividend);
 
       const candidates = taxes.filter(
-        tax => eventKey(tax) === key
+        tax => !usedTaxes.has(tax) && eventKey(tax) === key
       );
 
       let matched = [];
@@ -322,7 +323,7 @@
         matched = candidates;
 
         issues.push(
-          'Withholding matched by account/date/symbol/CCY; source excluded'
+          'Withholding matched by source/account/date/symbol/CCY'
         );
       }
 
@@ -429,46 +430,6 @@
           issues.push(
             'Bank fee not explicitly recorded'
           );
-        }
-
-        if (withholding === null) {
-          const description = text(
-            dividend.description
-          );
-
-          const isin = description.match(
-            /\(([A-Z]{2}[A-Z0-9]{10})\)/
-          );
-
-          const isCanadian = Boolean(
-            isin && isin[1].startsWith('CA')
-          );
-
-          const isReturnOfCapital =
-            /RETURN OF CAPITAL/i.test(description);
-
-          const matchingStatus =
-            Number.isFinite(withholding)
-              ? 'Tax matched'
-              : isReturnOfCapital
-                ? 'No tax expected — return of capital'
-                : isCanadian
-                  ? 'No tax expected — Canadian source'
-                  : 'No tax matched — review';
-
-          if (isReturnOfCapital) {
-            issues.push(
-              'Return of capital: withholding not expected'
-            );
-          } else if (isCanadian) {
-            issues.push(
-              'Canadian-source distribution: withholding not expected'
-            );
-          } else {
-            issues.push(
-              'No matched withholding: confirm whether tax was expected'
-            );
-          }
         }
 
         if (
@@ -766,7 +727,7 @@
     ['expectedWithholdingPct', 'Expected Withholding %'],
     ['withholdingBasis', 'Withholding Basis'],
     ['withholdingExpectationSource', 'Expectation Source'],
-    ['withholdingExpectationEvidence', 'Automatic Expectation Evidence'],
+    ['withholdingExpectationEvidence', 'Withholding Data Basis'],
     ['withholdingReview', 'Withholding Review'],
     ['expectedWithholdingNative', 'Expected Tax Native (Check Only)'],
     ['withholdingVarianceNative', 'Recorded Minus Expected Tax Native'],
@@ -867,41 +828,63 @@
     return map;
   }
 
-  // Automatic Canadian-source expectations v1: inference, never statement verification.
-  // Project assumption supplied by the owner; revisit if Canadian tax residency changes.
-  const canadianDividendExpectationPolicy = {
-    enabled: true, residentFrom: '2021-12-05', residentThrough: ''
-  };
-
-  function inferredCanadianZeroExpectation(row, rule) {
-    if (!canadianDividendExpectationPolicy.enabled) return null;
-    if (text(row.source).toUpperCase() !== 'IBKR') return null;
-    if (text(rule?.shareType || row.shareType).toUpperCase() !== 'CAN_SHARES') return null;
-    const day = text(row.date).slice(0,10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < canadianDividendExpectationPolicy.residentFrom ||
-        (canadianDividendExpectationPolicy.residentThrough && day > canadianDividendExpectationPolicy.residentThrough)) return null;
-    const description = text(row.description).toUpperCase();
-    if (!/\bCA[A-Z0-9]{9}[0-9]\b/.test(description)) return null;
-    if (!/CASH DIVIDEND/.test(description) || /RETURN OF CAPITAL|REINVEST|NON.RESIDENT|\bNR4\b/.test(description)) return null;
-    if (row.classification === 'Unmatched withholding') return null;
-    return {
-      rate:0, source:'INFERRED_CA_IBKR',
-      evidence:'IBKR cash-dividend description with CA ISIN + configured CAN_SHARES + project Canadian-residency date range. Currency and TFSA label are not eligibility tests. Fund-level foreign tax is not inferred.'
-    };
+  // Source policy: Stock_list is HSBC-only. IBKR uses uploaded records only.
+  function ibkrUploadedWithholdingRow(original) {
+    const row = { ...original };
+    const isin = text(row.description).toUpperCase().match(/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/)?.[1];
+    row.shareType = !isin ? 'UNKNOWN' : isin.startsWith('CA')
+      ? 'Canadian security (inferred)' : isin.startsWith('US')
+        ? 'US security (inferred)' : 'Other security (review)';
+    row.expectedWithholdingPct = null;
+    row.expectedWithholdingNative = null;
+    row.withholdingVarianceNative = null;
+    row.withholdingExpectationSource = 'IBKR_UPLOADED_RECORDS';
+    row.withholdingExpectationEvidence = 'Uploaded IBKR withholding entries only; no Stock_list rate, country rate or account-type expectation.';
+    row.withholdingExpectationInferred = false;
+    row.withholdingExceptionReviewApplicable = false;
+    row.withholdingReview = 'Not applicable — uploaded IBKR records only';
+    // Keep uploaded unallocated tax as a separate amount, never discard it.
+    if (row.classification === 'Unmatched withholding') {
+      row.withholdingBasis = 'Uploaded IBKR withholding — separate tax record';
+      row.matchingStatus = 'Separate uploaded withholding record';
+      row.status = 'Uploaded IBKR withholding retained separately; no expected-rate review';
+      return row;
+    }
+    const paired = row.pairedTaxCount > 0;
+    const ambiguous = Boolean(row.ibkrWithholdingAllocationUnavailable) || /Ambiguous withholding match/i.test(text(row.status)+' '+text(row.matchingStatus));
+    row.ibkrWithholdingAllocationUnavailable = ambiguous;
+    const hasAmount = Number.isFinite(row.withholding) || Number.isFinite(row.withholdingCad);
+    if (!paired && !ambiguous && !hasAmount) {
+      row.withholding = 0;
+      row.withholdingCad = 0;
+      row.withholdingWasDerivedZero = true;
+      row.withholdingBasis = 'No withholding entry in uploaded IBKR data';
+      row.matchingStatus = 'No uploaded withholding entry';
+    } else {
+      row.withholdingBasis = paired || hasAmount
+        ? 'Uploaded IBKR withholding amount'
+        : 'Uploaded IBKR tax not allocated to this dividend';
+      row.matchingStatus = paired ? 'Uploaded withholding matched'
+        : hasAmount ? 'Uploaded withholding amount retained' : 'Uploaded tax allocation unavailable';
+    }
+    row.net = [row.gross,row.withholding,row.fee].every(Number.isFinite)
+      ? row.gross - row.withholding - row.fee : null;
+    row.netCad = [row.grossCad,row.withholdingCad,row.feeCad].every(Number.isFinite)
+      ? row.grossCad - row.withholdingCad - row.feeCad : null;
+    row.status = text(row.status).split('; ').filter(v =>
+      !/No matched withholding: confirm whether tax was expected|Canadian-source distribution: withholding not expected|Return of capital: withholding not expected|Ambiguous withholding match|configured rate|Stock_list rule|Automatic account-level zero expectation/i.test(v)
+    ).join('; ');
+    return row;
   }
 
   function applyStockTaxRule(original) {
-    const row = { ...original };
+    if (text(original.source).toUpperCase() === 'IBKR') return ibkrUploadedWithholdingRow(original);
+    if (text(original.source).toUpperCase() !== 'HSBC') return { ...original };
+    const row = { ...original, withholdingExpectationSource:'STOCK_LIST', withholdingExceptionReviewApplicable:true };
     const rule = stockTaxRuleMap.get(normalizeRuleSymbol(row.symbol));
     row.shareType = rule?.shareType || 'UNKNOWN';
-    // An explicit configured rate always takes precedence over inference.
-    const configured = Number.isFinite(rule?.rate);
-    const inference = configured ? null : inferredCanadianZeroExpectation(row,rule);
-    const rate = configured ? rule.rate : inference?.rate ?? null;
-    row.expectedWithholdingPct = rate;
-    row.withholdingExpectationSource = configured ? 'STOCK_LIST' : inference?.source || 'UNCONFIGURED';
-    row.withholdingExpectationEvidence = inference?.evidence || '';
-    row.withholdingExpectationInferred = Boolean(inference);
+    row.expectedWithholdingPct = rule?.rate ?? null;
+    row.withholdingExpectationSource = rule?.rate === null || rule?.rate === undefined ? 'UNCONFIGURED' : 'STOCK_LIST';
     row.withholdingBasis = 'Unknown';
     row.withholdingReview = 'No configured rate; review';
     row.expectedWithholdingNative = null;
@@ -913,49 +896,43 @@
     }
     const paired = row.pairedTaxCount > 0;
     const validTax = Number.isFinite(row.withholding);
-    const recorded = validTax && !original.withholdingWasDerivedZero;
-    const ambiguous = /Ambiguous withholding match/i.test(text(row.status)+' '+text(row.matchingStatus));
-    if (paired || recorded) {
-      row.withholdingBasis = paired ? 'Paired tax record' : 'Recorded tax amount';
+    if (paired) {
+      row.withholdingBasis = 'Paired tax record';
       row.withholdingReview = validTax ? 'Recorded tax; no configured rate' : 'Paired tax amount unavailable';
-    } else if (ambiguous) {
-      row.withholdingReview = 'Ambiguous withholding match; review required';
-    } else if (rate === 0) {
+    } else if (rule?.rate === 0) {
       row.withholding = 0;
       row.withholdingCad = 0;
-      row.withholdingWasDerivedZero = true;
-      row.withholdingBasis = inference
-        ? 'Automatic zero expectation (Canadian-source inference)'
-        : 'Configured zero (Stock_list)';
-      row.withholdingReview = inference
-        ? 'Zero withholding — inferred Canadian-source expectation; verify evidence'
-        : 'Zero withholding — configured rule';
-      row.matchingStatus = inference
-        ? 'No paired tax — automatic Canadian-source zero expectation'
-        : 'Zero withholding — configured rule; no paired tax';
+      row.withholdingBasis = 'Configured zero (Stock_list)';
+      row.withholdingReview = 'Zero withholding — configured rule';
+      row.matchingStatus = 'Zero withholding — configured rule; no paired tax';
       if (row.source === 'HSBC') {
-        row.gross = Number.isFinite(row.net) && Number.isFinite(row.fee) ? row.net + row.fee : null;
-        row.grossCad = Number.isFinite(row.netCad) && Number.isFinite(row.feeCad) ? row.netCad + row.feeCad : null;
+        row.gross = Number.isFinite(row.net) && Number.isFinite(row.fee)
+          ? row.net + row.fee : null;
+        row.grossCad = Number.isFinite(row.netCad) && Number.isFinite(row.feeCad)
+          ? row.netCad + row.feeCad : null;
       } else if (row.source === 'IBKR') {
-        row.net = Number.isFinite(row.gross) && Number.isFinite(row.fee) ? row.gross - row.fee : null;
-        row.netCad = Number.isFinite(row.grossCad) && Number.isFinite(row.feeCad) ? row.grossCad - row.feeCad : null;
+        row.net = Number.isFinite(row.gross) && Number.isFinite(row.fee)
+          ? row.gross - row.fee : null;
+        row.netCad = Number.isFinite(row.grossCad) && Number.isFinite(row.feeCad)
+          ? row.grossCad - row.feeCad : null;
       }
-      row.status = text(row.status).split('; ').filter(v =>
-        v !== 'Gross uses zero assumed withholding: no tax record paired' &&
-        v !== 'No matched withholding: confirm whether tax was expected').join('; ');
-      const note = inference
-        ? 'Automatic account-level zero expectation, not statement-confirmed tax; verify Canadian residence/source and fund tax reporting separately'
-        : 'Zero tax uses Stock_list rule, not a statement-confirmed tax record';
-      if (!row.status.includes(note)) row.status += '; '+note;
-    } else if (rate !== null && rate > 0) {
+      row.status = text(row.status).split('; ')
+        .filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired' &&
+          v !== 'No matched withholding: confirm whether tax was expected').join('; ');
+      row.status += '; Zero tax uses Stock_list rule, not a statement-confirmed tax record';
+    } else if (rule && rule.rate !== null && rule.rate > 0) {
       row.withholdingReview = 'Expected withholding missing';
-      row.matchingStatus = 'Expected withholding missing (' + rate + '% rule)';
-      if (row.source === 'HSBC') { row.gross = null; row.grossCad = null; }
-      row.status = text(row.status).split('; ').filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired').join('; ');
+      row.matchingStatus = 'Expected withholding missing (' + rule.rate + '% rule)';
+      if (row.source === 'HSBC') {
+        row.gross = null;
+        row.grossCad = null;
+      }
+      row.status = text(row.status).split('; ')
+        .filter(v => v !== 'Gross uses zero assumed withholding: no tax record paired').join('; ');
       row.status += '; Expected withholding missing; no estimated tax included';
     }
-    if ((paired || recorded) && validTax && rate !== null && Number.isFinite(row.gross) && row.gross > 0) {
-      row.expectedWithholdingNative = row.gross * rate / 100;
+    if (paired && validTax && rule && rule.rate !== null && Number.isFinite(row.gross) && row.gross > 0) {
+      row.expectedWithholdingNative = row.gross * rule.rate / 100;
       row.withholdingVarianceNative = row.withholding - row.expectedWithholdingNative;
       row.withholdingReview = Math.abs(row.withholdingVarianceNative) <= 0.02 + 1e-9
         ? 'Recorded tax matches configured rate (native tolerance 0.02)'
@@ -1555,10 +1532,18 @@
     incomplete: 'Incomplete dividends',
     expectedMissing: 'Expected withholding missing',
     ruleReview: 'Withholding rule differences',
-    unmatched: 'Unmatched withholding'
+    unmatched: 'Unmatched withholding',
+    recordedTax: 'IBKR uploaded withholding — separate records'
   };
 
   function annotateReconciliation(row) {
+    if (text(row.source).toUpperCase() === 'IBKR' && row.classification === 'Unmatched withholding') {
+      const missingTax = ['withholding','withholdingCad'].filter(key => !Number.isFinite(row[key]));
+      const category = missingTax.length ? 'incomplete' : 'recordedTax';
+      return {...row,reconciliationCategory:category,reconciliationLabel:reconciliationLabels[category],
+        reconciliationDifferenceCad:null,reconciliationMissing:missingTax.join('; '),
+        reconciliationBasis:'Uploaded IBKR tax retained once in withholding totals; no expected-rate comparison or dividend equation.'};
+    }
     const missing = ['grossCad', 'withholdingCad', 'feeCad', 'netCad']
       .filter(key => !Number.isFinite(row[key]));
     const assumed = row.source === 'HSBC' && row.pairedTaxCount === 0 &&
@@ -1633,7 +1618,9 @@
         incomplete:
           'At least one required CAD component is unavailable.',
         unmatched:
-          'Standalone withholding without a paired dividend.'
+          'Standalone withholding without a paired dividend.',
+        recordedTax:
+          'Uploaded IBKR tax retained in totals without an expected-rate exception.'
       };
 
       return descriptions[category] || '';
@@ -1731,7 +1718,7 @@
 
     const ruleMessage =
       typeof stockTaxRuleMap !== 'undefined'
-        ? `${stockTaxRuleMap.size.toLocaleString('en-CA')} Stock_list rules loaded.`
+        ? `${stockTaxRuleMap.size.toLocaleString('en-CA')} HSBC Stock_list rules loaded.`
         : 'Configured Stock_list rules remain unchanged.';
 
     panel.innerHTML = `
@@ -1809,7 +1796,7 @@
         </p>
 
         <p>
-          Blank configured rates remain unresolved.
+          Blank HSBC configured rates remain unresolved. IBKR uses uploaded withholding records only and has no expected-rate checks.
           Configured-zero withholding is different from
           assumed-zero withholding. Recorded tax and fee
           amounts are retained.
@@ -2108,7 +2095,7 @@
     function stat(rows, key) {
       if (key === 'issues') {
         const annotated = rows.map(r => annotateReconciliation({...r}));
-        return {value: annotated.filter(r => r.reconciliationCategory !== 'balanced').length, missing: 0, count: rows.length};
+        return {value: annotated.filter(r => !['balanced','recordedTax'].includes(r.reconciliationCategory)).length, missing: 0, count: rows.length};
       }
       const records = eligible(rows, key);
       const known = records.filter(r => Number.isFinite(r[key]));
