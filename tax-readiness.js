@@ -1,4 +1,4 @@
-/* Tax Return Readiness v1 — read-only calculations, explicit server-saved review metadata. */
+/* Tax Return Readiness v2 — IBKR slip workflow; source-separated candidates; read-only calculations, explicit server-saved review metadata. */
 (function () {
   'use strict';
   let input=null,root=null,records=new Map(),writeToken='',year='',issues=[],editor=null;
@@ -50,11 +50,39 @@
     const known=rows.filter(r=>Number.isFinite(r[metric]));
     return {value:known.length?known.reduce((a,r)=>a+r[metric],0):null,missing:rows.length-known.length,count:rows.length,unavailable:gains?!!input.capitalError:!!input.dividendError};
   }
+  // Slip workflow reuses existing review records: no new backend record kind.
+  const isIBKR=source=>text(source).toUpperCase()==='IBKR';
+  const registered=(source,account)=>['RRSP','TFSA','RRIF','FHSA','OTHER_REGISTERED'].includes(settings(source,account).registration);
+  const slipDefinitions=[
+    ['documents','Applicable tax slips and supporting reports received','Confirm the correct account and tax year, and identify the documents retained. Do not mark complete while required documents are outstanding.'],
+    ['amendments','Amended-document check completed','Confirm whether amended slips/reports exist and record which versions will be used. Recheck before filing if documents may change.'],
+    ['acb','Capital-gains / ACB exceptions assessed','Check supported acquisition costs and relevant transfers, opening valuations and adjustments for securities sold. A T5008 cost/book value is not automatically a verified tax ACB. If there were no sales, document that and choose NOT_APPLICABLE.']
+  ];
+  function slipTasks(a){
+    return slipDefinitions.map(([code,label,description])=>{
+      const automatic=code==='acb'&&registered(a.source,a.account);
+      const k=key('review',[year,'ibkr_slip',[a.source,a.account,code],1]);
+      const record=records.get(k);
+      return {key:k,code,label,description,source:a.source,account:a.account,automatic,
+        status:automatic?'NOT_APPLICABLE':record?.payload.status||'OPEN',
+        note:record?.payload.note||'',evidence:record?.payload.evidence||'',revision:record?.revision||0};
+    });
+  }
+  function activeIBKRAccounts(){return accounts().filter(a=>isIBKR(a.source)&&[...input.trades,...input.dividends].some(r=>yearOf(r)===year&&sourceOf(r)===a.source&&accountOf(r)===a.account));}
+  function allSlipTasks(){return activeIBKRAccounts().flatMap(slipTasks);}
+  const reviewComplete=status=>['RESOLVED','NOT_APPLICABLE','EVIDENCE_REVIEWED'].includes(status);
+  function issueLocation(issue){
+    const id=issue.identity;
+    if(!Array.isArray(id))return {source:'',account:'',item:typeof id==='string'?id:''};
+    if(issue.type==='acb')return {source:id[0]||'',account:'Multiple accounts within source',item:id[1]||''};
+    return {source:id[0]||'',account:id[1]||'',item:issue.type==='reconciliation'?metrics[id[2]]||id[2]:issue.type==='ibkr_slip'?slipDefinitions.find(d=>d[0]===id[2])?.[1]||id[2]:id.slice(2,4).filter(Boolean).join(' / ')};
+  }
+  function workflowSnapshot(){return {policy:'IBKR tax-slip-based; HSBC detailed review; source/account calculations unchanged',skippedChecks:activeIBKRAccounts().map(a=>({...a,year,monthlyCoverage:'SKIPPED_TAX_SLIP_WORKFLOW',detailedComparisons:'OPTIONAL',routineDividendReview:'SKIPPED_TAX_SLIP_WORKFLOW'})),annualChecklist:allSlipTasks()};}
   function buildIssues(){
     const out=[],counts=new Map();
     function add(type,label,identity,details){
       const base=JSON.stringify([year,type,identity]);const n=(counts.get(base)||0)+1;counts.set(base,n);
-      out.push({key:key('review',[year,type,identity,n]),type,label,details});
+      out.push({key:key('review',[year,type,identity,n]),type,label,identity,details});
     }
     if(input.capitalError)add('calculation','Capital calculation unavailable','capital',input.capitalError);
     if(input.dividendError)add('calculation','Dividend review unavailable','dividend',input.dividendError);
@@ -64,6 +92,10 @@
       if(!used)continue;
       const set=settings(a.source,a.account),id=[a.source,a.account];
       if(!set.owner||!set.registration||['UNCONFIRMED','OTHER_REVIEW'].includes(set.registration))add('account','Account ownership/registration not confirmed',id,JSON.stringify(a));
+      if(isIBKR(a.source)){
+        for(const task of slipTasks(a))if(!reviewComplete(task.status))add('ibkr_slip',task.label,[...id,task.code],task.description);
+        continue;
+      }
       const cover=records.get(key('coverage',[Number(year),...id]))?.payload;
       const required=cover?cover.endMonth-cover.startMonth+1:12;
       if(!cover||cover.months.length<required)add('coverage','Statement coverage not confirmed',id,cover?`${cover.months.length}/${required} months confirmed for chosen review period`:'Review period and monthly evidence not confirmed. A missing month may be a no-activity month; confirm against statements.');
@@ -75,7 +107,7 @@
         else if(actual.unavailable||actual.missing||actual.value===null||Math.abs(actual.value-ref.referenceAmount)>.02)add('reconciliation','Statement/slip comparison unresolved',[...id,m],metrics[m]+': app '+fmt(actual.value)+', reference '+fmt(ref.referenceAmount)+', missing '+actual.missing);
       }
     }
-    for(const r of input.dividendRows.filter(r=>yearOf(r)===year)){
+    for(const r of input.dividendRows.filter(r=>yearOf(r)===year&&!isIBKR(sourceOf(r)))){
       const identity=[sourceOf(r),accountOf(r),r.date,symbolOf(r),r.currency,r.reference,r.gross,r.withholding,r.net,r.grossCad,r.withholdingCad,r.feeCad,r.netCad,r.expectedWithholdingPct];
       if(!['balanced','recordedTax'].includes(r.reconciliationCategory)&&!(sourceOf(r)==='IBKR'&&r.classification==='Unmatched withholding'&&Number.isFinite(r.withholdingCad)))add('dividend',r.reconciliationLabel||'Dividend requires review',identity,JSON.stringify(r));
       if(sourceOf(r)==='HSBC'&&r.expectedWithholdingPct===null&&r.classification!=='Unmatched withholding')add('classification','Withholding expectation not configured',identity,JSON.stringify(r));
@@ -87,9 +119,10 @@
       if(yearOf(r)>year)continue;
       const isin=[r.isin,r.ISIN,r.securityId,r.description].map(text).join(' ').toUpperCase().match(/\b([A-Z]{2}[A-Z0-9]{9}[0-9])\b/)?.[1];
       const match=isin?'ISIN '+isin:'Symbol '+symbolOf(r);if(!symbolOf(r)&&!isin)continue;
-      if(!pools.has(match))pools.set(match,new Map());pools.get(match).set(JSON.stringify([s,a]),{source:s,account:a,owner:settings(s,a).owner||'Unconfirmed'});
+      const poolKey=JSON.stringify([s,match]);
+      if(!pools.has(poolKey))pools.set(poolKey,new Map());pools.get(poolKey).set(JSON.stringify([s,a]),{source:s,account:a,owner:settings(s,a).owner||'Unconfirmed'});
     }
-    for(const [security,entries] of pools)if(entries.size>1)add('acb','Cross-account cost-pool candidate',security,security+'\n'+JSON.stringify([...entries.values()])+'\nCandidate only: verify identity, ownership, registration and overlapping holdings. No pooling/recalculation has been performed.');
+    for(const [poolKey,entries] of pools)if(entries.size>1){const [source,security]=JSON.parse(poolKey);add('acb','Within-source cross-account ACB candidate',[source,security],source+' / '+security+'\n'+JSON.stringify([...entries.values()])+'\nCandidate only: verify identity, ownership, registration and overlapping holdings. Separate account ledgers remain unchanged. Cross-source candidates are suppressed by worksheet policy; this is not a tax-compliance determination.');}
     for(const r of input.trades.filter(r=>yearOf(r)===year)){
       const label=text(r.action||r.type||r._type),desc=text(r.description);
       const identity=[sourceOf(r),accountOf(r),r.date||r._date,symbolOf(r),r.reference||r.statementKey||'',r.quantity,r.amount];
@@ -116,17 +149,18 @@
   function render(){
     if(!root)return;issues=buildIssues();
     const years=[...new Set([...input.trades,...input.dividends].map(yearOf).filter(Boolean).concat(String(new Date().getFullYear())))].sort().reverse();
-    const groups=[['account','Account setup'],['coverage','Statement coverage'],['dividend','Dividend reconciliation'],['classification','Withholding expectations'],['acb','Cross-account ACB candidates'],['adjustment','Adjustments'],['opening','Residency opening evidence'],['reconciliation','Statement/slip comparisons'],['calculation','Calculation availability']];
-    const accountRows=accounts().map((a,i)=>{const resolved=resolveAccountSettings(a.source,a.account),p=resolved.payload;return `<tr><td>${E(a.source)}</td><td>${E(a.account)}</td><td>${E(p.owner||'Not confirmed')}<small style="display:block">${E(resolved.scope==='INHERITED'?'Shared confirmation from '+resolved.fromYear:resolved.scope==='YEAR_OVERRIDE'?'Saved for selected year':resolved.conflict?'Conflicting yearly confirmations — confirm this year':'Confirmation required')}</small></td><td>${E(p.registration||'UNCONFIRMED')}</td><td><button data-tr-account="${i}" type="button">Edit</button> <button data-tr-coverage="${i}" type="button">Coverage</button></td></tr>`;}).join('');
+    const groups=[['account','Account setup'],['coverage','Statement coverage'],['dividend','Dividend reconciliation'],['classification','Withholding expectations'],['acb','Within-source ACB candidates'],['ibkr_slip','IBKR annual document checklist'],['adjustment','Adjustments'],['opening','Residency opening evidence'],['reconciliation','Statement/slip comparisons'],['calculation','Calculation availability']];
+    const accountRows=accounts().map((a,i)=>{const resolved=resolveAccountSettings(a.source,a.account),p=resolved.payload;return `<tr><td>${E(a.source)}</td><td>${E(a.account)}</td><td>${E(p.owner||'Not confirmed')}<small style="display:block">${E(resolved.scope==='INHERITED'?'Shared confirmation from '+resolved.fromYear:resolved.scope==='YEAR_OVERRIDE'?'Saved for selected year':resolved.conflict?'Conflicting yearly confirmations — confirm this year':'Confirmation required')}</small></td><td>${E(p.registration||'UNCONFIRMED')}</td><td><button data-tr-account="${i}" type="button">Edit</button> <button data-tr-coverage="${i}" type="button">${isIBKR(a.source)?'Coverage (optional)':'Coverage'}</button></td></tr>`;}).join('');
     const stateStatus=input.stateError?'Review state unavailable: '+input.stateError:input.stateAvailable?'Google Sheets review state loaded.':'Backend readiness extension not detected: review workspace is read-only.';
     root.innerHTML=`<h2>Tax Return Readiness</h2><p>Review workspace only. No change to imported transactions, ACB pools, withholding, registration treatment or tax calculations. Saved decisions document review; they do not repair source amounts or certify a return as filing-ready.</p>
       <div class="tr-controls"><label>Tax year<select data-tr-year>${years.map(y=>`<option ${y===year?'selected':''}>${y}</option>`).join('')}</select></label><button data-tr-action="reload" type="button">Reload review state</button><button data-tr-action="csv" type="button">Export checklist CSV</button><button data-tr-action="package" type="button">Export review package JSON</button></div>
       <details><summary>Google Sheets save authorization</summary><p>${E(stateStatus)} ${input.tokenConfigured?'Write-token setting detected.':'Write token is not configured on the backend.'}</p><label>Readiness write token <input type="password" autocomplete="off" data-tr-token placeholder="Enter private write token; kept in memory only"></label><button type="button" data-tr-action="forget">Forget token</button><p>Use only on your trusted tax page. Token is never included in exports. Saves affect only the dedicated readiness sheets. Do not put the token in GitHub.</p></details>
       <div class="tr-scroll"><table><thead><tr><th>Check</th><th>Detected items</th><th>Open / action required</th></tr></thead><tbody>${groups.map(([type,label])=>{const rows=issues.filter(i=>i.type===type);const open=rows.filter(i=>['account','coverage','reconciliation','calculation'].includes(i.type)||!['RESOLVED','NOT_APPLICABLE','EVIDENCE_REVIEWED'].includes(records.get(i.key)?.payload.status)).length;return `<tr><td>${E(label)}</td><td>${rows.length}</td><td>${open}</td></tr>`;}).join('')}</tbody></table></div>
-      <p>No detected issue is not proof of complete data. Manual review statuses never remove the underlying detected checks. Account, coverage, comparison and calculation checks stay open until their underlying conditions change; a queue note cannot clear them. Other review decisions remain annotations, not calculation adjustments.</p>
-      <details open><summary>Account ownership and registration — shared confirmations / yearly overrides</summary><div class="tr-scroll"><table><thead><tr><th>Source</th><th>Account</th><th>Owner / taxpayer</th><th>Registration</th><th>Actions</th></tr></thead><tbody>${accountRows}</tbody></table></div><p>Confirm once to reuse these details in years with no saved account settings. Existing year-specific settings take priority. Conflicting confirmed owners/registrations block inheritance; use Edit to save the correct selected-year override. Inheritance applies backward and forward without effective-date limits: use only where details were unchanged. Statement coverage and comparisons remain annual. All detected accounts remain in existing reports. This release does not implement ownership allocation, registered-account exclusions or tax ACB pooling.</p></details>
-      <details><summary>Statement/slip comparisons — selected year</summary><div class="tr-scroll"><table><thead><tr><th>Source / Account</th><th>Measure</th><th>App CAD</th><th>Reference CAD</th><th>Difference CAD</th><th>Action</th></tr></thead><tbody>${accounts().map((a,i)=>Object.keys(metrics).map(m=>{const t=total(a.source,a.account,m);if(!t.count&&!t.unavailable)return '';const p=records.get(key('reconcile',[Number(year),a.source,a.account,m]))?.payload;const delta=p&&t.value!==null&&!t.unavailable&&!t.missing?t.value-p.referenceAmount:null;return `<tr><td>${E(a.source+' / '+a.account)}</td><td>${E(metrics[m])}</td><td>${fmt(t.value)}${t.missing?` · ${t.missing} missing`:''}${t.unavailable?' · calculation unavailable':''}</td><td>${fmt(p?.referenceAmount)}</td><td>${fmt(delta)}</td><td><button type="button" data-tr-compare="${i}" data-metric="${m}">Edit reference</button></td></tr>`;}).join('')).join('')}</tbody></table></div></details>
-      <details open><summary>Review queue (${issues.length} detected items)</summary><div class="tr-scroll"><table><thead><tr><th>Type</th><th>Issue</th><th>Review status</th><th>Details / review</th></tr></thead><tbody>${issues.map((issue,i)=>`<tr><td>${E(issue.type)}</td><td>${E(issue.label)}</td><td>${E(records.get(issue.key)?.payload.status||'OPEN')}</td><td><button type="button" data-tr-issue="${i}">Open</button></td></tr>`).join('')||'<tr><td colspan="4">No detected issues; verify scope and evidence manually.</td></tr>'}</tbody></table></div></details>
+      <p>IBKR routine monthly coverage and dividend checks are skipped under the tax-slip workflow; comparisons remain optional. Ownership, annual documents and adjustment/opening exceptions still require attention. Cross-source pooling candidates are suppressed; existing source/account ACB calculations are unchanged. This policy is not certification of tax-correct ACB.</p><p>No detected issue is not proof of complete data. Manual review statuses never remove the underlying detected checks. Account, coverage, comparison and calculation checks stay open until their underlying conditions change; a queue note cannot clear them. Other review decisions remain annotations, not calculation adjustments.</p>
+      <details open><summary>Account ownership and registration — shared confirmations / yearly overrides</summary><div class="tr-scroll"><table><thead><tr><th>Source</th><th>Account</th><th>Owner / taxpayer</th><th>Registration</th><th>Actions</th></tr></thead><tbody>${accountRows}</tbody></table></div><p>Confirm once to reuse these details in years with no saved account settings. Existing year-specific settings take priority. Conflicting confirmed owners/registrations block inheritance; use Edit to save the correct selected-year override. Inheritance applies backward and forward without effective-date limits: use only where details were unchanged. HSBC statement coverage and comparisons remain annual. IBKR monthly coverage and comparisons are optional under the tax-slip workflow. All detected accounts remain in existing reports. This release does not implement ownership allocation, registered-account exclusions or tax ACB pooling.</p></details>
+      <details open><summary>IBKR — annual tax-slip workflow (${E(year)})</summary><p>Routine transaction review and monthly coverage: skipped — tax-slip workflow, not verified. Keep applicable tax documents and supporting records. EVIDENCE_REVIEWED / RESOLVED records completion of the named task only; it does not certify all imported amounts or ACB. Use NOT_APPLICABLE only with a documented reason. Registered-account ACB tasks are not applicable to this taxable-sales checklist; no calculation exclusions are introduced.</p><div class="tr-scroll"><table><thead><tr><th>Source / account</th><th>Annual task</th><th>Status</th><th>Evidence / note</th><th>Action</th></tr></thead><tbody>${allSlipTasks().map((t,i)=>`<tr><td>${E(t.source+' / '+t.account)}</td><td>${E(t.label)}</td><td>${E(t.automatic?'NOT_APPLICABLE — confirmed registered account':t.status)}</td><td>${E([t.evidence,t.note].filter(Boolean).join(' — '))}</td><td>${t.automatic?'Not required':`<button type="button" data-tr-slip="${i}">Review annual task</button>`}</td></tr>`).join('')||'<tr><td colspan="5">No IBKR transactions loaded for this year. This does not establish that no tax documents are required.</td></tr>'}</tbody></table></div></details>
+      <details><summary>Statement/slip comparisons — selected year (IBKR optional)</summary><div class="tr-scroll"><table><thead><tr><th>Source / Account</th><th>Measure</th><th>App CAD</th><th>Reference CAD</th><th>Difference CAD</th><th>Action</th></tr></thead><tbody>${accounts().map((a,i)=>Object.keys(metrics).map(m=>{const t=total(a.source,a.account,m);if(!t.count&&!t.unavailable)return '';const p=records.get(key('reconcile',[Number(year),a.source,a.account,m]))?.payload;const delta=p&&t.value!==null&&!t.unavailable&&!t.missing?t.value-p.referenceAmount:null;return `<tr><td>${E(a.source+' / '+a.account)}</td><td>${E(metrics[m])}${isIBKR(a.source)?' <small>Optional — tax-slip workflow</small>':''}</td><td>${fmt(t.value)}${t.missing?` · ${t.missing} missing`:''}${t.unavailable?' · calculation unavailable':''}</td><td>${fmt(p?.referenceAmount)}</td><td>${fmt(delta)}</td><td><button type="button" data-tr-compare="${i}" data-metric="${m}">Edit reference</button></td></tr>`;}).join('')).join('')}</tbody></table></div></details>
+      <details open><summary>Review queue (${issues.length} detected items)</summary><div class="tr-scroll"><table><thead><tr><th>Year</th><th>Source / account</th><th>Measure / security</th><th>Type</th><th>Issue</th><th>Review status</th><th>Details / review</th></tr></thead><tbody>${issues.map((issue,i)=>{const loc=issueLocation(issue);return `<tr><td>${E(year)}</td><td>${E([loc.source,loc.account].filter(Boolean).join(' / '))}</td><td>${E(loc.item)}</td><td>${E(issue.type)}</td><td>${E(issue.label)}</td><td>${E(records.get(issue.key)?.payload.status||'OPEN')}</td><td><button type="button" data-tr-issue="${i}">${issue.type==='coverage'?'Edit coverage':issue.type==='reconciliation'?'Edit reference':issue.type==='account'?'Edit account':'Open'}</button></td></tr>`;}).join('')||'<tr><td colspan="7">No detected issues; verify scope and evidence manually.</td></tr>'}</tbody></table></div></details>
       <div data-tr-details></div><div data-tr-editor></div><p data-tr-message role="status"></p>`;
     root.querySelector('[data-tr-token]').value=writeToken;renderEditor();
   }
@@ -152,19 +186,28 @@
         if(action==='forget'){writeToken='';root.querySelector('[data-tr-token]').value='';return;}
         if(action==='reload'){if(confirm('Reload saved review metadata? Unsaved form entries will be discarded.'))await reload();return;}
         if(action==='csv'){
-          const rows=[['Year','Issue key','Type','Issue','Status','Note','Evidence','Revision'],...issues.map(i=>{const r=records.get(i.key);return [year,i.key,i.type,i.label,r?.payload.status||'OPEN',r?.payload.note||'',r?.payload.evidence||'',r?.revision||0];})];
+          const rows=[['Year','Source','Account','Measure / security','Issue key','Type','Issue','Status','Note','Evidence','Revision'],...issues.filter(i=>i.type!=='ibkr_slip').map(i=>{const r=records.get(i.key),loc=issueLocation(i);return [year,loc.source,loc.account,loc.item,i.key,i.type,i.label,r?.payload.status||'OPEN',r?.payload.note||'',r?.payload.evidence||'',r?.revision||0];}),...allSlipTasks().map(t=>[year,t.source,t.account,t.label,t.key,'ibkr_slip',t.label,t.status,t.note,t.evidence,t.revision]),...activeIBKRAccounts().map(a=>[year,a.source,a.account,'Routine worksheet review','','workflow','Monthly coverage and routine dividend review skipped; comparisons optional','SKIPPED_TAX_SLIP_WORKFLOW','Not verified; annual document and exception checks retained','',0])];
           const quote=v=>{let s=String(v);if(/^[=+\-@\t\r\n]/.test(s))s="'"+s;return '"'+s.replace(/"/g,'""')+'"';};
           download('Tax_Review_Checklist_'+year+'.csv','\uFEFF'+rows.map(r=>r.map(quote).join(',')).join('\r\n'),'text/csv;charset=utf-8;');return;
         }
         if(action==='package'){
-          const snapshot={schemaVersion:1,createdAt:new Date().toISOString(),year,scope:'Investment review preparation only; not a filed return',basis:'Existing transaction-date calculations; no new tax pooling or registration exclusions',resolvedAccountSettings:accounts().map(a=>({...a,...resolveAccountSettings(a.source,a.account)})),inheritedAccountEvidence:[...new Set(accounts().map(a=>resolveAccountSettings(a.source,a.account)).filter(x=>x.scope==='INHERITED').map(x=>x.recordKey))].map(k=>records.get(k)),settingsAndReviews:[...records.values()].filter(r=>{try{return Number(JSON.parse(r.key.slice(r.key.indexOf('|')+1))[0])===Number(year);}catch(e){return false;}}),detectedIssues:issues,capitalError:input.capitalError||'',dividendError:input.dividendError||'',loadedCapitalSales:input.capitalSales.filter(r=>yearOf(r)===year),loadedDividendReview:input.dividendRows.filter(r=>yearOf(r)===year)};
+          const snapshot={schemaVersion:1,workflow:workflowSnapshot(),createdAt:new Date().toISOString(),year,scope:'Investment review preparation only; not a filed return',basis:'Existing transaction-date calculations; no new tax pooling or registration exclusions',resolvedAccountSettings:accounts().map(a=>({...a,...resolveAccountSettings(a.source,a.account)})),inheritedAccountEvidence:[...new Set(accounts().map(a=>resolveAccountSettings(a.source,a.account)).filter(x=>x.scope==='INHERITED').map(x=>x.recordKey))].map(k=>records.get(k)),settingsAndReviews:[...records.values()].filter(r=>{try{return Number(JSON.parse(r.key.slice(r.key.indexOf('|')+1))[0])===Number(year);}catch(e){return false;}}),detectedIssues:issues,capitalError:input.capitalError||'',dividendError:input.dividendError||'',loadedCapitalSales:input.capitalSales.filter(r=>yearOf(r)===year),loadedDividendReview:input.dividendRows.filter(r=>yearOf(r)===year)};
           download('Tax_Review_Package_'+year+'.json',JSON.stringify(snapshot,null,2),'application/json');return;
         }
+        if(b.dataset.trSlip!==undefined){const task=allSlipTasks()[Number(b.dataset.trSlip)];if(!task||task.automatic)return;root.querySelector('[data-tr-details]').innerHTML='<h4>'+E(task.label)+'</h4><p>'+E(task.description)+'</p>';openEditor('review',task.key,{},'IBKR annual task: '+year+' / '+task.account+' / '+task.label);return;}
         const list=accounts();
         if(b.dataset.trAccount!==undefined){const a=list[Number(b.dataset.trAccount)];openEditor('account',key('account',[Number(year),a.source,a.account]),{...settings(a.source,a.account),year:Number(year),...a},'Account settings: '+year+' / '+a.source+' / '+a.account);return;}
         if(b.dataset.trCoverage!==undefined){const a=list[Number(b.dataset.trCoverage)];openEditor('coverage',key('coverage',[Number(year),a.source,a.account]),{year:Number(year),...a},'Statement coverage: '+year+' / '+a.source+' / '+a.account);return;}
         if(b.dataset.trCompare!==undefined){const a=list[Number(b.dataset.trCompare)],metric=b.dataset.metric;openEditor('reconcile',key('reconcile',[Number(year),a.source,a.account,metric]),{year:Number(year),...a,metric},'Reference amount: '+year+' / '+a.account+' / '+metrics[metric]);return;}
-        if(b.dataset.trIssue!==undefined){const i=issues[Number(b.dataset.trIssue)];root.querySelector('[data-tr-details]').innerHTML='<h4>'+E(i.label)+'</h4><pre>'+E(i.details)+'</pre>';openEditor('review',i.key,{},i.label);}
+        if(b.dataset.trIssue!==undefined){
+          const i=issues[Number(b.dataset.trIssue)],loc=issueLocation(i),context=[year,loc.source,loc.account,loc.item].filter(Boolean).join(' / ');
+          root.querySelector('[data-tr-details]').innerHTML='<h4>'+E(i.label)+'</h4><p>'+E(context)+'</p><pre>'+E(i.details)+'</pre>';
+          const id=i.identity;
+          if(i.type==='coverage'&&Array.isArray(id)){openEditor('coverage',key('coverage',[Number(year),id[0],id[1]]),{year:Number(year),source:id[0],account:id[1]},'Statement coverage: '+context);return;}
+          if(i.type==='account'&&Array.isArray(id)){openEditor('account',key('account',[Number(year),id[0],id[1]]),{...settings(id[0],id[1]),year:Number(year),source:id[0],account:id[1]},'Account settings: '+context);return;}
+          if(i.type==='reconciliation'&&Array.isArray(id)){openEditor('reconcile',key('reconcile',[Number(year),...id]),{year:Number(year),source:id[0],account:id[1],metric:id[2]},'Reference amount: '+context);return;}
+          openEditor('review',i.key,{},i.label+' — '+context);
+        }
       }catch(err){root.querySelector('[data-tr-message]').textContent=err.message;}
     };
     root.onsubmit=async e=>{
