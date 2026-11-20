@@ -1,0 +1,10 @@
+/* Tax workspace tabs: leave every existing panel in its original DOM position. */
+.tax-section-tabs{display:flex;gap:.6rem;flex-wrap:wrap;margin:0 0 1rem;padding:.65rem 0;border-bottom:1px solid #536078}
+.tax-section-tabs button{padding:.65rem 1rem;border:1px solid #61738e;border-radius:6px 6px 0 0;background:#172337;color:#dce8f7;font:inherit;cursor:pointer}
+.tax-section-tabs button[aria-pressed="true"]{background:#165532;border-color:#4cbd8e;color:#fff;box-shadow:inset 0 -3px #77dca8}
+.tax-section-tabs button:focus-visible{outline:2px solid #81cbff;outline-offset:3px}
+.tax-section-tabs button:disabled{opacity:.5;cursor:wait}
+main.tax-tabs-main[data-tax-view="investments"] > #t1-preparation{display:none!important}
+main.tax-tabs-main[data-tax-view="t1"] > :not(.tax-section-tabs):not(#t1-preparation){display:none!important}
+.tax-t1-context{margin:-.35rem 0 1rem;color:#bdcee2;font-size:.95rem}
+@media print{.tax-section-tabs{display:none!important}.tax-t1-context{color:#222}main.tax-tabs-main[data-tax-view="investments"] > :not(.tax-section-tabs):not(#t1-preparation){display:block!important}}

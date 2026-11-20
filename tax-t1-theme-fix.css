@@ -1,0 +1,22 @@
+/* T1 readability fix: load after tax-t1.css. No data or calculation changes. */
+#t1-preparation{color:#e5edf5}
+#t1-preparation button{background:#253449;color:#e5edf5;border:1px solid #64768f;border-radius:5px}
+#t1-preparation button:hover:not(:disabled){background:#334863;color:#fff;border-color:#a6bfdc}
+#t1-preparation button[aria-pressed="true"],
+#t1-preparation button[aria-selected="true"],
+#t1-preparation button[aria-current="step"]{background:#165532!important;color:#fff!important;border:2px solid #75d4a2!important;box-shadow:inset 0 -3px #75d4a2;font-weight:700}
+#t1-preparation button:disabled{opacity:.5;cursor:not-allowed}
+#t1-preparation input:not([type=checkbox]),#t1-preparation select,#t1-preparation textarea{background:#101b2c;color:#e5edf5;border:1px solid #8290a8;color-scheme:dark}
+#t1-preparation option{background:#1e2b3f;color:#e5edf5}
+#t1-preparation option:checked{background:#165532;color:#fff}
+#t1-preparation input[type=checkbox]{accent-color:#75d4a2}
+#t1-preparation input::placeholder,#t1-preparation textarea::placeholder{color:#adbed1;opacity:1}
+#t1-preparation button:focus-visible,#t1-preparation input:focus-visible,#t1-preparation select:focus-visible,#t1-preparation textarea:focus-visible{outline:3px solid #91d3ff;outline-offset:2px}
+#t1-preparation thead th{background:#165532;color:#fff}
+#t1-preparation tbody tr:nth-child(odd){background:#1e2b3f;color:#e5edf5}
+#t1-preparation tbody tr:nth-child(even){background:#253449;color:#e5edf5}
+#t1-preparation tbody tr[aria-selected="true"],#t1-preparation tbody tr:has(input[type=checkbox]:checked){background:#165532;color:#fff}
+#t1-preparation tbody tr:hover{box-shadow:inset 3px 0 #75d4a2}
+#t1-preparation small{color:#c5d1e3}
+#t1-preparation ::selection{background:#267548;color:#fff}
+@media print{#t1-preparation,#t1-preparation table,#t1-preparation th,#t1-preparation td,#t1-preparation small{background:#fff!important;color:#000!important}#t1-preparation tbody tr:nth-child(odd),#t1-preparation tbody tr:nth-child(even){background:#fff!important;color:#000!important}}

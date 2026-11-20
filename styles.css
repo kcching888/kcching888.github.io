@@ -1238,3 +1238,26 @@ td.empty {
   text-align: right !important;
   padding-right: 12px !important;
 }
+
+
+.port-basis-toggle {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0 4px 0 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.port-basis-toggle:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+[data-port-basis-detail][hidden] {
+  display: none !important;
+}
+
+.port-dividend {
+  white-space: nowrap;
+}

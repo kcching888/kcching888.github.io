@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.7.0">
+    <meta name="version" content="5.7.1">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -340,6 +340,13 @@
 }
         
     </style>
+<style id="portfolio-dividend-basis-styles">
+.port-basis-toggle { border:0; background:transparent; color:inherit; padding:0 4px 0 0; font:inherit; cursor:pointer; }
+.port-basis-toggle:focus-visible { outline:1px solid currentColor; outline-offset:2px; }
+[data-port-basis-detail][hidden] { display:none !important; }
+.port-dividend { white-space:nowrap; }
+.port-enhanced-scroll { overflow-x:auto; max-width:100%; }
+</style>
 </head>
 <body>
 <div class="header">
@@ -6257,6 +6264,7 @@ function renderGroupTable(groupTitle, groupPositions, totalLabel) {
   );
 
   wrap.innerHTML = html;
+  enhancePortfolioTables_(wrap, 'HSBC');
 }
 function buildHsbcPortfolioStatsHtml_(snapshot) {
   const holdings = Array.isArray(snapshot.holdings)
@@ -6507,7 +6515,7 @@ var acct = key.substring(dashIdx + 1);
         html += `<h3 style="margin-top:20px; border-bottom:1px solid #333">${esc(acct)} (${type})</h3>`;
 
         if (type === 'Stocks') {
-            html += `<table class="portfolio-table"><thead><tr>
+            html += `<table class="portfolio-table" data-port-account="${esc(acct)}"><thead><tr>
                 <th>Symbol</th><th class="text-right">Qty</th><th class="text-right">Last</th><th class="text-right">Changes</th><th class="text-right">Changes %</th><th class="text-right">Daily P&amp;L</th><th class="text-right">MV</th>
                 <th class="text-right" style="border-left:2px solid #444; color:#aaa">Avg (FIFO)</th>
                 <th class="text-right" style="color:#aaa">Basis</th>
@@ -6702,8 +6710,276 @@ var acct = key.substring(dashIdx + 1);
  
 
     document.getElementById('port-table-wrap').innerHTML = html;
+    enhancePortfolioTables_(document.getElementById('port-table-wrap'), 'IBKR');
 }
 
+
+var portfolioBasisExpanded = {
+  ibkrFifo: false,
+  ibkrAcb: false,
+  hsbcAcb: false,
+  hsbcLanding: false
+};
+
+try {
+  var savedPortfolioBasis = JSON.parse(
+    localStorage.getItem('portfolioBasisExpanded') || '{}'
+  );
+
+  Object.keys(portfolioBasisExpanded).forEach(function(key) {
+    if (typeof savedPortfolioBasis[key] === 'boolean') {
+      portfolioBasisExpanded[key] = savedPortfolioBasis[key];
+    }
+  });
+} catch (error) {
+  console.warn('Could not restore Portfolio column settings', error);
+}
+
+function togglePortfolioBasis(key) {
+  if (!Object.prototype.hasOwnProperty.call(
+    portfolioBasisExpanded, key
+  )) {
+    return;
+  }
+
+  portfolioBasisExpanded[key] = !portfolioBasisExpanded[key];
+
+  try {
+    localStorage.setItem(
+      'portfolioBasisExpanded',
+      JSON.stringify(portfolioBasisExpanded)
+    );
+  } catch (error) {
+    console.warn('Could not save Portfolio column settings', error);
+  }
+
+  applyPortfolioBasisVisibility();
+}
+
+function applyPortfolioBasisVisibility() {
+  document.querySelectorAll('[data-port-basis-detail]')
+    .forEach(function(cell) {
+      var key = cell.getAttribute('data-port-basis-detail');
+      cell.hidden = !portfolioBasisExpanded[key];
+    });
+
+  document.querySelectorAll('[data-port-basis-toggle]')
+    .forEach(function(button) {
+      var key = button.getAttribute('data-port-basis-toggle');
+      var expanded = !!portfolioBasisExpanded[key];
+
+      button.textContent = expanded ? '[-]' : '[+]';
+      button.setAttribute('aria-expanded', String(expanded));
+      button.title = expanded
+        ? 'Collapse cost-basis details'
+        : 'Expand cost-basis details';
+    });
+}
+
+function portfolioBasisHeading(key, label) {
+  var expanded = !!portfolioBasisExpanded[key];
+
+  return (
+    '<button type="button" class="port-basis-toggle" ' +
+      'data-port-basis-toggle="' + key + '" ' +
+      'aria-expanded="' + String(expanded) + '" ' +
+      'onclick="togglePortfolioBasis(\'' + key + '\')">' +
+      (expanded ? '[-]' : '[+]') +
+    '</button> ' + esc(label)
+  );
+}
+
+function getPortfolioDividendYears() {
+  var year = new Date().getFullYear();
+  return [year - 2, year - 1, year];
+}
+
+function portfolioDividendKey(account, symbol) {
+  return JSON.stringify([
+    String(account || '').trim().toUpperCase(),
+    String(symbol || '').trim().toUpperCase()
+  ]);
+}
+
+function buildPortfolioDividendIndex(dividendRows) {
+  var index = Object.create(null);
+  var years = getPortfolioDividendYears();
+
+  (dividendRows || allDivs || []).forEach(function(dividend) {
+    var action = String(dividend.action || '')
+      .trim().toUpperCase();
+
+    if (action !== 'DIVIDENDS') return;
+
+    var dateText = String(dividend.date || '').trim();
+    var yearMatch = dateText.match(/^(\d{4})-/);
+    var year;
+
+    if (yearMatch) {
+      year = Number(yearMatch[1]);
+    } else {
+      var parsedDate = new Date(dividend.date);
+      if (isNaN(parsedDate.getTime())) return;
+      year = parsedDate.getFullYear();
+    }
+
+    if (years.indexOf(year) < 0) return;
+
+    var amount = Number(
+      String(dividend.amount == null ? '' : dividend.amount)
+        .replace(/,/g, '')
+    );
+
+    if (!isFinite(amount)) return;
+
+    var currency = String(dividend.currency || '')
+      .trim().toUpperCase() || 'Unknown CCY';
+
+    var key = portfolioDividendKey(
+      dividend.account,
+      dividend.symbol
+    );
+
+    if (!index[key]) index[key] = Object.create(null);
+    if (!index[key][year]) {
+      index[key][year] = Object.create(null);
+    }
+
+    index[key][year][currency] =
+      (index[key][year][currency] || 0) + amount;
+  });
+
+  return index;
+}
+
+function portfolioDividendHeadings() {
+  var currentYear = new Date().getFullYear();
+
+  return getPortfolioDividendYears().map(function(year) {
+    return (
+      '<th class="text-right">Div ' + year +
+      (year === currentYear ? ' YTD' : '') +
+      '</th>'
+    );
+  }).join('');
+}
+
+function portfolioDividendCells(index, account, symbol) {
+  var record = index[
+    portfolioDividendKey(account, symbol)
+  ] || {};
+
+  return getPortfolioDividendYears().map(function(year) {
+    var amounts = record[year] || {};
+    var currencies = Object.keys(amounts).sort();
+
+    var text = currencies.length
+      ? currencies.map(function(currency) {
+          return amounts[currency].toLocaleString('en-CA', {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            });
+        }).join('<br>')
+      : '&mdash;';
+
+    var currencyDetail = currencies.map(function(currency) {
+      return currency + ' ' + amounts[currency].toLocaleString('en-CA', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+    }).join('; ');
+
+    return '<td class="text-right port-dividend" data-div-currency-detail="' + esc(currencyDetail) + '">' +
+      text + '</td>';
+  }).join('');
+}
+
+
+
+function enhancePortfolioTables_(root, source) {
+  if (!root) return;
+  var rows;
+  var accountScope = null;
+  if (source === 'HSBC') {
+    var hsbcRows = Array.isArray(window.hsbcDividends)
+      ? window.hsbcDividends : [];
+    rows = hsbcRows.length ? hsbcRows : (allDivs || []).filter(function(d) {
+      return /^\d{12}$/.test(String(d.account || '').replace(/[-\s]/g, ''));
+    });
+    accountScope = String(hsbcSelectedAccount || '').toUpperCase() === 'ALL'
+      ? (hsbcPortfolio.accounts || []).map(function(a) { return a.account; })
+      : [hsbcSelectedAccount];
+  } else {
+    rows = allDivs || [];
+  }
+  function accountKey(value) {
+    return String(value || '').trim().toUpperCase().replace(/[-\s]/g, '');
+  }
+  var scope = accountScope && new Set(accountScope.map(accountKey));
+  var scopedRows = rows.filter(function(d) {
+    return !scope || scope.has(accountKey(d.account));
+  }).map(function(d) {
+    return Object.assign({}, d, {
+      account: source === 'HSBC' ? '__HSBC_VISIBLE__' : accountKey(d.account)
+    });
+  });
+  var index = buildPortfolioDividendIndex(scopedRows);
+  root.querySelectorAll('table.portfolio-table').forEach(function(table) {
+    var head = table.tHead && table.tHead.rows[0];
+    if (!head || head.cells.length !== 14 ||
+        head.cells[0].textContent.trim() !== 'Symbol' ||
+        table.dataset.portEnhanced) return;
+    table.dataset.portEnhanced = 'true';
+    var fifo = source === 'IBKR' ? 'ibkrFifo' : 'hsbcAcb';
+    var acb = source === 'IBKR' ? 'ibkrAcb' : 'hsbcLanding';
+    head.cells[7].innerHTML = portfolioBasisHeading(
+      fifo, source === 'IBKR' ? 'Avg (FIFO)' : 'ACB'
+    );
+    head.cells[10].innerHTML = portfolioBasisHeading(
+      acb, source === 'IBKR' ? 'Avg (ACB)' : 'ACB since landing'
+    );
+    var account = source === 'HSBC' ? '__HSBC_VISIBLE__'
+      : accountKey(table.dataset.portAccount);
+    var detailMap = {8: fifo, 9: fifo, 11: acb, 12: acb};
+    Array.from(table.rows).forEach(function(row) {
+      var isHeader = row === head;
+      var isHolding = !isHeader && !row.classList.contains('total-row') &&
+        row.cells.length === 14;
+      var symbol = isHolding ? row.cells[0].textContent.trim() : '';
+      var logicalColumn = 0;
+      Array.from(row.cells).forEach(function(cell) {
+        var span = cell.colSpan || 1;
+        var crossesDetail = span > 1 && Object.keys(detailMap).some(function(c) {
+          return Number(c) >= logicalColumn && Number(c) < logicalColumn + span;
+        });
+        if (crossesDetail && !cell.textContent.trim()) {
+          for (var n = 0; n < span; n++) {
+            var blank = document.createElement(cell.tagName.toLowerCase());
+            if (detailMap[logicalColumn + n]) {
+              blank.setAttribute('data-port-basis-detail', detailMap[logicalColumn + n]);
+            }
+            row.insertBefore(blank, cell);
+          }
+          cell.remove();
+        } else if (detailMap[logicalColumn]) {
+          cell.setAttribute('data-port-basis-detail', detailMap[logicalColumn]);
+        }
+        logicalColumn += span;
+      });
+      row.insertAdjacentHTML('beforeend', isHeader
+        ? portfolioDividendHeadings()
+        : isHolding ? portfolioDividendCells(index, account, symbol)
+        : '<td></td><td></td><td></td>');
+    });
+    table.querySelectorAll('.port-dividend').forEach(function(cell) {
+      cell.title = (cell.getAttribute('data-div-currency-detail') || '') + '\nGross dividends received for this holding/account scope; separate withholding-tax rows excluded. A dash means no matching loaded records.';
+    });
+    if (!table.parentElement.classList.contains('port-enhanced-scroll')) {
+      var scroll = document.createElement('div');
+      scroll.className = 'port-enhanced-scroll';
+      table.parentNode.insertBefore(scroll, table);
+      scroll.appendChild(table);
+    }
+  });
+  applyPortfolioBasisVisibility();
+}
 
 function renderTransfersTable() {
     const fAcct = ($('ft-account') || {}).value || '';

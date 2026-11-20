@@ -1,3 +1,4 @@
+/* Complete tax.js: IBKR commissions counted once; original FX source retained. */
 /* =========================================================
    CRA Tax Reporting — Annual Realized Capital Gains 
    ========================================================= */
@@ -183,6 +184,7 @@ function getUsdAmount(t) {
 }
 
 function getFeesCad(t) {
+  if (getTradeSource(t) === 'IBKR') return getIbkrCommissionCad(t);
   const fee = num(
     t.fee ??
     t.commission ??
@@ -756,11 +758,11 @@ if (isCorporateActionIn(t)) {
 if (isBuy(t)) {
   const buyQty = Math.abs(t._qty);
 
-  const buyCostNative =
-    getNativeAmount(t) + getFeesNative(t);
-
-  const buyCostCad =
-    Math.abs(t._cad) + t._feesCad;
+  const ibkrBuy = t._source === 'IBKR' ? getIbkrTradeAmounts(t, 'BUY') : null;
+  const buyCostNative = ibkrBuy ? ibkrBuy.nativeAmount
+    : getNativeAmount(t) + getFeesNative(t);
+  const buyCostCad = ibkrBuy ? ibkrBuy.cadAmount
+    : Math.abs(t._cad) + t._feesCad;
 
   pos.qty += buyQty;
   pos.costNative += buyCostNative;
@@ -809,8 +811,9 @@ if (isSell(t)) {
   // Use the same share proportion for both cost pools.
   const soldFraction = Math.min(sellQty / pos.qty, 1);
 
-// Proceeds are already NET of selling commission.
-const proceedsNative = getNativeAmount(t);
+// Convert IBKR gross CSV amounts to net once; preserve HSBC's existing basis.
+const ibkrSale = t._source === 'IBKR' ? getIbkrTradeAmounts(t, 'SELL') : null;
+const proceedsNative = ibkrSale ? ibkrSale.nativeAmount : getNativeAmount(t);
 const acbNative = pos.costNative * soldFraction;
 const commissionNative = getFeesNative(t);
 
@@ -819,7 +822,7 @@ const outlaysNative = 0;
 const gainNative = proceedsNative - acbNative;
 
 // CAD proceeds are also already NET of selling commission.
-const proceedsCad = Math.abs(t._cad);
+const proceedsCad = ibkrSale ? ibkrSale.cadAmount : Math.abs(t._cad);
 const acbCad = pos.costCad * soldFraction;
 
 const outlaysCad = 0;
@@ -857,6 +860,8 @@ includeInTotals: true,
     gainNative,
 
     proceedsCad,
+    ...(ibkrSale ? {commissionCad: ibkrSale.commissionCad,
+      sourceAmountBasis: ibkrSale.sourceBasis, proceedsBasis: 'NET'} : {}),
     acbCad,
     outlaysCad,
     gainCad,
@@ -1209,6 +1214,7 @@ function getNativeAmount(t) {
 }
 
 function getFeesNative(t) {
+  if (getTradeSource(t) === 'IBKR') return getIbkrCommissionNative(t);
   const value =
     t.comm ??
     t.commission ??
@@ -1247,6 +1253,55 @@ function getFeesNative(t) {
   }
 
   return Math.abs(fee);
+}
+
+
+/* IBKR: supplied CSV importer stores gross Proceeds in amount, and fees in comm.
+   Return all-in purchase cost or net sale proceeds; never deduct fees twice. */
+function ibkrNumber(value,label){
+ const text=String(value??'').trim().replace(/,/g,'');
+ if(!text||!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(text))throw new Error('IBKR '+label+' is missing or invalid.');
+ const n=Number(text);if(!Number.isFinite(n))throw new Error('IBKR '+label+' is invalid.');return n;
+}
+function ibkrPresent(v){return v!==undefined&&v!==null&&String(v).trim()!=='';}
+function getIbkrCommissionNative(t){
+ const key=['comm','commission','fee','fees'].find(k=>ibkrPresent(t[k]));
+ const fee=key?Math.abs(ibkrNumber(t[key],'commission')):0;if(!fee)return 0;
+ const c=String(t.currency||'').trim().toUpperCase(),fc=String(t.commissionCurrency||t.feeCurrency||c).trim().toUpperCase();
+ if(!c||fc!==c)throw new Error('IBKR commission currency differs from trade currency; review '+getTradeAccount(t)+' / '+getSymbol(t)+'.');return fee;
+}
+function getIbkrCommissionCad(t){
+ const fee=getIbkrCommissionNative(t);if(!fee)return 0;
+ if(ibkrPresent(t.feeCad)){const v=Math.abs(ibkrNumber(t.feeCad,'commission CAD'));if(v<=0)throw new Error('IBKR nonzero commission requires a positive CAD commission.');return v;}
+ if(String(t.currency||'').trim().toUpperCase()==='CAD')return fee;
+ const key=['exchRate','exchangeRate','fxRate'].find(k=>ibkrPresent(t[k]));const rate=key?ibkrNumber(t[key],'commission FX rate'):NaN;
+ if(!Number.isFinite(rate)||rate<=0)throw new Error('IBKR commission requires a supported transaction FX rate for '+getTradeAccount(t)+' / '+getSymbol(t)+'.');return fee*rate;
+}
+function getIbkrSourceBasis(t,side,amount,fee){
+ const explicit=String(t.amountBasis||'').trim().toUpperCase();if(explicit){if(!['GROSS','NET'].includes(explicit))throw new Error('IBKR amountBasis must be GROSS or NET.');return explicit;}
+ if(!fee)return 'GROSS';
+ const q=Math.abs(getQuantity(t)),p=ibkrPresent(t.price)?Math.abs(ibkrNumber(t.price,'price')):NaN;
+ const mult=ibkrPresent(t.multiplier)?ibkrNumber(t.multiplier,'contract multiplier'):1;if(!(mult>0))throw new Error('IBKR contract multiplier must be positive.');
+ if(q>0&&Number.isFinite(p)){
+  const gross=q*p*mult,cash=gross+(side==='BUY'?fee:-fee),dg=Math.abs(amount-gross),dn=Math.abs(amount-cash),g=dg<=.02000001,n=dn<=.02000001;
+  if(g&&!n)return 'GROSS';if(n&&!g)return 'NET';
+  if(g&&n){if(dg<=1e-7&&dn>1e-7)return 'GROSS';if(dn<=1e-7&&dg>1e-7)return 'NET';throw new Error('IBKR gross/net commission basis is ambiguous for '+getTradeAccount(t)+' / '+getSymbol(t)+'. Reconcile the source amount.');}
+ }
+ // Known legacy parser contract, including rounded/averaged execution prices.
+ if(ibkrPresent(t.amount)&&ibkrPresent(t.comm))return 'GROSS';
+ if(!ibkrPresent(t.amount)&&ibkrPresent(t.grossAmount))return 'GROSS';
+ throw new Error('IBKR source amount cannot be verified as gross or net for '+getTradeAccount(t)+' / '+getSymbol(t)+'. Review its import format.');
+}
+function getIbkrTradeAmounts(t,side){
+ if(!['BUY','SELL'].includes(side))throw new Error('Invalid IBKR trade side.');
+ const key=['amount','grossAmount','netAmount'].find(k=>ibkrPresent(t[k])),fee=getIbkrCommissionNative(t),feeCad=getIbkrCommissionCad(t);
+ const rawNative=key?Math.abs(ibkrNumber(t[key],'trade amount')):Math.abs(getQuantity(t))*Math.abs(ibkrNumber(t.price,'price'));
+ const basis=key==='netAmount'?'NET':!key?'GROSS':getIbkrSourceBasis(t,side,rawNative,fee);
+ const rawCad=ibkrPresent(t.cadAmount)?Math.abs(ibkrNumber(t.cadAmount,'trade CAD amount')):ibkrPresent(t._cad)?Math.abs(ibkrNumber(t._cad,'trade CAD amount')):Math.abs(getCadAmount(t));
+ if(rawNative>0&&rawCad===0)throw new Error('IBKR positive trade amount has no positive CAD valuation.');
+ const sign=side==='BUY'?1:-1,nativeAmount=rawNative+(basis==='GROSS'?sign*fee:0),cadAmount=rawCad+(basis==='GROSS'?sign*feeCad:0);
+ if(!Number.isFinite(nativeAmount)||!Number.isFinite(cadAmount)||nativeAmount<0||cadAmount<0)throw new Error('IBKR commission-adjusted cash amount is invalid or negative; review '+getTradeAccount(t)+' / '+getSymbol(t)+'.');
+ return {nativeAmount,cadAmount,commissionNative:fee,commissionCad:feeCad,sourceBasis:basis};
 }
 
 function populateAccountFilter() {
