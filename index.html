@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.7.2">
+    <meta name="version" content="5.7.3">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -945,6 +945,24 @@
 </div>    
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+<!-- Currency styling helper: load before the main application script. -->
+<script>
+window.portfolioCurrencyRowAttrs = function(currency) {
+  var code = String(currency || '').trim().toUpperCase();
+
+  switch (code) {
+    case 'USD':
+    case 'CAD':
+    case 'HKD':
+    case 'CNY':
+      return ' data-port-currency="' + code + '"';
+
+    default:
+      return '';
+  }
+};
+</script>
     
 <script>
     var GAS_URL = localStorage.getItem('ibkr_gas_url') || '';
