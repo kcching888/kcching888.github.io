@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="version" content="5.7.1">
+    <meta name="version" content="5.7.2">
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
     <meta charset="UTF-8">
@@ -337,6 +337,51 @@
 .latest-upload-date {
     font-weight: 700;
     white-space: nowrap;
+}
+
+        /* Portfolio holding currency accents — presentation only. */
+
+#port-table-wrap tr[data-port-currency="USD"] {
+  --port-ccy-bg: #1B2D49;
+  --port-ccy-accent: #719FDF;
+}
+
+#port-table-wrap tr[data-port-currency="CAD"] {
+  --port-ccy-bg: #192F34;
+  --port-ccy-accent: #67B4A6;
+}
+
+#port-table-wrap tr[data-port-currency="HKD"] {
+  --port-ccy-bg: #2B2541;
+  --port-ccy-accent: #B29ADF;
+}
+
+#port-table-wrap tr[data-port-currency="CNY"] {
+  --port-ccy-bg: #342D24;
+  --port-ccy-accent: #D6B477;
+}
+
+/* Subtle currency tint across the holding row. */
+#port-table-wrap tr[data-port-currency] > td {
+  background-color: var(--port-ccy-bg);
+}
+
+/* Thin currency-colored strip inside the first cell. */
+#port-table-wrap tr[data-port-currency] > td:first-child {
+  box-shadow: inset 3px 0 0 var(--port-ccy-accent);
+}
+
+/* Color only the currency label, not gain/loss figures. */
+#port-table-wrap tr[data-port-currency] > td.port-currency-label {
+  color: var(--port-ccy-accent);
+}
+
+/* Slight highlight on hover while retaining the currency tint. */
+#port-table-wrap tr[data-port-currency]:hover > td {
+  background-image: linear-gradient(
+    rgba(255, 255, 255, 0.035),
+    rgba(255, 255, 255, 0.035)
+  );
 }
         
     </style>
@@ -5137,13 +5182,15 @@ function buildHsbcPortfolioHtml_(snapshot) {
 
     bySection[section].forEach(function(holding) {
       html +=
-        '<tr>' +
+        '<tr' + portfolioCurrencyRowAttrs(holding.currency) + '>' +
         '<td>' + esc(holding.symbol || '') + '</td>' +
         '<td>' + esc(holding.description || '') + '</td>' +
         '<td class="text-right">' + money(holding.quantity, 6) + '</td>' +
         '<td class="text-right">' + money(holding.unitPrice, 5) + '</td>' +
         '<td class="text-right">' + money(holding.marketValue, 2) + '</td>' +
-        '<td>' + esc(holding.currency || '') + '</td>' +
+        '<td class="port-currency-label">' +
+    esc(holding.currency || '') +
+'</td>' +
         '</tr>';
     });
 
@@ -6041,6 +6088,14 @@ function renderHsbcPortfolioAfterUTPrices() {
     };
   }
 
+function portfolioCurrencyRowAttrs(currency) {
+  var code = String(currency || '').trim().toUpperCase();
+
+  return ['USD', 'CAD', 'HKD', 'CNY'].indexOf(code) >= 0
+    ? ' data-port-currency="' + code + '"'
+    : '';
+}
+
 function renderPositionRows(positions) {
     let html = '';
 
@@ -6086,9 +6141,9 @@ function renderPositionRows(positions) {
         const oldestClass = oldestGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
         const recentClass = recentGainLoss >= 0 ? 'pos-gain' : 'pos-loss';
 
-        html +=
-            '<tr>' +
-            '<td>' + esc(position.symbol) + '</td>' +
+       html +=
+    '<tr' + portfolioCurrencyRowAttrs(position.currency) + '>' +
+    '<td>' + esc(position.symbol) + '</td>' +
             '<td class="text-right">' +
                 currentQuantity.toLocaleString('en-CA', {
                     minimumFractionDigits: 4,
@@ -6145,7 +6200,9 @@ function renderPositionRows(positions) {
                 (hasPrice ? formatMoney(recentGainLoss) : '&mdash;') +
             '</td>' +
 
-            '<td>' + esc(position.currency) + '</td>' +
+           '<td class="port-currency-label">' +
+    esc(position.currency) +
+'</td>' +
             '</tr>';
     });
 
@@ -6557,7 +6614,7 @@ var acct = key.substring(dashIdx + 1);
 
                 tDailyPnL += dailyPnL;
                 
-                html += `<tr>
+              html += `<tr${portfolioCurrencyRowAttrs(p.currency)}>
                     <td>${esc(p.symbol)}</td>
                     <td class="text-right">${fmt(p.qty, 2)}</td>
                     <td class="text-right">$${fmt(curP)}</td>
@@ -6571,7 +6628,7 @@ var acct = key.substring(dashIdx + 1);
                     <td class="text-right" style="border-left:2px solid #444; font-weight:bold; color:#4caf50">$${fmt(acbAvg, 3)}</td>
                     <td class="text-right" style="color:#4caf50">$${fmt(p.acbTotalCost)}</td>
                     <td class="text-right ${glA>=0?'pos-gain':'pos-loss'}" style="font-weight:bold">$${fmt(glA)}</td>
-                    <td>${esc(p.currency)}</td>
+                    <td class="port-currency-label">${esc(p.currency)}</td>
                 </tr>`;
             });
 
