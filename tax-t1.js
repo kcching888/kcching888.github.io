@@ -1233,18 +1233,83 @@ function init(){
   if(rememberToken)storeToken(token);
  }
 };
- host.onchange=async e=>{const t=e.target;try{if(t.dataset.line){setLine(t.dataset.line,t.dataset.field,t.value);render();return;}if(t.dataset.component!==undefined){draft.contributions[Number(t.dataset.component)].included=t.checked;touch();render();return;}if(t.matches('[data-province]')){draft.province=t.value;draft.provinceConfirmed=false;draft.profileConfirmed=false;touch();}if(t.matches('[data-province-confirmed]')){draft.provinceConfirmed=t.checked;touch();}if(t.matches('[data-profile-confirmed]')){draft.profileConfirmed=t.checked;touch();}if(t.matches('[data-residency]')){draft.residencyNote=t.value;touch();}if(t.matches('[data-other-reviewed]')){draft.otherLinesReviewed=t.checked;touch();}if(t.matches('[data-other-note]')){draft.otherLinesNote=t.value;touch();}if(t.matches('[data-import]')&&t.files[0]){const obj=JSON.parse(await t.files[0].text()),incoming=validateDraft(obj.draft||obj);if(discard()){draft=incoming;revision=0;touch();refreshSuggestions();message='JSON restored as unsaved work. Server revision reset to zero; saving over an existing draft will conflict. Export this copy before loading/merging the server draft.';}}
-                                             if(t.matches('[data-token-remember]')){
- rememberToken=t.checked;
- if(rememberToken){
-  if(!token)throw Error('Enter the write token before remembering it.');
-  storeToken(token);
- }else{
-  storeToken('');
- }
-}
-if(!t.matches('[data-token],[data-token-remember],[data-select-year],[data-profile-id],[data-profile-name]'))render();
-     }};
+ host.onchange = async e => {
+  const t = e.target;
+  try {
+    if (t.dataset.line) {
+      setLine(t.dataset.line, t.dataset.field, t.value);
+      render();
+      return;
+    }
+
+    if (t.dataset.component !== undefined) {
+      draft.contributions[Number(t.dataset.component)].included = t.checked;
+      touch();
+      render();
+      return;
+    }
+
+    if (t.matches('[data-province]')) {
+      draft.province = t.value;
+      draft.provinceConfirmed = false;
+      draft.profileConfirmed = false;
+      touch();
+    }
+
+    if (t.matches('[data-province-confirmed]')) {
+      draft.provinceConfirmed = t.checked;
+      touch();
+    }
+
+    if (t.matches('[data-profile-confirmed]')) {
+      draft.profileConfirmed = t.checked;
+      touch();
+    }
+
+    if (t.matches('[data-residency]')) {
+      draft.residencyNote = t.value;
+      touch();
+    }
+
+    if (t.matches('[data-other-reviewed]')) {
+      draft.otherLinesReviewed = t.checked;
+      touch();
+    }
+
+    if (t.matches('[data-other-note]')) {
+      draft.otherLinesNote = t.value;
+      touch();
+    }
+
+    if (t.matches('[data-import]')) {
+      const obj = JSON.parse(await t.files[0].text());
+      const incoming = validateDraft(obj.draft || obj);
+      if (!discard()) return;
+      draft = incoming;
+      revision = 0;
+      touch();
+      refreshSuggestions();
+      message = 'JSON restored as unsaved work. Server revision reset to zero; saving over an existing draft will conflict. Export this copy before loading/merging the server draft.';
+    }
+
+    if (t.matches('[data-token-remember]')) {
+      rememberToken = t.checked;
+      if (rememberToken) {
+        if (!token) throw Error('Enter the write token before remembering it.');
+        storeToken(token);
+      } else {
+        storeToken('');
+      }
+    }
+
+    if (!t.matches('[data-token],[data-token-remember],[data-select-year],[data-profile-id],[data-profile-name]')) {
+      render();
+    }
+  } catch (err) {
+    message = err.message;
+    render();
+  }
+};
  host.onclick=async e=>{const b=e.target.closest('button[data-action]');if(!b||busy)return;const a=b.dataset.action;try{
  if(a==='open-schedule'){draft.step=1;draft.investmentTab=8;touch();}if(a==='step'){draft.step=Number(b.dataset.index);touch();}if(a==='next'||a==='back'){draft.step=Math.max(0,Math.min(6,draft.step+(a==='next'?1:-1)));touch();}
  if(a==='switch'){const id=host.querySelector('[data-profile-id]').value.trim().toLowerCase(),name=host.querySelector('[data-profile-name]').value.trim(),year=Number(host.querySelector('[data-select-year]').value);if(!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)||!name)throw Error('Enter a stable taxpayer ID and display name.');if(id===draft.taxpayer.id&&year===draft.year){draft.taxpayer.name=name;draft.profileConfirmed=false;touch();}else if(discard()){draft=blank(year,id,name);revision=0;dirty=false;message='New in-memory draft. Load server draft if one already exists.';}refreshSuggestions();}
