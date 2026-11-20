@@ -414,11 +414,61 @@ if(typeof module!=='undefined'&&module.exports){module.exports=API;return;}
 
 let draft=blank(),revision=0,dirty=false,token,host,snapshot=null,candidates,busy=false,message='Draft not yet saved. Financial data is not stored in browser localStorage.';
 let rememberToken=false;
+let autoLoadAttempted=false;
 const TOKEN_STORAGE_PREFIX='t1WriteToken:';
-function backendUrl(){return snapshot?.url||localStorage.getItem('ibkrgasurl')||'';}
-function tokenKey(){const url=backendUrl();if(!url)throw Error('Backend URL unavailable. Load investment data or configure your existing Apps Script URL.');return TOKEN_STORAGE_PREFIX+hash(url);}
-function readStoredToken(){try{return localStorage.getItem(tokenKey())||'';}catch(e){return '';}}
-function storeToken(value){try{if(value)localStorage.setItem(tokenKey(),value);else localStorage.removeItem(tokenKey());}catch(e){throw Error('Browser storage is unavailable. The token cannot be remembered.');}}
+
+function backendUrl(){
+  return snapshot?.url||localStorage.getItem('ibkrgasurl')||'';
+}
+
+function tokenKey(){
+  const url=backendUrl();
+  if(!url)throw Error('Backend URL unavailable. Load investment data or configure your existing Apps Script URL.');
+  return TOKEN_STORAGE_PREFIX+hash(url);
+}
+
+function readStoredToken(){
+  try{
+    return localStorage.getItem(tokenKey())||'';
+  }catch(e){
+    return '';
+  }
+}
+
+function storeToken(value){
+  try{
+    if(value)localStorage.setItem(tokenKey(),value);
+    else localStorage.removeItem(tokenKey());
+  }catch(e){
+    throw Error('Browser storage is unavailable. The token cannot be remembered.');
+  }
+}
+
+async function autoLoadServerDraft(){
+  if(autoLoadAttempted||busy||dirty||slipEditorDirty||dispositionDirty)return;
+  if(!backendUrl()||!token)return;
+  autoLoadAttempted=true;
+  busy=true;
+  try{
+    const result=await request('getT1PreparationDraft');
+    if(result.draft){
+      draft=validateDraft(result.draft);
+      refreshSuggestions();
+      dirty=false;
+      revision=result.revision||0;
+      message='Saved draft loaded automatically.';
+    }else{
+      message='No saved draft found for this taxpayer and year.';
+    }
+    render();
+  }catch(err){
+    autoLoadAttempted=false;
+    message=err.message;
+    render();
+  }finally{
+    busy=false;
+  }
+}
 function touch(){dirty=true;}
 function refreshSuggestions(){snapshot=typeof window.getT1InvestmentSnapshot==='function'?window.getT1InvestmentSnapshot():null;candidates=investmentCandidates(snapshot,draft);}
 function warnings(){const out=[];out.push(...benefitsSummary(draft).blockers);if(draft.schedule3)out.push(...scheduleSummary(draft,snapshot).blockers);const emp=employmentSummary(draft);out.push(...emp.blockers);if((draft.dispositions||[]).length){const cap=dispositionSummary(draft,snapshot);out.push(...cap.blockers);if(cap.rows.some(x=>x.record.classification==='INCOME'))out.push('T5008 income-account transactions require separate reporting and are excluded from capital subtotals.');}if((draft.slips||[]).length||draft.contributions.some(c=>c.included)){const x=investmentSummary(draft,candidates,!!snapshot);out.push(...x.blockers);out.push(...x.notices);for(const c of ['12000','12100'])if(Number.isFinite(draft.lines[c]?.amount)&&Math.abs(draft.lines[c].amount-x.totals[c])>.005)out.push('Line '+c+' differs from the proposed investment summary; review/apply or document the independently supported amount. No overwrite was made.');}if(!draft.profileConfirmed||!draft.provinceConfirmed||!draft.province)out.push('Confirm taxpayer, province and residency profile.');if(draft.year!==2025)out.push('Verify all lines against this year’s return. Only the listed ordinary Schedule 3 calculation is enabled for supported years; other tax/credit calculations remain manual.');if(!draft.otherLinesReviewed)out.push('Review other applicable T1 lines/schedules; the listed lines are not the complete return.');if(snapshot?.capitalError)out.push('Existing capital calculation error: '+snapshot.capitalError);if(snapshot?.dividendError)out.push('Existing dividend calculation error: '+snapshot.dividendError);const missing=LINES.filter(([c])=>!['CONFIRMED','NA'].includes(statusOf(draft,c,candidates,!!snapshot,snapshot)));if(missing.length)out.push(missing.length+' listed lines are unanswered, unconfirmed or need re-review.');if(staleComponents(draft,candidates,!!snapshot).length)out.push('An accepted HSBC component changed or cannot currently be checked. Refresh/review it.');for(const c of ['12700','43500','48200','48400','48500'])if((draft.lines[c]?.amount??0)<0)out.push('Line '+c+' requires a non-negative amount; review the supporting calculation.');const f=refundSuggestions(draft);if(f&&['48400','48500'].some(c=>draft.lines[c]?.amount!==null&&Math.abs(draft.lines[c].amount-f[c])>.005))out.push('Entered refund/balance differs from confirmed payable/credits arithmetic.');return out;}
@@ -1330,7 +1380,11 @@ message='Token forgotten from this browser.';
  if(a==='csv'){const q=v=>'"'+String(v??'').replace(/^[=+@\t\r\n-]/,"'$&").replace(/"/g,'""')+'"',rows=[['Taxpayer','Year','Province','Line','Description','CAD','Status','Source','Note'],...LINES.map(([c,l])=>[draft.taxpayer.name,draft.year,draft.province,c,l,draft.lines[c]?.amount??'',statusOf(draft,c,candidates,!!snapshot,snapshot),draft.lines[c]?.source||'',draft.lines[c]?.note||''])];download('T1_'+draft.taxpayer.id+'_'+draft.year+'.csv','\uFEFF'+rows.map(r=>r.map(q).join(',')).join('\r\n'),'text/csv;charset=utf-8;');}
  if(a==='print'){draft.step=6;render();window.print();return;}render();
  }catch(err){busy=false;message=err.message+(a==='save'?' If the response was lost, export your draft and load server state before retrying.':'');render();}};
- window.addEventListener('t1-investment-data-ready',()=>{refreshSuggestions();if(!host.contains(document.activeElement))render();});
+
+window.addEventListener('t1-investment-data-ready',()=>{
+  refreshSuggestions();
+  autoLoadServerDraft();
+}); 
  window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
